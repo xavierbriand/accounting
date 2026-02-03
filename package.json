@@ -1,0 +1,41 @@
+{
+  "name": "accounting",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "tsx src/cli/migrate.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xavierbriand/accounting.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/xavierbriand/accounting/issues"
+  },
+  "homepage": "https://github.com/xavierbriand/accounting#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "csv-parse": "^6.1.0",
+    "dinero.js": "^1.9.1",
+    "ora": "^9.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.2.0",
+    "eslint": "^9.39.2",
+    "fast-check": "^4.5.3",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

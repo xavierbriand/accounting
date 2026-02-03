@@ -1,0 +1,29 @@
+# Node.js
+node_modules/
+dist/
+npm-debug.log
+yarn-error.log
+
+# Database
+data/*.db
+*.db
+*.db-journal
+*.db-wal
+*.bak
+
+# Environment
+.env
+.env.local
+
+# MacOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Testing
+coverage/
+
+# BMAD
+_bmad-output/

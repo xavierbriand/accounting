@@ -1,6 +1,7 @@
 ---
 name: 'step-02-design-epics'
 description: 'Design and approve the epics_list that will organize all requirements into user-value-focused epics'
+status: 'complete'
 
 # Path Definitions
 workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories'
@@ -139,10 +140,10 @@ Format the epics_list as:
 
 Display the complete epics_list to user with:
 
-- Total number of epics
-- FR coverage per epic
-- User value delivered by each epic
-- Any natural dependencies
+- - Total number of epics
+- - FR coverage per epic
+- - User value delivered by each epic
+- - Any natural dependencies
 
 ### 5. Create Requirements Coverage Map
 

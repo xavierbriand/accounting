@@ -26,4 +26,5 @@ data/*.db
 coverage/
 
 # BMAD
-_bmad-output/
+# _bmad-output/ - Kept in version control for documentation
+

@@ -44,9 +44,9 @@ A failure of any item at P3-retro is a **merge blocker**, not a deferred suggest
 ## Error handling
 
 - [ ] Core returns `Result<T, E>`; no thrown exceptions inside Core.
-- [ ] Infra catches only exceptions it can translate to `Result.Fail`; others propagate.
+- [ ] Infra catches only exceptions it can translate to `Result.fail`; others propagate.
 - [ ] No bare `catch` blocks that swallow errors.
-- [ ] CLI boundary converts `Result.Fail` to a human-readable message plus a non-zero exit code.
+- [ ] CLI boundary converts `Result.fail` to a human-readable message plus a non-zero exit code.
 
 ## Review cadence
 

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "lint": "eslint .",
-    "build": "tsc",
+    "build": "tsc && cp -R src/infra/db/migrations dist/infra/db/",
     "migrate": "tsx src/cli/migrate.ts"
   },
   "repository": {

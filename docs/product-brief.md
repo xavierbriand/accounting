@@ -2,6 +2,8 @@
 
 **Date:** 2026-02-02  **Author:** Xavier
 
+> **See also** — [prd.md](prd.md) for success criteria, MVP scope, functional/non-functional requirements, and the full set of user journeys. This brief owns the *vision* — problem, users, trust-loop narrative.
+
 ## Executive Summary
 
 The **Couples Expense Sharing App** is a **Predictive Asset-Based Financial Engine** designed to replace reactive, stress-inducing joint account top-ups with a stable, fair, and forward-looking financial operating system.
@@ -74,79 +76,3 @@ A **Predictive Pre-Funding Engine** that treats the household as an organization
     *   **Day 16:** Chat update: "Car Bucket used. Remaining: $200. No extra transfer needed." (The "Aha!" moment).
 5.  **The "System Blame" Safety Net:**
     *   If a prediction fails (Bucket empty), the System takes the blame: *"My prediction for car maintenance was too low. We're short $200. I've updated the model. Pull from Vacation bucket?"* (Prevents couple conflict).
-
----
-
-## Success Metrics
-
-### User Success Metrics (Outcomes)
-
-*   **The "Zero-Stress" Transfer:**
-    *   *Metric:* >90% of monthly transfers completed within 24 hours of notification.
-    *   *Why:* Fast compliance indicates high trust; hesitation indicates friction/doubt.
-*   **The "Thriving" Buffer (Replacing "Zero Overdraft"):**
-    *   *Metric:* Months of Continuous Buffer Growth (Net Positive Flow).
-    *   *Why:* Shifts focus from "survival" (avoiding overdraft) to "wealth building" (accumulating reserves).
-*   **The "No-Surprise" Maintenance:**
-    *   *Metric:* >90% of irregular expenses (>$200) are covered by an existing "Buffer Bucket" balance.
-    *   *Why:* Validates the "Predictive Pre-Funding" promise.
-
-### Business Objectives (North Star)
-
-*   **Trust Retention:**
-    *   *Objective:* Users stick with the platform because it holds their "Financial Truth."
-    *   *KPI:* <5% Churn Rate after Month 3 (High switching costs due to accumulated buffers).
-*   **Conflict De-Escalation:**
-    *   *Objective:* The System successfully acts as the neutral arbiter.
-    *   *KPI:* **Unedited Transfer Rate > 80%**. (If users accept the calculated transfer without editing it, they trust the system's fairness).
-
-### Key Performance Indicators (Technical Health)
-
-*   **Fixed Cost Accuracy:** Variance between Predicted vs Actual Fixed Costs < 5%.
-*   **Buffer Utilization Health:** Variance between "Predicted Buffer Fill" and "Actual Chaos Expenses" tracked separately to refine risk models.
-*   **Onboarding Velocity:** Time from "Sign Up" to "First Successful Predictive Transfer" < 7 days.
-
----
-
-## MVP Scope
-
-### Core Features (The "Transfer Engine")
-
-**1. The Predictive Engine:**
-*   **Forensic Ingestion:** Ingests 3 months of bank history (CSV import) and auto-classifies transactions into "Life Objects" (Car, House, Utilities).
-*   **Calculation Logic:** Calculates "Fixed Costs" + "Buffer Contribution" = Monthly Transfer.
-*   **Liquidity Controller:** Ensures the transfer amount covers immediate bills + builds safety floor.
-
-**2. The Equity Calculator:**
-*   **Inputs:** Income (Net), Assets (Savings/Investments).
-*   **Logic:** Calculates Split Ratio for Operations (Income-based) vs Assets (Wealth-based).
-*   **Transparency:** Shows the math ("You pay 60% of groceries, but 50% of the mortgage").
-
-**3. The "Buffer Bucket" System:**
-*   **Virtual Ledger:** Sub-ledgers for House, Car, Vacation.
-*   **Flow:** Logic to "Fill" buckets monthly and "Drain" them when transactions are tagged.
-*   **Safety Net:** Logic to handle empty buckets (System Blame/Reallocation).
-
-**4. The Conversational Interface:**
-*   **Interaction:** Text-based output (CLI/Chat).
-*   **Notifications:** "Transfer $1,600. ($100 -> Car Buffer)."
-*   **Feedback:** Accepts commands like "Paid" or "Spent $400 on tires."
-
-### Out of Scope for MVP
-
-*   **Real-time Bank Sync (Plaid/GoCardless):** CSV import only to reduce cost and complexity.
-*   **Investment Tracking:** Focus is on *contributions* to assets, not market value tracking.
-*   **Bill Splitting (Splitwise style):** We pre-fund the Joint Account; we do not manage micro-reimbursements (coffee/lunch).
-*   **Mobile App:** Responsive Web or CLI only.
-
-### MVP Success Criteria
-
-*   **Validation:** 10 Beta users complete 3 consecutive "Unedited Transfers."
-*   **Technical:** "Fixed Cost Prediction" is accurate within 5% for >80% of users.
-*   **Value:** Users report a reduction in "Financial Anxiety" (qualitative survey).
-
-### Future Vision
-
-*   **Phase 2:** "Bank Sync" (Auto-import).
-*   **Phase 3:** "The Arbitrator" (AI that negotiates conflict).
-*   **Phase 4:** "The Family Office" (Estate planning, kids, insurance optimization).

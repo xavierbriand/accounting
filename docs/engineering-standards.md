@@ -17,7 +17,7 @@ We use SOLID where it concretely buys readability, testability, or flexibility w
 
 - **SRP.** A class or module does one thing. If a reviewer needs "and" to describe its responsibility, split it.
 - **OCP.** New behaviour preferably arrives as a new type implementing an existing Port, not as edits to existing Core classes. Edit Core only when the contract itself changes.
-- **LSP.** Any implementation of a Port behaves in all the ways Core relies on, including failure modes. An adapter that throws where the Port says `Result.Fail` violates this.
+- **LSP.** Any implementation of a Port behaves in all the ways Core relies on, including failure modes. An adapter that throws where the Port says `Result.fail` violates this.
 - **ISP.** Ports are small and cohesive. A repository Port with methods for five unrelated queries is probably two or three Ports wearing a trench coat.
 - **DIP.** Core depends on abstractions (Ports), not on concretions. If Core imports `better-sqlite3`, something is wrong.
 

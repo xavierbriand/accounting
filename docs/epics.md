@@ -2,67 +2,12 @@
 
 ## Overview
 
-This document provides the complete epic and story breakdown for accounting, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
+Roadmap for `accounting`. This document owns the epic / story decomposition; it does **not** restate requirements or architectural decisions.
 
-## Requirements Inventory
+- Functional and non-functional requirements — [prd.md](prd.md) §§ Functional Requirements / Non-Functional Requirements.
+- Architectural decisions (money format, Result pattern, constructor DI, custom migration runner, Ports & Adapters, DB/testing choices) — [architecture.md](architecture.md).
 
-### Functional Requirements
-
-FR1: Admin User can configure Split Rules (e.g., Income Ratio 60/40) via a YAML configuration file.
-FR2: Admin User can define Buffer Buckets (e.g., "Car", "House") with target amounts and caps via YAML.
-FR3: System can validate the configuration file structure and data types upon load, rejecting invalid configs with clear error messages.
-FR4: User can ingest transaction history from standard CSV bank exports (multi-bank support).
-FR5: User can interactively Tag transactions into predefined buckets via the CLI interface.
-FR6: System can automatically tag transactions based on exact merchant name matches from previous history.
-FR7: System can identify and skip duplicate transactions during ingestion to ensure Idempotency.
-FR8: System can calculate the Safe Monthly Transfer amount required from each partner based on splits and liability forecasts.
-FR9: System can perform all currency calculations using Integer Math (cents) to ensure zero floating-point errors.
-FR10: System can manage Buffer Levels, automatically filling or draining buckets based on expense flow and target rules.
-FR11: System can predict recurring Fixed Costs (subscriptions, rent) to reserve liquidity in advance.
-FR12: System can apply Dynamic Equity Splits based on transaction dates relative to "Effective Date" rules.
-FR13: System can record all financial events in an Append-Only Ledger (SQLite), preventing direct modification of history.
-FR14: User can "Edit" a past transaction via a Soft Edit command, which triggers a Reversal and a Correction entry.
-FR15: System can enforce Double-Entry Consistency, ensuring every debit has a matching credit within the ledger.
-FR16: System can store monetary values with their associated Currency Code (ISO 4217) to support future multi-currency features.
-FR17: System can create a Snapshot Backup of the database before any write operation (ingest/settle).
-FR18: User can view current Buffer Status and "Safe to Spend" amounts via a CLI command (status).
-FR19: System can generate Human-Readable Explanations ("Conversational CFO") for why a transfer amount changed.
-FR20: System can output all command results in JSON Format to support external dashboards or piping.
-FR21: User can perform a Graceful Dissolution (Data Wipe), exporting all personal data to portable formats and securely resetting the application state.
-FR22: System can perform Deterministic Temporal Calculations, ensuring that re-running a settlement for a past month yields the exact same result.
-FR23: System can generate an Immutable Audit Trail of all user actions (ingests, edits, config changes).
-
-### NonFunctional Requirements
-
-NFR1: Read-only commands must execute in < 500ms to ensure the tool feels "instant".
-NFR2: Write operations are permitted up to 2000ms to accommodate mandatory ACID transaction locking and snapshot generation.
-NFR3: Ingestion Throughput: Parse, deduplicate, and dry-run 1,000 transactions in < 2 seconds.
-NFR4: Mathematical Precision: 0% usage of floating-point arithmetic for currency values.
-NFR5: Penny Allocation Protocol: Use deterministic algorithm (e.g., "Largest Remainder Method") for indivisible splits.
-NFR6: Settlement Invariant: Sum(Credits) + Sum(Debits) = 0 for every transaction group.
-NFR7: ACID Compliance: SQLite configuration must be set to WAL mode with synchronous = NORMAL or higher.
-NFR8: Snapshot Reliability: Successfully create a .bak copy of the database before every write operation with 100% reliability.
-NFR9: Network Isolation: Zero (0) outgoing network requests automatically.
-NFR10: Log Redaction: Debug logs must automatically detect and redact patterns matching IBANs and Account Numbers.
-NFR11: File Permissions: Created DB and config files must default to 600 permissions.
-NFR12: Safe Mode Recovery: Offer interactive "Repair" workflow if corrupt SQLite file detected.
-NFR13: Error Recovery: 100% of user-facing error messages must include a "Suggested Action".
-NFR14: Interactive Navigation: Ingest loop must support standard terminal navigation keys (Arrow Up/Down, Enter, Esc, 'j'/'k').
-NFR15: Exit Code Standards: Strictly adhere to POSIX exit codes (0 for success, >0 for failures).
-
-### Additional Requirements
-
-- Starter Template: Custom Clean Architecture Scaffold (No Oclif).
-- Implementation Priority: "MigrationRunner" implementation is part of Epic 1.
-- Data Model: Money must be stored as Dual Column (Amount INTEGER, Currency TEXT).
-- Code Pattern: Strict Result Pattern (no throwing exceptions in Core) and Constructor Injection.
-- Configuration: Locate config via XDG_CONFIG_HOME logic (Project-based or Global).
-- Database: Local SQLite using `better-sqlite3`.
-- Architecture: Core Domain must be isolated from CLI and Infrastructure (Ports & Adapters).
-- Migrations: Custom lightweight runner using SQL files.
-- Testing: Vitest + fast-check for Property-Based Testing.
-
-### FR Coverage Map
+## FR Coverage Map
 
 FR1: Epic 1 - Config Split Rules
 FR2: Epic 1 - Config Buffers
@@ -140,7 +85,7 @@ So that I can prevent floating-point errors and currency mismatches throughout t
 
 **Given** The `Money` value object,
 **When** I attempt to add two Money objects with different currencies (e.g., USD + EUR),
-**Then** The system throws a typed error (Result.fail).
+**Then** The operation returns a failure Result (`Result.fail`) — no exception is thrown.
 **And** All internal storage is verified to be in integers (cents).
 **And** Formatting to string uses "Banker's Rounding" (Round Half to Even) to minimize cumulative error.
 **And** I can run property-based tests (fast-check) proving associativity and distributivity of the Money operations.
@@ -191,7 +136,7 @@ So that I can normalize their disparate date/amount formats into a single system
 **When** I invoke the CSV parser,
 **Then** It returns a list of normalized `IngestItem` objects (Date, Description, MoneyAmount).
 **And** It successfully handles positive/negative signs correctly (some banks use negative for credit, others for debit).
-**And** It rejects rows with malformed dates or non-numeric amounts without crashing the entire batch.
+**And** During the **parse stage**, rows with malformed dates or non-numeric amounts are skipped and individually reported — valid sibling rows still proceed. (Commit-stage atomicity is governed by Story 2.5.)
 
 ### Story 2.2: Idempotency Service
 
@@ -244,12 +189,12 @@ So that I can undo the import if something goes wrong.
 
 **Acceptance Criteria:**
 
-**Given** A confirmed batch of transactions,
-**When** The system begins the commit process,
+**Given** A confirmed batch of transactions (already produced by the parse + idempotency + builder stages),
+**When** The system begins the **commit stage**,
 **Then** It first copies `ledger.db` to `ledger.db.bak` (Snapshot).
 **And** It opens a single SQL transaction.
 **And** It inserts all records.
-**And** If any insert fails, it rolls back the ENTIRE batch (ACID).
+**And** If any insert fails at the DB level, the ENTIRE batch is rolled back (ACID). Parse-stage skips are out of scope here — they were handled earlier in Story 2.1.
 
 ## Epic 3: Liquidity Engine & Settlement
 

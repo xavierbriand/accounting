@@ -19,7 +19,7 @@ Instructions for Claude Code working on this repo. Read before changing code.
 
 Three layers with a strict dependency rule:
 
-- `src/core/` — Pure domain. **Depends on nothing.** No `commander`, no `fs`, no `better-sqlite3`, no `process.exit()`. Only Dinero and TypeScript stdlib.
+- `src/core/` — Pure domain. **Depends on nothing.** No `commander`, no `better-sqlite3`, no `process.exit()`. No Node APIs (`fs`, `path`, `os`, `crypto`, …). Only Dinero and pure TypeScript.
 - `src/infra/` — Implementations of the ports declared in `src/core/ports/`. Talks to SQLite, the filesystem, and external libraries. Depends on Core via port interfaces only.
 - `src/cli/` — Interface adapters. Wires Core + Infra, parses CLI args, formats output. Depends on both.
 
@@ -43,7 +43,7 @@ Money bugs are the highest-severity class in this project. Rules are non-negotia
   - System events (migrations, audit log timestamps): UTC.
   - Transactions: ISO 8601 **with offset** (e.g. `2026-04-21T14:30:00+02:00`). Preserves "receipt truth" — the local wall clock when the transaction actually happened.
 - **Versioned rules:** config/rules that change over time (split ratios, buffer targets) use the Validity Window pattern (`valid_from`, `valid_to`). No event sourcing. Queries resolve the active rule by date.
-- **SQLite:** WAL mode enabled in `sqlite-client.ts`. DB files get `chmod 0600`. Migrations are numbered SQL files under `src/infra/db/migrations/`, run by the custom runner using `PRAGMA user_version`.
+- **SQLite:** WAL mode enabled in [src/infra/db/sqlite-client.ts](src/infra/db/sqlite-client.ts). DB files **must** be created with `0600` permissions (rule — not yet enforced in code; wire this into the SQLite client or config layer when Story 1.4 lands). Migrations are numbered SQL files under `src/infra/db/migrations/`, run by the custom runner using `PRAGMA user_version`.
 - **PII:** redact IBANs, names, and similar fields in logs by default.
 
 ## 4. Style

@@ -6,8 +6,8 @@ import path from 'path';
 import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
-import { Transaction } from '../../../../src/core/ledger/transaction.js';
-import { Money } from '../../../../src/core/shared/money.js';
+import { Transaction } from '@core/ledger/transaction.js';
+import { Money } from '@core/shared/money.js';
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;

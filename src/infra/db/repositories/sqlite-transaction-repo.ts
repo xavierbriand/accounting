@@ -1,8 +1,8 @@
 import Database from 'better-sqlite3';
-import { Result } from '../../../core/shared/result.js';
-import { Money } from '../../../core/shared/money.js';
-import { Transaction, EntryDraft } from '../../../core/ledger/transaction.js';
-import type { TransactionRepository } from '../../../core/ports/transaction-repository.js';
+import { Result } from '@core/shared/result.js';
+import { Money } from '@core/shared/money.js';
+import { Transaction, EntryDraft } from '@core/ledger/transaction.js';
+import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 
 interface TransactionRow {
   id: string;

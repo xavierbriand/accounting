@@ -1,11 +1,10 @@
-import { runMigrations } from '../infra/db/migrator.js';
 import path from 'path';
+import { getDb } from '../infra/db/sqlite-client.js';
+import { runMigrations } from '../infra/db/migrator.js';
 
-const dbPath = path.resolve('accounting.db');
-
-console.log('Starting migration...');
+const db = getDb(path.resolve('accounting.db'));
 try {
-  runMigrations(dbPath);
+  runMigrations(db);
   console.log('Migration completed successfully.');
 } catch (error) {
   console.error('Migration failed:', error);

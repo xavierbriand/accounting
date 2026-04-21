@@ -1,0 +1,201 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { runMigrations } from '../../../../src/infra/db/migrator.js';
+import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
+import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
+import { Transaction } from '@core/ledger/transaction.js';
+import { Money } from '@core/shared/money.js';
+
+function makeEur(cents: number): Money {
+  return Money.fromCents(cents, 'EUR').value;
+}
+
+function makeBalancedTx(id: string): Transaction {
+  return Transaction.create({
+    id,
+    occurredAt: '2026-04-21T14:30:00+02:00',
+    description: 'Transport',
+    entries: [
+      { account: 'Expense:Transport', side: 'debit', amount: makeEur(2000) },
+      { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
+    ],
+  }).value;
+}
+
+describe('SqliteTransactionRepository', () => {
+  let db: Database.Database;
+  let repo: SqliteTransactionRepository;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    runMigrations(db);
+    repo = new SqliteTransactionRepository(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('save + findById round-trip preserves all fields', () => {
+    const tx = makeBalancedTx('tx-round-trip');
+    const saveResult = repo.save(tx);
+
+    expect(saveResult.isSuccess).toBe(true);
+
+    const findResult = repo.findById('tx-round-trip');
+    expect(findResult.isSuccess).toBe(true);
+    const found = findResult.value;
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe('tx-round-trip');
+    expect(found!.occurredAt).toBe('2026-04-21T14:30:00+02:00');
+    expect(found!.description).toBe('Transport');
+    expect(found!.entries).toHaveLength(2);
+    expect(found!.entries[0].account).toBe('Expense:Transport');
+    expect(found!.entries[0].side).toBe('debit');
+    expect(found!.entries[0].amount.amount).toBe(2000);
+    expect(found!.entries[0].amount.currency).toBe('EUR');
+  });
+
+  it('findById returns Result.ok(null) for unknown id', () => {
+    const result = repo.findById('does-not-exist');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value).toBeNull();
+  });
+
+  describe('Schema CHECK constraints', () => {
+    it('rejects 4-char currency (CHECK length(currency)=3)', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('no-tx','a','debit',100,'EURO')",
+        ).run();
+      }).toThrow(/CHECK constraint failed/);
+    });
+
+    it('rejects negative amount_cents (CHECK amount_cents >= 0)', () => {
+      db.prepare(
+        "INSERT INTO transactions (id, occurred_at, description) VALUES ('tx-neg','2026-01-01T00:00:00Z','test')",
+      ).run();
+      expect(() => {
+        db.prepare(
+          "INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('tx-neg','a','debit',-1,'EUR')",
+        ).run();
+      }).toThrow(/CHECK constraint failed/);
+    });
+
+    it('rejects unknown side value (CHECK side IN (...))', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('no-tx','a','split',100,'EUR')",
+        ).run();
+      }).toThrow(/CHECK constraint failed/);
+    });
+  });
+
+  describe('Foreign key enforcement', () => {
+    it('rejects an entry whose transaction_id does not exist', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('ghost-id','a','debit',100,'EUR')",
+        ).run();
+      }).toThrow(/FOREIGN KEY constraint failed/);
+    });
+  });
+
+  describe('Atomic save', () => {
+    it('leaves zero rows when a CHECK failure occurs mid-save', () => {
+      const txId = 'tx-atomic';
+      db.prepare(
+        `INSERT INTO transactions (id, occurred_at, description) VALUES ('${txId}','2026-01-01T00:00:00Z','test')`,
+      ).run();
+
+      try {
+        db.transaction(() => {
+          db.prepare(
+            `INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('${txId}','a','debit',100,'EUR')`,
+          ).run();
+          // This insert will fail: EURO has 4 chars
+          db.prepare(
+            `INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES ('${txId}','b','credit',100,'EURO')`,
+          ).run();
+        })();
+      } catch {
+        // expected
+      }
+
+      // Because we wrapped in a transaction, the header row is still there (we inserted it directly)
+      // but the entries should be absent
+      const entries = db
+        .prepare("SELECT * FROM transaction_entries WHERE transaction_id = ?")
+        .all(txId);
+      expect(entries).toHaveLength(0);
+    });
+
+    it('save() is atomic under PK collision — original entries untouched', () => {
+      // First save: should succeed
+      const first = Transaction.create({
+        id: 'tx-dup',
+        occurredAt: '2026-04-21T14:30:00+02:00',
+        description: 'Original',
+        entries: [
+          { account: 'Expense:Food', side: 'debit', amount: makeEur(1000) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(1000) },
+        ],
+      }).value;
+      expect(repo.save(first).isSuccess).toBe(true);
+
+      // Second save with same id: PK collision on the header INSERT must roll back
+      const second = Transaction.create({
+        id: 'tx-dup',
+        occurredAt: '2026-04-21T15:00:00+02:00',
+        description: 'Duplicate',
+        entries: [
+          { account: 'Expense:Other', side: 'debit', amount: makeEur(5000) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(5000) },
+        ],
+      }).value;
+      const saveResult = repo.save(second);
+      expect(saveResult.isFailure).toBe(true);
+
+      // DB state must match the original tx exactly — no bleed from second attempt
+      const found = repo.findById('tx-dup').value;
+      expect(found).not.toBeNull();
+      expect(found!.description).toBe('Original');
+      expect(found!.entries).toHaveLength(2);
+      expect(found!.entries[0].account).toBe('Expense:Food');
+    });
+  });
+
+  describe('WAL mode', () => {
+    it('getDb() configures WAL and foreign_keys on first open', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-test-'));
+      closeDb(); // reset singleton so getDb() treats this path as first open
+      try {
+        const db = getDb(path.join(tmpDir, 'test.db'));
+        runMigrations(db);
+
+        expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
+        expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+      } finally {
+        closeDb();
+        fs.rmSync(tmpDir, { recursive: true });
+      }
+    });
+  });
+
+  describe('Repository surface (type-level)', () => {
+    it('exposes save and findById', () => {
+      expect(typeof repo.save).toBe('function');
+      expect(typeof repo.findById).toBe('function');
+    });
+
+    it('does not expose update or delete', () => {
+      // @ts-expect-error — update should not exist on TransactionRepository
+      expect(repo.update).toBeUndefined();
+      // @ts-expect-error — delete should not exist on TransactionRepository
+      expect(repo.delete).toBeUndefined();
+    });
+  });
+});

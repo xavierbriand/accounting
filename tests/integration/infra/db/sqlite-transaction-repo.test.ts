@@ -133,16 +133,38 @@ describe('SqliteTransactionRepository', () => {
       expect(entries).toHaveLength(0);
     });
 
-    it('save() via repo is atomic: failed entry insert leaves no header row', () => {
-      // Construct a transaction but corrupt it via a forced failing insert by
-      // using repo.save() with a valid transaction, then verify via findById
-      const txId = 'tx-repo-atomic';
-      const tx = makeBalancedTx(txId);
-      const saveResult = repo.save(tx);
-      expect(saveResult.isSuccess).toBe(true);
+    it('save() is atomic under PK collision — original entries untouched', () => {
+      // First save: should succeed
+      const first = Transaction.create({
+        id: 'tx-dup',
+        occurredAt: '2026-04-21T14:30:00+02:00',
+        description: 'Original',
+        entries: [
+          { account: 'Expense:Food', side: 'debit', amount: makeEur(1000) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(1000) },
+        ],
+      }).value;
+      expect(repo.save(first).isSuccess).toBe(true);
 
-      // Verify findById confirms the record
-      expect(repo.findById(txId).value).not.toBeNull();
+      // Second save with same id: PK collision on the header INSERT must roll back
+      const second = Transaction.create({
+        id: 'tx-dup',
+        occurredAt: '2026-04-21T15:00:00+02:00',
+        description: 'Duplicate',
+        entries: [
+          { account: 'Expense:Other', side: 'debit', amount: makeEur(5000) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(5000) },
+        ],
+      }).value;
+      const saveResult = repo.save(second);
+      expect(saveResult.isFailure).toBe(true);
+
+      // DB state must match the original tx exactly — no bleed from second attempt
+      const found = repo.findById('tx-dup').value;
+      expect(found).not.toBeNull();
+      expect(found!.description).toBe('Original');
+      expect(found!.entries).toHaveLength(2);
+      expect(found!.entries[0].account).toBe('Expense:Food');
     });
   });
 

@@ -1,14 +1,4 @@
----
-stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
-workflowType: 'architecture'
-lastStep: 8
-status: 'complete'
-completedAt: 'Tue Feb 03 2026'
----
-
 # Architecture Decisions
-<!-- This file records architectural decisions for the project -->
-<!-- It is built incrementally through the collaborative architecture workflow -->
 
 > **See also** — applied when reviewing a change against this architecture: [quality-assurance.md](quality-assurance.md) (product QA invariants, P2 review), [engineering-standards.md](engineering-standards.md) (how we build, P3 review), [security-checklist.md](security-checklist.md) (attack surface, part of P3).
 

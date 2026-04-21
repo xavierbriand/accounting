@@ -1,13 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getDb } from './sqlite-client.js';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export function runMigrations(dbPath: string) {
-  const db = getDb(dbPath);
+export function runMigrations(db: Database.Database): void {
   const migrationsDir = path.join(__dirname, 'migrations');
 
   if (!fs.existsSync(migrationsDir)) {

@@ -138,7 +138,7 @@ One PR per story. More than ~3 Gherkin scenarios, or work likely to exceed one S
 Runs **before the planning phase of every new story**. Unconditional.
 
 - **Triage open issues:** re-prioritize, close stale, confirm `deferred-suggestion` items still relevant.
-- **Review open Dependabot PRs:** CI + diff + changelog. Routine bumps (patch, minor dev-dep) → merge directly, no DoR/DoD/retro. Breaking changes, major bumps, or bumps to critical-path deps (`better-sqlite3`, `dinero.js`, `zod`, `commander`, `vitest`) → issue + full story.
+- **Review open Dependabot PRs:** CI + diff + changelog. Routine bumps (patch or minor, any dep) → merge directly after CI + changelog check, no DoR/DoD/retro. **Major bumps** of runtime deps, **critical-path major bumps** (`better-sqlite3`, `dinero.js`, `zod`, `commander`, `vitest`), or any **breaking change** flagged in a changelog → issue + full story through the main loop. Minor/patch bumps of critical-path deps still merge routinely, but with a slightly closer changelog read (check for deprecations, removed exports, runtime-behaviour notes) — if anything looks non-trivial, escalate.
 - **`npm audit`:** `high`/`critical` → immediate issue, fix before the next story.
 
 Lighter than feature work. Aggregate learnings surface at the next per-story retrospective.

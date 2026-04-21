@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { runMigrations } from '../../../../src/infra/db/migrator.js';
+import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { Transaction } from '../../../../src/core/ledger/transaction.js';
 import { Money } from '../../../../src/core/shared/money.js';
@@ -146,18 +147,19 @@ describe('SqliteTransactionRepository', () => {
   });
 
   describe('WAL mode', () => {
-    it('file-backed DB opened via migrator runs in WAL mode', () => {
+    it('getDb() configures WAL and foreign_keys on first open', () => {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-test-'));
-      const tmpDb = path.join(tmpDir, 'test.db');
-      const fileDb = new Database(tmpDb);
-      fileDb.pragma('journal_mode = WAL');
-      runMigrations(fileDb);
+      closeDb(); // reset singleton so getDb() treats this path as first open
+      try {
+        const db = getDb(path.join(tmpDir, 'test.db'));
+        runMigrations(db);
 
-      const journalMode = fileDb.pragma('journal_mode', { simple: true });
-      expect(journalMode).toBe('wal');
-
-      fileDb.close();
-      fs.rmSync(tmpDir, { recursive: true });
+        expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
+        expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+      } finally {
+        closeDb();
+        fs.rmSync(tmpDir, { recursive: true });
+      }
     });
   });
 

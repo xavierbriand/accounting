@@ -1,15 +1,6 @@
----
-stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish']
-inputDocuments: ['_bmad-output/planning-artifacts/product-brief-accounting-2026-02-02.md', '_bmad-output/project-context.md', '_bmad-output/brainstorming/brainstorming-session-2026-02-02.md']
-workflowType: 'prd'
-classification:
-  projectType: 'cli_tool'
-  domain: 'fintech'
-  complexity: 'high'
-  projectContext: 'greenfield'
----
-
 # Product Requirements Document - Couples Expense Sharing App
+
+> **See also** — [quality-assurance.md](quality-assurance.md) is the test-plan reference for these requirements. Product invariants listed there are walked during the P2 critical review and the P2 retro-check.
 
 **Author:** Xavier
 **Date:** Tue Feb 03 2026

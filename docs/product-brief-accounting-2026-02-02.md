@@ -1,14 +1,6 @@
----
-stepsCompleted: [1, 2, 3, 4, 5, 6]
-inputDocuments: ['_bmad-output/brainstorming/brainstorming-session-2026-02-02.md']
-date: 'Mon Feb 02 2026'
-author: 'Xavier'
-status: 'complete'
----
-
 # Product Brief: accounting
 
-<!-- Content will be appended sequentially through collaborative workflow steps -->
+**Date:** 2026-02-02  **Author:** Xavier
 
 ## Executive Summary
 

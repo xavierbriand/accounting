@@ -25,6 +25,3 @@ data/*.db
 # Testing
 coverage/
 
-# BMAD
-# _bmad-output/ - Kept in version control for documentation
-

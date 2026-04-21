@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import fc from 'fast-check';
 import { Transaction } from '@core/ledger/transaction';
 import { Money } from '@core/shared/money';
 
@@ -84,5 +85,60 @@ describe('Transaction.create', () => {
 
     expect(result.isFailure).toBe(true);
     expect(result.error).toMatch(/^Invariant Violation:/);
+  });
+
+  describe('Properties (fast-check)', () => {
+    it('balanced debit/credit arrays in one currency always succeed and preserve entry order/currency', () => {
+      fc.assert(
+        fc.property(
+          fc.array(fc.nat({ max: 100_000 }), { minLength: 1, maxLength: 5 }),
+          (amounts) => {
+            const total = amounts.reduce((s, n) => s + n, 0);
+            if (total === 0) return true; // zero-sum not interesting but valid
+            const entries = [
+              ...amounts.map((n, i) => ({
+                account: `Debit:${i}`,
+                side: 'debit' as const,
+                amount: makeEur(n),
+              })),
+              { account: 'Credit:0', side: 'credit' as const, amount: makeEur(total) },
+            ];
+            const result = Transaction.create({
+              id: 'prop-tx',
+              occurredAt: '2026-04-21T14:00:00+02:00',
+              description: 'property test',
+              entries,
+            });
+            if (!result.isSuccess) return false;
+            const tx = result.value;
+            return (
+              tx.entries.length === entries.length &&
+              tx.entries.every((e, i) => e.amount.currency === 'EUR' && e.side === entries[i].side)
+            );
+          },
+        ),
+      );
+    });
+
+    it('any non-zero perturbation of the credit total causes failure', () => {
+      fc.assert(
+        fc.property(
+          fc.nat({ max: 100_000 }),
+          fc.integer({ min: 1, max: 50 }),
+          (debitCents, delta) => {
+            const result = Transaction.create({
+              id: 'prop-tx-imbalance',
+              occurredAt: '2026-04-21T14:00:00+02:00',
+              description: 'property imbalance',
+              entries: [
+                { account: 'Debit', side: 'debit', amount: makeEur(debitCents) },
+                { account: 'Credit', side: 'credit', amount: makeEur(debitCents + delta) },
+              ],
+            });
+            return result.isFailure;
+          },
+        ),
+      );
+    });
   });
 });

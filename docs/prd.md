@@ -11,6 +11,8 @@ classification:
 
 # Product Requirements Document - Couples Expense Sharing App
 
+> **See also** — [quality-assurance.md](quality-assurance.md) is the test-plan reference for these requirements. Product invariants listed there are walked during the P2 critical review and the P2 retro-check.
+
 **Author:** Xavier
 **Date:** Tue Feb 03 2026
 

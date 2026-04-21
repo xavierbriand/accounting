@@ -109,6 +109,8 @@ Emit exactly these sections, in order:
 ```
 Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md).
 
+**Invocation note (retro finding, Story 1.3):** in the current Claude Code harness, custom agent IDs defined in `.claude/agents/*.md` are **not** registered with the Task / Agent tool — only built-in subagent types are selectable (`claude-code-guide`, `Explore`, `general-purpose`, `Plan`, `statusline-setup`). Treat "sonnet-implementer" as a role description, not a `subagent_type` value. Working invocation pattern: `subagent_type: "general-purpose"` + `model: "sonnet"` override + inline the full operating brief from the agent spec file into the `prompt`. If a future harness registers custom agents, switch back to `subagent_type: "sonnet-implementer"` and drop the inline brief.
+
 ### 6.4 Commit convention inside a story
 
 State transitions. Story id in every subject, e.g. `(Story 1.3)`.
@@ -116,6 +118,10 @@ State transitions. Story id in every subject, e.g. `(Story 1.3)`.
 - `test(<scope>): <scenario> — failing` (red)
 - `feat(<scope>): <scenario> — minimal green` (green)
 - `refactor(<scope>): <what>` (behaviour-preserving cleanup)
+
+**Green-on-landing `test:` commits are acceptable** when the earlier `feat:` commit already covered the tested branches and the subsequent `test:` is adding coverage for a sibling condition. Call it out in the return report's "Deviations" — the TDD-by-intent invariant (the test *would* have failed against a stripped-down implementation) still holds.
+
+**Empty `refactor:` commit with a justification message** (e.g. `refactor(db): tidy prepared statements (Story 1.3)` with body *"No-op: all functions under 50 LOC, naming is clear, no duplication identified"*) is an acceptable pattern when the refactor slot has nothing to clean up. Keeps the commit sequence aligned with the plan and documents the review.
 
 Squash on merge is optional.
 

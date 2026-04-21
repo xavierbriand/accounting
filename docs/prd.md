@@ -89,7 +89,7 @@
 **5. Journey: "The Clean Break" (Data Exit)**
 *   **Opening:** The relationship ends. Both users need to separate their finances cleanly and fairly.
 *   **Rising Action:** User runs `accounting export --all`.
-*   **Climax:** System generates two encrypted archives containing all history, labeled by "Contributor". It provides a final "Settlement Balance" to zero out the books.
+*   **Climax:** System generates two exportable archives containing all history, labeled by "Contributor". It provides a final "Settlement Balance" to zero out the books.
 *   **Resolution:** Users have their data. The shared instance is wiped. The system facilitates a fair exit without bias.
 
 **6. Journey: "The Job Loss" (Dynamic Equity Logic)**
@@ -111,7 +111,9 @@
     *   *Pattern:* To fix an error, the system must generate a "Reversal" transaction and a new "Correction" transaction (Double-Entry principles).
     *   *UX:* The "Soft Edit" command in CLI handles this complexity automatically (User sees "Edit", System does "Reverse + Post").
 *   **Integer Math (Dinero.js):** All monetary values are stored as Integers (Cents). Floating point arithmetic is strictly forbidden in the codebase.
-*   **ACID Compliance:** The local SQLite database must enforce strict transactional integrity. A batch import either fully succeeds or fully fails (no partial states).
+*   **Batch Ingestion — Two-Stage Policy:** A batch import runs in two stages.
+    *   *Parse stage:* each input row is independently validated. Malformed rows (bad dates, non-numeric amounts, unknown format) are **skipped and reported individually** — they never crash the batch, and valid siblings proceed.
+    *   *Commit stage:* the set of valid parsed rows is written inside a single SQL transaction. Either all of them commit or none do (rolled back on any DB-level failure). Partial DB state is not permitted.
 *   **Multi-Currency Data Structure:** The schema must support `{ amount: Int, currency: ISO_CODE }` from Day 1 to allow for future Forex features without schema migration.
 
 ### Integration Requirements

@@ -8,7 +8,7 @@ The distinction from [engineering-standards.md](engineering-standards.md) and [s
 
 - Every recorded transaction satisfies `sum(debits) == sum(credits)`, enforced at write time. See also [architecture.md](architecture.md).
 - Account balances are mathematically derivable from the ledger alone. No hidden state, no cached totals that can drift from the journal.
-- **Currency consistency per account.** An account has exactly one currency for its lifetime. Mixed-currency operations fail loudly with `Result.Fail`; silent coercion is unacceptable.
+- **Currency consistency per account.** An account has exactly one currency for its lifetime. Mixed-currency operations fail loudly with `Result.fail`; silent coercion is unacceptable.
 - **Allocations are conservative to the cent.** Splits use Largest Remainder so `sum(parts) == total` exactly; no rounding error leaks out of an allocation.
 - **Determinism.** Historical recalculations produce identical results given the same inputs. If a user runs the same report twice with the same data, the numbers match byte-for-byte.
 - **Validity windows.** Versioned rules (split ratios, buffer targets) apply the rule that was active on the transaction's date, not today's rule. A transaction dated 2024-05 recomputes with the 2024-05 split, regardless of later config changes.
@@ -23,15 +23,17 @@ The distinction from [engineering-standards.md](engineering-standards.md) and [s
 
 ## Coherence with the product brief
 
-- **User journeys reachable.** Every journey documented in [product-brief-accounting-2026-02-02.md](product-brief-accounting-2026-02-02.md) must remain achievable through the CLI. A refactor that orphans a journey is a P2 blocker, not a deferred item.
+- **User journeys reachable.** Every journey documented in [product-brief.md](product-brief.md) must remain achievable through the CLI. A refactor that orphans a journey is a P2 blocker, not a deferred item.
 - **"Conversational CFO" truthfulness.** Human-readable explanations must match the mathematical result they reference. A sentence like "you'll be short €240 in March" must be backed by a deterministic calculation the user can reproduce.
 - **Audit trail.** Every user action that changes state leaves a traceable entry (ledger row, audit-log row, or both). "What changed and why" must be answerable from the local data alone.
 - **Soft edits, not hard edits.** Corrections are recorded as new balancing transactions (reversal + correction). The original is never mutated.
 
 ## Observability of failures
 
-- **Batch operations surface per-row outcomes.** A 500-row CSV with 3 bad rows must report *exactly* which 3 failed and why; the other 497 must commit atomically.
-- **Human-readable error messages at the CLI boundary.** A user never sees a raw stack trace, a raw `Result.Fail` payload, or a TypeScript type name. Errors translate to a sentence the user can act on.
+- **Batch ingestion — two stages.**
+  - *Parse:* bad rows are isolated and reported per-row; a 500-row CSV with 3 malformed rows reports exactly those 3 and their reasons. Valid siblings proceed.
+  - *Commit:* the set of valid parsed rows is written inside a single SQL transaction. Either all commit or none do (rolled back on any DB-level failure). Partial DB state is never observable.
+- **Human-readable error messages at the CLI boundary.** A user never sees a raw stack trace, a raw `Result.fail` payload, or a TypeScript type name. Errors translate to a sentence the user can act on.
 - **Exit codes reflect outcome.** `0` for full success, non-zero for any failure. Scripts calling the CLI can branch on it reliably.
 
 ## Non-goals (to preempt false-positive reviews)

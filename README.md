@@ -2,7 +2,7 @@
 
 A local-first, CLI-based **predictive asset-based financial engine** for couples managing joint finances. It replaces reactive "top up the joint account again" conversations with a deterministic engine that predicts fair monthly transfers, buffers financial volatility, and keeps an auditable append-only ledger — all on your laptop, no cloud.
 
-Full problem framing and vision: [docs/product-brief-accounting-2026-02-02.md](docs/product-brief-accounting-2026-02-02.md).
+Full problem framing and vision: [docs/product-brief.md](docs/product-brief.md).
 
 ## Status
 
@@ -38,7 +38,7 @@ npm run migrate
 - [docs/prd.md](docs/prd.md) — Product requirements & non-functional requirements
 - [docs/architecture.md](docs/architecture.md) — Architectural decisions (layering, money storage, versioning)
 - [docs/epics.md](docs/epics.md) — Epics and stories roadmap
-- [docs/product-brief-accounting-2026-02-02.md](docs/product-brief-accounting-2026-02-02.md) — Problem statement, target users, success criteria
+- [docs/product-brief.md](docs/product-brief.md) — Problem statement, target users, success criteria
 - [CLAUDE.md](CLAUDE.md) — Project rules for AI-assisted development
 
 ## License

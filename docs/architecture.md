@@ -1,199 +1,89 @@
 # Architecture Decisions
 
-> **See also** — applied when reviewing a change against this architecture: [quality-assurance.md](quality-assurance.md) (product QA invariants, P2 review), [engineering-standards.md](engineering-standards.md) (how we build, P3 review), [security-checklist.md](security-checklist.md) (attack surface, part of P3).
+> **See also**
+> - [prd.md](prd.md) — functional & non-functional requirements this architecture serves.
+> - [epics.md](epics.md) — roadmap; which architectural pieces land in which epic.
+> - [quality-assurance.md](quality-assurance.md) — product QA invariants (P2 review).
+> - [engineering-standards.md](engineering-standards.md) — how we build (P3 review). **Naming, DI, testing tiers, style, and refactor policy live there, not here.** This document records architectural *decisions*; engineering-standards captures the *patterns* applied across them.
+> - [security-checklist.md](security-checklist.md) — attack surface (part of P3).
 
-## Project Information
+## Project Context
 
-*   **Project Name:** accounting
-*   **Date:** Tue Feb 03 2026
-*   **Status:** In Progress
+### Requirements summary
 
-## Project Context Analysis
+**Functional core:** An "Ingest → Tag → Predict → Settle" loop.
+- **Input:** High-variability CSVs from banks.
+- **Processing:** Deterministic, integer-based math engine.
+- **Output:** Immutable ledger entries (SQLite) and human-readable text (CLI).
 
-### Requirements Overview
+**Non-functional constraints:**
+- **Local-only** — no cloud services; strict local backup/recovery responsibilities.
+- **Performance** — <500ms startup for read commands rules out heavy framework init.
+- **Precision** — Dinero.js mandatory for all currency ops; zero float math.
 
-**Functional Requirements:**
-The system requires a robust **State Machine** to handle the "Ingest -> Tag -> Predict -> Settle" loop.
-*   **Input:** High-variability CSVs from banks.
-*   **Processing:** Deterministic, Integer-based math engine.
-*   **Output:** Immutable Ledger entries (SQLite) and Human-readable text (CLI).
+**Domain:** CLI / Fintech. Algorithmic complexity > infrastructure complexity.
 
-**Non-Functional Requirements:**
-*   **Local-Only:** No reliance on cloud services imposes strict local backup/recovery responsibilities on the app.
-*   **Performance:** <500ms startup time rules out heavy framework initialization (e.g., NestJS might be too heavy, lightweight DI preferred).
-*   **Precision:** Dinero.js is mandatory for all currency ops.
+**Estimated architectural components:** 5 — CLI Layer, Ingestion Engine, Core Math/Logic, Ledger/DB, Config Manager.
 
-**Scale & Complexity:**
-*   Primary domain: CLI / Fintech
-*   Complexity level: High (Algorithmic complexity > Infrastructure complexity)
-*   Estimated architectural components: 5 (CLI Layer, Ingestion Engine, Core Math/Logic, Ledger/DB, Config Manager)
+### Technical dependencies
 
-### Technical Constraints & Dependencies
-*   **Runtime:** Node.js 20+
-*   **Database:** SQLite (local file)
-*   **Libraries:** `dinero.js` (Math), `commander`/`oclif` (CLI), `better-sqlite3` (DB).
+- **Runtime:** Node.js 20+
+- **Database:** SQLite (local file, `better-sqlite3`)
+- **CLI:** `commander`
+- **Math:** `dinero.js`
+- **Validation:** `zod`
+- **CSV:** `csv-parse`
 
-### Cross-Cutting Concerns Identified
-1.  **Auditability:** Every user action must result in a traceable ledger event.
-2.  **Versioning:** Configuration rules (Split Ratios) must be versioned by date to support historical recalculations.
-3.  **Resilience:** The "Snapshot" mechanism must be atomic and fail-safe.
+### Cross-cutting concerns
 
-## Starter Template Evaluation
+1. **Auditability.** Every user action results in a traceable ledger event.
+2. **Versioning.** Configuration rules (split ratios, buffer targets) are versioned by date to support historical recalculation.
+3. **Resilience.** Snapshot mechanism is atomic and fail-safe.
 
-### Primary Technology Domain
+## Core architectural decisions
 
-Node.js CLI Tool (TypeScript)
+### Money storage — dual column
 
-### Starter Options Considered
+- **Decision:** two columns per monetary amount — `INTEGER NOT NULL` cents + `TEXT NOT NULL` ISO 4217 currency code.
+- **Rationale:** enforces currency correctness at the storage layer; allows fast SQL aggregations; makes floating-point money bugs physically impossible.
 
-1.  **Oclif:** Rejected. Too opinionated; heavy dependency tree risks "Local-Only" performance limits.
-2.  **Microsoft TypeScript Starter:** Rejected. Often outdated; uses Jest (we require Vitest).
-3.  **Custom Clean Architecture Scaffold:** **Selected.** precise control over dependencies.
+### Versioning for rules — validity window pattern
 
-### Selected Starter: Custom Clean Architecture Scaffold
+- **Decision:** rules with a start + end date (`valid_from`, `valid_to`); queries resolve the active rule for any given transaction date.
+- **Rationale:** allows historical recalculation ("time travel") without the complexity of full event sourcing. Simple SQL resolves the active rule for any transaction date.
 
-**Rationale for Selection:**
-Ensures zero bloat and perfect alignment with the "Pragmatic Clean Architecture" rule. Allows us to manually wire `commander` to the Domain Layer without framework abstraction leaks.
-Agreed to use a **Factory Pattern** for command registration to avoid "spaghetti code" in the CLI entry point.
+### Command execution — use case pattern
 
-**Initialization Command:**
+- **Decision:** CLI commands call Use Cases in Core; Core has no awareness of the CLI.
+- **Rationale:** decouples interface adapter from business logic. Core logic is testable without mocking the CLI.
 
-```bash
-# Initialize Project
-npm init -y
-npm install typescript @types/node --save-dev
-npx tsc --init
+### Database migrations — custom lightweight runner
 
-# Core Dependencies
-npm install commander dinero.js zod csv-parse better-sqlite3 chalk ora
+- **Decision:** numbered `.sql` files under `src/infra/db/migrations/`, executed by a custom runner using `PRAGMA user_version` for idempotency.
+- **Rationale:** keeps dependencies low (aligns with local-only). Avoids heavy ORM migration tools that slow startup.
 
-# Dev/Test Dependencies
-npm install vitest fast-check tsx eslint prettier @types/better-sqlite3 --save-dev
-```
+### Ledger — append-only
 
-**Architectural Decisions Provided by Starter:**
+- **Decision:** no `UPDATE`/`DELETE` on ledger tables. Corrections are recorded as reversal + new correction entries.
+- **Rationale:** immutability is a non-negotiable accounting invariant. The "Soft Edit" CLI command handles this transparently for the user.
 
-**Language & Runtime:**
-TypeScript 5.x (Strict Mode), Node.js 20+
+### Data integrity — double-entry invariant
 
-**Styling Solution:**
-Chalk (for CLI output colorization)
+- **Decision:** `sum(debits) == sum(credits)` is checked in Core at construction time, before the transaction reaches the repository.
+- **Rationale:** the rule lives in the domain, not the database. A repository should never receive an unbalanced transaction.
 
-**Build Tooling:**
-`tsc` for production, `tsx` for fast dev execution
+## Project structure
 
-**Testing Framework:**
-Vitest (Unit) + fast-check (Property-based)
-
-**Code Organization:**
-*   `src/core`: Pure Domain Logic (No CLI/DB deps)
-*   `src/cli`: Commander Interface & UI Logic
-*   `src/infra`: Database & File System Adapters
-
-**Development Experience:**
-`tsx` for instant feedback loop; Prettier + ESLint for consistency.
-
-**Note:** Project initialization using this command should be the first implementation story.
-
-## Core Architectural Decisions
-
-### Decision Priority Analysis
-
-**Critical Decisions (Block Implementation):**
-*   Data Modeling for Money (Dual Column)
-*   Versioning Strategy (Validity Windows)
-*   Command Execution Pattern (Use Cases)
-
-**Important Decisions (Shape Architecture):**
-*   Migration Strategy (Custom Lightweight)
-
-### Data Architecture
-
-**Money Storage Format:**
-*   **Decision:** Dual Column (Amount INTEGER, Currency TEXT)
-*   **Rationale:** Enforces currency correctness while allowing fast SQL aggregations. Prevents "floating point money" bugs at the storage layer.
-
-**Versioning for Rules:**
-*   **Decision:** Validity Window Pattern (`valid_from`, `valid_to`)
-*   **Rationale:** Allows historical recalculation ("Time Travel") without the complexity of full Event Sourcing. Simple SQL queries can resolve the active rule for any transaction date.
-
-### Application Patterns
-
-**Command Execution:**
-*   **Decision:** Use Case Pattern (Clean Architecture)
-*   **Rationale:** Decouples the CLI (Interface Adapter) from the Business Logic (Entities/Use Cases). Makes the core logic testable without mocking the CLI.
-
-### Infrastructure
-
-**Database Migrations:**
-*   **Decision:** Custom Lightweight Runner (SQL Files)
-*   **Rationale:** Keeps dependencies low (aligns with Local-Only philosophy). Avoids heavy ORM migration tools that might slow down startup.
-
-### Decision Impact Analysis
-
-**Implementation Sequence:**
-1.  Initialize Custom Scaffold.
-2.  Implement `MigrationRunner` and Money Type definitions.
-3.  Build `IngestUseCase` with validity window logic.
-
-**Cross-Component Dependencies:**
-*   The **Use Case Pattern** requires a strict Dependency Injection setup (manual or lightweight) to inject the **SQLite Repository** into the **Domain**.
-
-## Implementation Patterns & Consistency Rules
-
-### Pattern Categories Defined
-
-**Critical Conflict Points Identified:**
-4 areas where AI agents could make different choices (Database Naming, File Naming, Error Handling, DI).
-
-### Naming Patterns
-
-**Database Naming Conventions:**
-*   **Snake Case (`user_id`):** Standard for SQL tables and columns.
-*   **Mapping:** Repositories MUST explicitly map `snake_case` DB columns to `camelCase` Domain objects.
-
-**Code Naming Conventions:**
-*   **File Names:** Kebab-case (`ingest-use-case.ts`, `transaction-repo.ts`).
-*   **Class Names:** PascalCase (`IngestUseCase`, `TransactionRepo`).
-*   **Interfaces:** PascalCase, no "I" prefix (`TransactionRepository`, not `ITransactionRepository`).
-
-### Communication Patterns
-
-**Error Handling Patterns:**
-*   **Result Pattern:** Core/Domain methods MUST return a `Result<T, E>` object (or similar structure) instead of throwing.
-*   **Explicit Handling:** The CLI layer MUST check `result.isFailure` and display a formatted error message to the user.
-
-### Structure Patterns
-
-**Dependency Injection:**
-*   **Constructor Injection:** All dependencies (Repos, Services) must be passed via constructor.
-*   **Rule:** NO `new Class()` instantiation inside business logic classes.
-
-### Enforcement Guidelines
-
-**All AI Agents MUST:**
-1.  Use `kebab-case` for all new files.
-2.  Return `Result` objects from Core logic; never throw.
-3.  Inject dependencies via constructor.
-
-**Anti-Patterns:**
-*   Using `float` or `double` types in SQL.
-*   Calling `process.exit()` from inside the Core domain.
-*   Importing `commander` or `fs` directly into `src/core`.
-
-## Project Structure & Boundaries
-
-### Complete Project Directory Structure
+Target shape — directories materialise as stories implement them. This tree is the intended destination, not a snapshot of the current filesystem.
 
 ```text
 accounting/
 ├── package.json
 ├── tsconfig.json
-├── .eslintrc.json
-├── .prettierrc
-├── vitest.config.ts
+├── eslint.config.js
+├── vitest.config.js
 ├── src/
-│   ├── core/                  # PURE DOMAIN (No external deps)
+│   ├── core/                  # PURE DOMAIN (no external deps)
 │   │   ├── ingest/
 │   │   │   ├── ingest-use-case.ts
 │   │   │   └── types.ts
@@ -201,16 +91,16 @@ accounting/
 │   │   │   ├── ledger-service.ts
 │   │   │   └── transaction.ts
 │   │   ├── shared/
-│   │   │   ├── result.ts      # Result Pattern Monad
-│   │   │   └── money.ts       # Dinero types
-│   │   └── ports/             # Interfaces for Infra
-│   │       ├── repository.interface.ts
-│   │       ├── csv-parser.interface.ts
-│   │       └── config-service.interface.ts
+│   │   │   ├── result.ts      # Result pattern
+│   │   │   └── money.ts       # Dinero wrapper
+│   │   └── ports/             # interfaces for Infra
+│   │       ├── transaction-repository.ts
+│   │       ├── csv-parser.ts
+│   │       └── config-service.ts
 │   ├── infra/                 # IMPLEMENTATION DETAILS
 │   │   ├── db/
 │   │   │   ├── sqlite-client.ts
-│   │   │   ├── migrations/    # .sql files (copy to dist/ in build)
+│   │   │   ├── migrations/    # numbered .sql files, copied to dist/ during build
 │   │   │   └── repositories/
 │   │   │       └── sqlite-transaction-repo.ts
 │   │   ├── csv/
@@ -218,173 +108,45 @@ accounting/
 │   │   ├── fs/
 │   │   │   └── file-system.ts
 │   │   └── config/
-│   │       └── config-service.ts # XDG_CONFIG_HOME resolution
+│   │       └── config-service.ts  # XDG_CONFIG_HOME resolution
 │   └── cli/                   # INTERFACE ADAPTERS
 │       ├── commands/
 │       │   ├── ingest-command.ts
 │       │   └── report-command.ts
 │       ├── utils/
-│       │   ├── printer.ts     # Chalk helpers
-│       │   └── spinner.ts     # Ora wrappers
-│       └── program.ts         # Entry point (Command Factory)
+│       │   ├── printer.ts     # chalk helpers
+│       │   └── spinner.ts     # ora wrappers
+│       └── program.ts         # entry point
 ├── tests/
-│   ├── fixtures/              # CSV samples (valid, malformed)
-│   ├── unit/                  # Pure Core tests
-│   ├── integration/           # DB/Infra tests
-│   └── e2e/                   # CLI full process tests
-└── data/                      # Local dev data (gitignored)
+│   ├── fixtures/              # CSV samples (valid + malformed)
+│   ├── features/              # Gherkin acceptance scenarios + step defs
+│   ├── unit/                  # pure Core tests (mirror of src/core/)
+│   └── integration/           # DB/Infra tests against real SQLite
+└── data/                      # local dev data (gitignored)
     └── ledger.db
 ```
 
-### Architectural Boundaries
+### The dependency rule
 
-**The Dependency Rule:**
-*   **CLI** depends on **Core**
-*   **Infra** depends on **Core** (via Ports)
-*   **Core** depends on **NOTHING** (Pure TypeScript)
+- **CLI** depends on **Core**.
+- **Infra** depends on **Core** (via Ports).
+- **Core** depends on **nothing** (pure TypeScript + Dinero).
 
-**Data Boundaries:**
-*   **SQL Boundary:** `Infra/Repositories` map SQL rows (snake_case) to Domain Entities (camelCase).
-*   **Core Boundary:** Domain Entities use `Dinero<number>` for money; they never see raw Integers or Strings from the DB.
+### Data boundaries
 
-### Requirements to Structure Mapping
+- **SQL boundary:** `Infra/Repositories` map SQL rows (snake_case) to domain entities (camelCase).
+- **Core boundary:** domain entities use `Money` / `Dinero<number>` for money; they never see raw integers or currency strings from the DB.
 
-**Feature Mapping:**
-*   **Epic: Ingestion** → `src/core/ingest/` (Logic), `src/infra/csv/` (Parsing)
-*   **Epic: Math Engine** → `src/core/math/` (Wrapper around Dinero)
-*   **Epic: Ledger** → `src/core/ledger/` (State), `src/infra/db/` (Storage)
+### Build process
 
-**Cross-Cutting Concerns:**
-*   **Configuration** → `src/infra/config/` (Locating DB path)
-*   **Error Handling** → `src/core/shared/result.ts` (Result Type)
-*   **Logging/Output** → `src/cli/utils/printer.ts` (User feedback)
+- `tsc` compiles `.ts` to `.js` in `dist/`.
+- The build script also copies `src/infra/db/migrations/*.sql` to `dist/infra/db/migrations/` so the runtime can find them when running from `dist/`. Without this step, migrations would fail in any non-`tsx` execution.
 
-### File Organization Patterns
+### Feature to structure mapping
 
-**Source Organization:**
-*   **Features:** Grouped by folder in `Core` (`ingest`, `ledger`, `predict`).
-*   **Ports:** All Interface definitions live in `src/core/ports/`.
-*   **Adapters:** All Interface implementations live in `src/infra/`.
-
-**Test Organization:**
-*   **Unit:** Mirror the `src/core` structure. Mock all Ports.
-*   **Integration:** Test `src/infra` implementations against real SQLite/FS.
-*   **E2E:** Test the compiled CLI binary against `tests/fixtures`.
-
-### Development Workflow Integration
-
-**Build Process:**
-*   `tsc` compiles `.ts` to `.js` in `dist/`.
-*   **Critical:** Build script must copy `src/infra/db/migrations/*.sql` to `dist/infra/db/migrations/` so the runtime can find them.
-
-## Architecture Validation Results
-
-### Coherence Validation ✅
-
-**Decision Compatibility:**
-High compatibility. Node.js/TypeScript/SQLite/Commander is a standard, cohesive stack. The "Pragmatic Clean Architecture" fits the stack well, using manual dependency injection via constructors which avoids framework complexity while ensuring testability. The "Local-Only" constraint is well-supported by the choice of SQLite and file-system based configuration.
-
-**Pattern Consistency:**
-Patterns are consistent. Naming conventions (kebab-case files, PascalCase classes, snake_case DB) follow standard mappings. The Result pattern for error handling aligns with the "Functional Core" philosophy, ensuring errors are values, not exceptions.
-
-**Structure Alignment:**
-The directory structure explicitly supports the "Ports and Adapters" pattern via `src/core/ports` and `src/infra`. Integration points (CSV, DB, Config) have dedicated folders in `src/infra`, strictly isolating implementation details from the core.
-
-### Requirements Coverage Validation ✅
-
-**Epic/Feature Coverage:**
-*   **Ingestion:** Fully covered by `src/core/ingest` (Logic) and `src/infra/csv` (Parsing).
-*   **Math Engine:** Covered by `src/core/math` and the strict `Dinero.js` wrapper.
-*   **Ledger:** Covered by `src/core/ledger` (State) and `src/infra/db` (Storage).
-*   **CLI:** Covered by `src/cli` and `Commander` integration.
-*   **Reporting:** Covered by `src/cli/commands/report-command.ts`.
-
-**Functional Requirements Coverage:**
-All functional requirements regarding state machine processing, input handling, and output generation are architecturally supported by the Core/Infra separation.
-
-**Non-Functional Requirements Coverage:**
-*   **Performance:** Lightweight stack (<500ms startup) supported by minimal dependencies.
-*   **Precision:** Dinero.js mandate enforced in `src/core/shared/money.ts`.
-*   **Resilience:** Atomic Transactions and Result Pattern ensure fail-safe operations.
-*   **Auditability:** Immutable Ledger design (Append-Only) built into `TransactionRepo`.
-
-### Implementation Readiness Validation ✅
-
-**Decision Completeness:**
-Critical decisions (Money format, Versioning, Error handling) are documented. The tech stack is finalized.
-
-**Structure Completeness:**
-A complete, specific file tree is provided. Boundaries are explicitly defined.
-
-**Pattern Completeness:**
-Naming, Error Handling, and Dependency Injection rules are clear.
-
-### Gap Analysis Results
-
-**Critical Gaps:**
-*   **Migration Tool:** The decision for "Custom/Manual" migrations is made, but the specific implementation code is not yet written. This is the first blocker.
-
-**Important Gaps:**
-*   **Config Resolution:** `ConfigService` needs to implement specific XDG logic for cross-platform support.
-
-### Validation Issues Addressed
-
-*   **Migration Tool:** Acknowledged as the first implementation story.
-*   **Config Service:** Identified as a testability risk; specific test case requirement noted.
-
-### Architecture Completeness Checklist
-
-**✅ Requirements Analysis**
-
-- [x] Project context thoroughly analyzed
-- [x] Scale and complexity assessed
-- [x] Technical constraints identified
-- [x] Cross-cutting concerns mapped
-
-**✅ Architectural Decisions**
-
-- [x] Critical decisions documented with versions
-- [x] Technology stack fully specified
-- [x] Integration patterns defined
-- [x] Performance considerations addressed
-
-**✅ Implementation Patterns**
-
-- [x] Naming conventions established
-- [x] Structure patterns defined
-- [x] Communication patterns specified
-- [x] Process patterns documented
-
-**✅ Project Structure**
-
-- [x] Complete directory structure defined
-- [x] Component boundaries established
-- [x] Integration points mapped
-- [x] Requirements to structure mapping complete
-
-### Architecture Readiness Assessment
-
-**Overall Status:** READY FOR IMPLEMENTATION
-
-**Confidence Level:** High
-
-**Key Strengths:**
-*   Clean separation of Core domain from Infrastructure.
-*   Strict Money handling via Dinero.js.
-*   Zero-bloat stack optimized for performance.
-
-**Areas for Future Enhancement:**
-*   Migration system could be replaced by a lightweight tool if complexity grows.
-*   CLI could be upgraded to `oclif` later if plugin system is needed (unlikely).
-
-### Implementation Handoff
-
-**AI Agent Guidelines:**
-
-- Follow all architectural decisions exactly as documented
-- Use implementation patterns consistently across all components
-- Respect project structure and boundaries
-- Refer to this document for all architectural questions
-
-**First Implementation Priority:**
-Initialize the Custom Clean Architecture Scaffold and implement the `MigrationRunner`.
+- **Ingestion** → `src/core/ingest/` (logic) + `src/infra/csv/` (parsing).
+- **Ledger** → `src/core/ledger/` (state) + `src/infra/db/` (storage).
+- **Liquidity engine** → `src/core/` (math + predictions; exact folder named during story planning).
+- **Configuration** → `src/infra/config/` (location resolution, YAML parse).
+- **Error handling** → `src/core/shared/result.ts`.
+- **Logging / output** → `src/cli/utils/printer.ts`.

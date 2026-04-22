@@ -88,14 +88,14 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
   const data = parsed.data;
   const currency = data.defaultCurrency;
 
-  const buffers: AppConfig['buffers'] = [];
+  const buffers: Array<{ name: string; target: Money; cap?: Money }> = [];
   for (let i = 0; i < data.buffers.length; i++) {
     const b = data.buffers[i];
     const targetResult = Money.fromDecimal(b.target, currency);
     if (targetResult.isFailure) {
       return Result.fail(`buffers.${i}.target: ${targetResult.error}`);
     }
-    let cap: InstanceType<typeof Money> | undefined;
+    let cap: Money | undefined;
     if (b.cap !== undefined) {
       const capResult = Money.fromDecimal(b.cap, currency);
       if (capResult.isFailure) {

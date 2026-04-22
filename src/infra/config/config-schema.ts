@@ -15,12 +15,47 @@ const BufferBucketRawSchema = z.object({
   cap: z.number().nonnegative().optional(),
 });
 
+const AccountConfigSchema = z
+  .object({
+    id: z.string().min(1),
+    filenamePrefix: z.string().min(1),
+  })
+  .strict();
+
 const RawConfigSchema = z
   .object({
     dbPath: z.string().min(1),
     defaultCurrency: z
       .string()
       .regex(/^[A-Z]{3}$/, 'must be a 3-letter ISO 4217 code'),
+    timezone: z
+      .string()
+      .min(1)
+      .refine((tz) => {
+        try {
+          new Intl.DateTimeFormat('en', { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'must be a valid IANA timezone (e.g. Europe/Paris, UTC)'),
+    accounts: z
+      .array(AccountConfigSchema)
+      .min(1)
+      .superRefine((accts, ctx) => {
+        const ids = accts.map(a => a.id);
+        const prefixes = accts.map(a => a.filenamePrefix);
+        ids.forEach((id, i) => {
+          if (ids.indexOf(id) !== i) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'id'], message: 'duplicate id' });
+          }
+        });
+        prefixes.forEach((p, i) => {
+          if (prefixes.indexOf(p) !== i) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'filenamePrefix'], message: 'duplicate prefix' });
+          }
+        });
+      }),
     splits: z
       .array(SplitRuleSchema)
       .min(1)
@@ -109,7 +144,9 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
   return Result.ok({
     dbPath: data.dbPath,
     defaultCurrency: currency,
+    timezone: data.timezone,
     splits: data.splits,
     buffers,
+    accounts: data.accounts,
   });
 }

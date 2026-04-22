@@ -137,6 +137,8 @@ Obvious local cleanups (rename, extract small helper, collapse a duplicated lite
 
 One PR per story. More than ~3 Gherkin scenarios, or work likely to exceed one Sonnet Task round → split.
 
+**Adapter stories need coarser slices, not finer (retro finding, Story 2.1).** For a bank-CSV adapter, file-format reader, export target, or any boundary adapter, the minimum-viable implementation *intrinsically* includes a bundle of behaviours — encoding tolerance, per-row isolation, header validation, delimiter handling, basic invariants. Planning a separate `test:` + `feat:` pair for each of those invites green-on-landing collapses, because the first `feat:` that satisfies the happy path already covers the others. Pattern: **one slice for the adapter's "obvious basics"** (happy path + the invariants any correct implementation satisfies) + **one slice per deliberately-counterintuitive rule** (e.g., a sign-inversion, a locale quirk, a bank-specific edge case). Target 5–7 commits for adapter stories; finer slicing is for stories with genuinely independent behaviours.
+
 ### 6.7 Maintenance sub-loop
 
 Runs **before the planning phase of every new story**. Unconditional.

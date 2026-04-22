@@ -1,0 +1,7 @@
+Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation
+19/04/2026;BOULANGERIE FICTIVE;PAIEMENT CB BOULANGERIE;REF010;;Carte;Alimentation;Boulangerie;-5,80;;19/04/2026;20/04/2026;0
+20/04/2026;CINEMA IMAGINAIRE;PAIEMENT CB CINEMA;REF011;;Carte;Loisirs;Cinema;-14,00;;20/04/2026;21/04/2026;0
+20/04/2026;LIBRAIRIE FICTIVE;PAIEMENT CB LIBRAIRIE;REF012;;Carte;Loisirs;Livres;-22,50;;32/13/2026;21/04/2026;0
+21/04/2026;RESTAURANT FICTIF;PAIEMENT CB RESTAURANT;REF013;;Carte;Alimentation;Restaurant;-38,00;;21/04/2026;22/04/2026;0
+22/04/2026;MAGASIN FICTIF;PAIEMENT CB MAGASIN;REF014;;Carte;Divers;Autres;abc;;22/04/2026;23/04/2026;0
+23/04/2026;VIREMENT FICTIF;VIR SEPA;REF015;;Virement;Divers;Autres;-10,00;+10,00;23/04/2026;24/04/2026;0

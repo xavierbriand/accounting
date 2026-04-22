@@ -10,6 +10,22 @@ dbPath: ./data/ledger.db
 # ISO 4217 three-letter currency code used for all monetary amounts in this file.
 defaultCurrency: EUR
 
+# IANA timezone for normalising date-only bank data into ISO 8601 with offset.
+# The parser converts e.g. 20/04/2026 to 2026-04-20T00:00:00+02:00 in Europe/Paris (CEST).
+# DST transitions are handled per-date, so April dates resolve to +02:00 and January to +01:00.
+timezone: Europe/Paris
+
+# Account identifiers and filename-prefix matching rules.
+# `accounting ingest -f <file.csv>` will read each file, find the account whose
+# filenamePrefix is a prefix of the file's basename, and tag every parsed
+# transaction with that account's `id`.
+# Prefixes must be unique so a file matches at most one account.
+accounts:
+  - id: main-12345678901
+    filenamePrefix: "12345678901_"
+  - id: card-1234
+    filenamePrefix: "carte_1234_"
+
 # Split rules: who pays what share of shared expenses.
 # ratios must sum exactly to 1.0.
 # Each partner name must be unique (case-sensitive).

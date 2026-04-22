@@ -162,7 +162,9 @@ describe('parseRawConfig', () => {
 
     it('rejects a missing timezone field', () => {
       // fails if parseRawConfig accepts a config with no timezone field
-      const { timezone: _omitted, ...withoutTimezone } = minimalValid;
+      const withoutTimezone = Object.fromEntries(
+        Object.entries(minimalValid).filter(([k]) => k !== 'timezone'),
+      );
       const result = parseRawConfig(withoutTimezone);
       expect(result.isFailure).toBe(true);
       expect(result.error).toContain('timezone');
@@ -181,7 +183,9 @@ describe('parseRawConfig', () => {
 
     it('rejects a missing accounts field', () => {
       // fails if parseRawConfig accepts a config with no accounts field
-      const { accounts: _omitted, ...withoutAccounts } = minimalValid;
+      const withoutAccounts = Object.fromEntries(
+        Object.entries(minimalValid).filter(([k]) => k !== 'accounts'),
+      );
       const result = parseRawConfig(withoutAccounts);
       expect(result.isFailure).toBe(true);
       expect(result.error).toContain('accounts');

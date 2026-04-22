@@ -1,0 +1,188 @@
+import { describe, it, expect } from 'vitest';
+import * as fc from 'fast-check';
+import { parseRawConfig } from '../../../../src/infra/config/config-schema.js';
+
+const minimalValid = {
+  dbPath: './data/ledger.db',
+  defaultCurrency: 'EUR',
+  splits: [
+    { partner: 'Alex', ratio: 0.5 },
+    { partner: 'Sam', ratio: 0.5 },
+  ],
+  buffers: [],
+};
+
+describe('parseRawConfig', () => {
+  it('accepts minimal valid config (no buffers)', () => {
+    // fails if parseRawConfig rejects a config with empty buffers array
+    const result = parseRawConfig(minimalValid);
+    expect(result.isSuccess).toBe(true);
+    const config = result.value;
+    expect(config.defaultCurrency).toBe('EUR');
+    expect(config.splits).toHaveLength(2);
+  });
+
+  it('rejects missing splits with friendly message', () => {
+    const raw = { dbPath: './data/ledger.db', defaultCurrency: 'EUR', buffers: [] };
+    // fails if parseRawConfig does not produce a human-readable error for missing splits
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('splits');
+    expect(result.error).not.toContain('ZodError');
+    expect(result.error).not.toContain('at Object');
+  });
+
+  it('rejects ratios not summing to 1', () => {
+    const raw = {
+      ...minimalValid,
+      splits: [
+        { partner: 'Alex', ratio: 0.4 },
+        { partner: 'Sam', ratio: 0.5 },
+      ],
+    };
+    // fails if parseRawConfig does not validate that split ratios sum to 1.0
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('ratios must sum to 1.0');
+  });
+
+  it('rejects duplicate partner names — error cites path not value', () => {
+    const raw = {
+      ...minimalValid,
+      splits: [
+        { partner: 'Alex', ratio: 0.5 },
+        { partner: 'Alex', ratio: 0.5 },
+      ],
+    };
+    // fails if parseRawConfig does not detect duplicate partner names
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('duplicate');
+    // PII-safe: error must NOT contain the actual partner name value
+    expect(result.error).not.toContain('Alex');
+  });
+
+  it('rejects ratio out of [0,1]', () => {
+    const raw = {
+      ...minimalValid,
+      splits: [
+        { partner: 'Alex', ratio: 1.5 },
+        { partner: 'Sam', ratio: -0.5 },
+      ],
+    };
+    // fails if parseRawConfig does not validate ratio range [0, 1]
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('rejects non-ISO currency ("EURO")', () => {
+    const raw = { ...minimalValid, defaultCurrency: 'EURO' };
+    // fails if parseRawConfig does not enforce 3-letter ISO currency code
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('3-letter ISO 4217');
+  });
+
+  it('rejects buffer with cap < target', () => {
+    const raw = {
+      ...minimalValid,
+      buffers: [{ name: 'Car', target: 200, cap: 100 }],
+    };
+    // fails if parseRawConfig does not enforce cap >= target for buffers
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('cap');
+  });
+
+  it('rejects duplicate bucket names — error cites path not value', () => {
+    const raw = {
+      ...minimalValid,
+      buffers: [
+        { name: 'Car', target: 1000 },
+        { name: 'Car', target: 2000 },
+      ],
+    };
+    // fails if parseRawConfig does not detect duplicate bucket names
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('duplicate');
+    // PII-safe: error must NOT contain the actual bucket name value
+    expect(result.error).not.toContain('Car');
+  });
+
+  it('rejects unknown top-level key ("dbPaht")', () => {
+    const raw = { ...minimalValid, dbPaht: './data/ledger.db' };
+    // fails if parseRawConfig does not reject unknown top-level keys (schema not strict)
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('dbPaht');
+  });
+
+  it('maps decimal targets/caps to Money with defaultCurrency', () => {
+    const raw = {
+      ...minimalValid,
+      buffers: [{ name: 'Car', target: 1000.5, cap: 2000 }],
+    };
+    // fails if parseRawConfig does not convert decimal amounts to Money using defaultCurrency
+    const result = parseRawConfig(raw);
+    expect(result.isSuccess).toBe(true);
+    const bucket = result.value.buffers[0];
+    expect(bucket.target.amount).toBe(100050);
+    expect(bucket.target.currency).toBe('EUR');
+    expect(bucket.cap?.amount).toBe(200000);
+    expect(bucket.cap?.currency).toBe('EUR');
+  });
+
+  describe('property tests', () => {
+    it('succeeds for any splits where ratios sum to 1 with unique partners', () => {
+      fc.assert(
+        fc.property(
+          fc.array(
+            fc.record({
+              partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
+              weight: fc.float({ min: Math.fround(0.01), max: Math.fround(1.0), noNaN: true }),
+            }),
+            { minLength: 1, maxLength: 5 },
+          ).filter(items => {
+            const names = items.map(i => i.partner);
+            return new Set(names).size === names.length;
+          }),
+          (items) => {
+            const totalWeight = items.reduce((sum, i) => sum + i.weight, 0);
+            const splits = items.map(i => ({ partner: i.partner, ratio: i.weight / totalWeight }));
+            const raw = { ...minimalValid, splits };
+            // fails if parseRawConfig rejects a splits array whose ratios were correctly rescaled to sum to 1
+            const result = parseRawConfig(raw);
+            return result.isSuccess;
+          },
+        ),
+        { numRuns: 50 },
+      );
+    });
+
+    it('fails for any splits where ratios do not sum to 1', () => {
+      fc.assert(
+        fc.property(
+          fc.array(
+            fc.record({
+              partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
+              ratio: fc.float({ min: Math.fround(0.01), max: Math.fround(0.4), noNaN: true }),
+            }),
+            { minLength: 1, maxLength: 3 },
+          ).filter(items => {
+            const names = items.map(i => i.partner);
+            const sum = items.reduce((s, i) => s + i.ratio, 0);
+            return new Set(names).size === names.length && Math.abs(sum - 1.0) > 1e-9;
+          }),
+          (items) => {
+            const raw = { ...minimalValid, splits: items };
+            // fails if parseRawConfig accepts a splits array whose ratios do not sum to 1
+            const result = parseRawConfig(raw);
+            return result.isFailure;
+          },
+        ),
+        { numRuns: 50 },
+      );
+    });
+  });
+});

@@ -24,6 +24,19 @@ npm ci
 npm run migrate
 ```
 
+## Configuration
+
+The app reads its split rules and buffer targets from `accounting.yaml` in the project root. This file is git-ignored because it contains household data.
+
+```bash
+cp accounting.example.yaml accounting.yaml
+# Edit accounting.yaml with your own values
+```
+
+Alternatively, place the config at `$XDG_CONFIG_HOME/accounting/config.yaml` (defaults to `~/.config/accounting/config.yaml`). The project-root file takes precedence if both are present.
+
+See `accounting.example.yaml` for the full schema with inline documentation.
+
 ## Scripts
 
 | Command | What it does |

@@ -25,3 +25,7 @@ data/*.db
 # Testing
 coverage/
 
+# Accounting config (contains household data — copy from accounting.example.yaml)
+/accounting.yaml
+/accounting.yml
+

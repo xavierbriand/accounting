@@ -123,6 +123,10 @@ State transitions. Story id in every subject, e.g. `(Story 1.3)`.
 
 **Empty `refactor:` commit with a justification message** (e.g. `refactor(db): tidy prepared statements (Story 1.3)` with body *"No-op: all functions under 50 LOC, naming is clear, no duplication identified"*) is an acceptable pattern when the refactor slot has nothing to clean up. Keeps the commit sequence aligned with the plan and documents the review.
 
+**Commit subjects: summary over enumeration (retro finding, Story 1.4).** Prefer a summary verb in the subject rather than listing every scenario the commit covers. `test(config): schema validation suite — failing (Story 1.4)` ages better than `test(config): rejects missing splits, non-ISO currency, ratio sum — failing (Story 1.4)` — the latter goes stale the moment an 11th assertion lands. Scenario details belong in the commit body, not the subject.
+
+**Plan in slices, not tests-per-commit (retro finding, Story 1.4).** When drafting the TDD commit sequence in the plan-for-Sonnet section, one slice = one behaviour + its tests + the minimal code to make them green (often one Gherkin scenario). Over-decomposing into per-assertion commits invites green-on-landing collapses that divorce the plan from execution. Target 6–10 commits per story; only split further when a slice's failing test genuinely cannot turn green without an intermediate `feat:` step.
+
 Squash on merge is optional.
 
 ### 6.5 Refactor-during-green policy

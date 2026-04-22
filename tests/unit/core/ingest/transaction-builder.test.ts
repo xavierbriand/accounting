@@ -250,3 +250,94 @@ describe('TransactionBuilder — obvious basics', () => {
     });
   });
 });
+
+describe('TransactionBuilder — card-settlement classifier', () => {
+  beforeEach(() => { idSeq = 0; });
+
+  describe('Scenario AC/#26: PAIEMENT CARTE on main account → internal transfer', () => {
+    it('matches PAIEMENT CARTE X1234 and classifies as internal-transfer', () => {
+      // fails if: the classifier doesn't run, or it doesn't recognise the PAIEMENT CARTE pattern
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({
+        sourceAccount: 'main-1',
+        direction: 'outflow',
+        description: 'PAIEMENT CARTE X1234 AVRIL',
+        amount: eur(52345),
+      });
+      const result = builder.build(item);
+      expect(result.isSuccess).toBe(true);
+      const outcome = result.value;
+      expect(outcome.classification).toBe('internal-transfer');
+      expect(outcome.category).toBe('InternalTransfer');
+      expect(outcome.confidence).toBe('high');
+    });
+
+    it('debit Liabilities:CreditCard:card-1234, credit Assets:Bank:main-1', () => {
+      // fails if: the internal-transfer entries swap debit/credit sides,
+      // or it resolves to the wrong card account id
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({
+        sourceAccount: 'main-1',
+        direction: 'outflow',
+        description: 'PAIEMENT CARTE X1234 AVRIL',
+        amount: eur(52345),
+      });
+      const outcome = builder.build(item).value;
+      const debit = outcome.transaction.entries.find((e) => e.side === 'debit');
+      const credit = outcome.transaction.entries.find((e) => e.side === 'credit');
+      expect(debit?.account).toBe('Liabilities:CreditCard:card-1234');
+      expect(credit?.account).toBe('Assets:Bank:main-1');
+      expect(debit?.amount.amount).toBe(52345);
+      expect(credit?.amount.amount).toBe(52345);
+    });
+
+    it('also matches without X prefix: PAIEMENT CARTE 1234', () => {
+      // fails if: the regex requires the X prefix (some BPCE statements omit it)
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({
+        sourceAccount: 'main-1',
+        direction: 'outflow',
+        description: 'PAIEMENT CARTE 1234',
+        amount: eur(10000),
+      });
+      const outcome = builder.build(item).value;
+      expect(outcome.classification).toBe('internal-transfer');
+    });
+  });
+
+  describe('Scenario: PAIEMENT CARTE with unknown suffix → Uncategorized expense, confidence=low', () => {
+    it('falls back to expense when suffix matches no card', () => {
+      // fails if: the classifier silently guesses a card, or hard-fails the item (silent data loss)
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({
+        sourceAccount: 'main-1',
+        direction: 'outflow',
+        description: 'PAIEMENT CARTE X9999',
+        amount: eur(10000),
+      });
+      const result = builder.build(item);
+      expect(result.isSuccess).toBe(true);
+      const outcome = result.value;
+      expect(outcome.classification).toBe('expense');
+      expect(outcome.category).toBe('Uncategorized');
+      expect(outcome.confidence).toBe('low');
+    });
+  });
+
+  describe('Scenario: card-sourced item is NOT classified by the card-settlement classifier', () => {
+    it('PAIEMENT CARTE on a card account is treated as regular expense, not internal-transfer', () => {
+      // fails if: the classifier runs against card-sourced items
+      // (should only fire when sourceAccount.type === 'bank')
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({
+        sourceAccount: 'card-1234',
+        direction: 'outflow',
+        description: 'PAIEMENT CARTE X1234',
+        amount: eur(10000),
+      });
+      const outcome = builder.build(item).value;
+      expect(outcome.classification).not.toBe('internal-transfer');
+      expect(outcome.classification).toBe('expense');
+    });
+  });
+});

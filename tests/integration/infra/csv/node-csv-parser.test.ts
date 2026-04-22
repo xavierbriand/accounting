@@ -155,3 +155,38 @@ describe('NodeCsvParser — encoding tolerance', () => {
     expect(items[0].occurredAt).toBe('2026-01-15T00:00:00+01:00');
   });
 });
+
+describe('NodeCsvParser — file-level failure: missing BPCE columns', () => {
+  it('returns Result.fail naming the missing columns without echoing the incorrect header verbatim', () => {
+    // fails if: a missing column is silently tolerated and every row is reported
+    // as per-row errors rather than one file-level Result.fail
+    const content = readFixture('bpce-missing-columns.csv');
+    const parser = new NodeCsvParser();
+    const result = parser.parse(content, defaultOpts);
+
+    expect(result.isFailure).toBe(true);
+    const msg = result.error;
+    // The error must mention that columns are missing
+    expect(msg).toContain('Missing required BPCE columns');
+    // Must name at least one missing required column
+    expect(msg).toContain('Libelle simplifie');
+    // Must NOT echo the user's incorrect header verbatim
+    expect(msg).not.toContain('Date,Description,Amount,Currency');
+    expect(msg).not.toContain('Date;Description');
+  });
+});
+
+describe('NodeCsvParser — file-level failure: wrong delimiter', () => {
+  it('returns Result.fail hinting at the expected semicolon delimiter', () => {
+    // fails if: csv-parse silently produces a single multi-field column and the
+    // parser treats it as valid instead of failing with a delimiter hint
+    const content = readFixture('bpce-wrong-delimiter.csv');
+    const parser = new NodeCsvParser();
+    const result = parser.parse(content, defaultOpts);
+
+    expect(result.isFailure).toBe(true);
+    const msg = result.error;
+    // The error must hint at the correct delimiter
+    expect(msg).toContain('semicolon');
+  });
+});

@@ -10,6 +10,11 @@ const minimalValid = {
     { partner: 'Sam', ratio: 0.5 },
   ],
   buffers: [],
+  timezone: 'Europe/Paris',
+  accounts: [
+    { id: 'main-12345678901', filenamePrefix: '12345678901_' },
+    { id: 'card-1234', filenamePrefix: 'carte_1234_' },
+  ],
 };
 
 describe('parseRawConfig', () => {
@@ -131,6 +136,115 @@ describe('parseRawConfig', () => {
     expect(bucket.target.currency).toBe('EUR');
     expect(bucket.cap?.amount).toBe(200000);
     expect(bucket.cap?.currency).toBe('EUR');
+  });
+
+  describe('timezone field', () => {
+    it('accepts a valid IANA timezone', () => {
+      // fails if parseRawConfig rejects a valid IANA timezone string
+      const result = parseRawConfig({ ...minimalValid, timezone: 'Europe/Paris' });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.timezone).toBe('Europe/Paris');
+    });
+
+    it('accepts UTC as a valid IANA timezone', () => {
+      // fails if parseRawConfig rejects 'UTC' as a valid timezone
+      const result = parseRawConfig({ ...minimalValid, timezone: 'UTC' });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.timezone).toBe('UTC');
+    });
+
+    it('rejects an invalid timezone string', () => {
+      // fails if parseRawConfig accepts an invalid IANA timezone like 'Not/AZone'
+      const result = parseRawConfig({ ...minimalValid, timezone: 'Not/AZone' });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('timezone');
+    });
+
+    it('rejects a missing timezone field', () => {
+      // fails if parseRawConfig accepts a config with no timezone field
+      const { timezone: _omitted, ...withoutTimezone } = minimalValid;
+      const result = parseRawConfig(withoutTimezone);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('timezone');
+    });
+  });
+
+  describe('accounts field', () => {
+    it('accepts a valid accounts list', () => {
+      // fails if parseRawConfig rejects a valid accounts array
+      const result = parseRawConfig(minimalValid);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.accounts).toHaveLength(2);
+      expect(result.value.accounts[0].id).toBe('main-12345678901');
+      expect(result.value.accounts[0].filenamePrefix).toBe('12345678901_');
+    });
+
+    it('rejects a missing accounts field', () => {
+      // fails if parseRawConfig accepts a config with no accounts field
+      const { accounts: _omitted, ...withoutAccounts } = minimalValid;
+      const result = parseRawConfig(withoutAccounts);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('accounts');
+    });
+
+    it('rejects an empty accounts array', () => {
+      // fails if parseRawConfig accepts an empty accounts array
+      const result = parseRawConfig({ ...minimalValid, accounts: [] });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('accounts');
+    });
+
+    it('rejects duplicate account ids — error cites path not value', () => {
+      const raw = {
+        ...minimalValid,
+        accounts: [
+          { id: 'main-12345678901', filenamePrefix: '12345678901_' },
+          { id: 'main-12345678901', filenamePrefix: 'carte_1234_' },
+        ],
+      };
+      // fails if parseRawConfig does not detect duplicate account ids
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate');
+      // PII-safe: error must NOT echo the user-chosen id value
+      expect(result.error).not.toContain('main-12345678901');
+    });
+
+    it('rejects duplicate filenamePrefix values — error cites path not value', () => {
+      const raw = {
+        ...minimalValid,
+        accounts: [
+          { id: 'main-aaa', filenamePrefix: 'shared_prefix_' },
+          { id: 'card-bbb', filenamePrefix: 'shared_prefix_' },
+        ],
+      };
+      // fails if parseRawConfig does not detect duplicate filenamePrefix values
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate');
+      // PII-safe: error must NOT echo the user-chosen prefix value
+      expect(result.error).not.toContain('shared_prefix_');
+    });
+
+    it('rejects an account entry with an empty id', () => {
+      // fails if parseRawConfig accepts an account with an empty id
+      const raw = {
+        ...minimalValid,
+        accounts: [{ id: '', filenamePrefix: '12345678901_' }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('rejects an account entry with an empty filenamePrefix', () => {
+      // fails if parseRawConfig accepts an account with an empty filenamePrefix
+      const raw = {
+        ...minimalValid,
+        accounts: [{ id: 'main-aaa', filenamePrefix: '' }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+    });
   });
 
   describe('property tests', () => {

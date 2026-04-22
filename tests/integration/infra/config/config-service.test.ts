@@ -18,6 +18,7 @@ function writeConfig(dir: string, filename: string, content: string): void {
 const validYaml = `
 dbPath: ./data/ledger.db
 defaultCurrency: EUR
+timezone: Europe/Paris
 splits:
   - partner: Alex
     ratio: 0.5
@@ -29,6 +30,11 @@ buffers:
   - name: House
     target: 5000
     cap: 10000
+accounts:
+  - id: main-12345678901
+    filenamePrefix: "12345678901_"
+  - id: card-1234
+    filenamePrefix: "carte_1234_"
 `;
 
 describe('FileConfigService', () => {

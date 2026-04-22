@@ -26,3 +26,8 @@ export interface ParseOutcome {
   readonly items: readonly IngestItem[];
   readonly errors: readonly ParseError[];
 }
+
+export interface IdempotencyOutcome {
+  readonly fresh: readonly IngestItem[];
+  readonly duplicates: readonly IngestItem[];
+}

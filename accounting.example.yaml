@@ -22,8 +22,11 @@ timezone: Europe/Paris
 # Prefixes must be unique so a file matches at most one account.
 accounts:
   - id: main-12345678901
+    type: bank
     filenamePrefix: "12345678901_"
   - id: card-1234
+    type: card
+    cardSuffix: "1234"
     filenamePrefix: "carte_1234_"
 
 # Split rules: who pays what share of shared expenses.

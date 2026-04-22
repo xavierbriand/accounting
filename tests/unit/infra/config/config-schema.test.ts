@@ -12,8 +12,8 @@ const minimalValid = {
   buffers: [],
   timezone: 'Europe/Paris',
   accounts: [
-    { id: 'main-12345678901', filenamePrefix: '12345678901_' },
-    { id: 'card-1234', filenamePrefix: 'carte_1234_' },
+    { id: 'main-12345678901', type: 'bank', filenamePrefix: '12345678901_' },
+    { id: 'card-1234', type: 'card', cardSuffix: '1234', filenamePrefix: 'carte_1234_' },
   ],
 };
 
@@ -202,8 +202,8 @@ describe('parseRawConfig', () => {
       const raw = {
         ...minimalValid,
         accounts: [
-          { id: 'main-12345678901', filenamePrefix: '12345678901_' },
-          { id: 'main-12345678901', filenamePrefix: 'carte_1234_' },
+          { id: 'main-12345678901', type: 'bank', filenamePrefix: '12345678901_' },
+          { id: 'main-12345678901', type: 'bank', filenamePrefix: 'carte_1234_' },
         ],
       };
       // fails if parseRawConfig does not detect duplicate account ids
@@ -218,8 +218,8 @@ describe('parseRawConfig', () => {
       const raw = {
         ...minimalValid,
         accounts: [
-          { id: 'main-aaa', filenamePrefix: 'shared_prefix_' },
-          { id: 'card-bbb', filenamePrefix: 'shared_prefix_' },
+          { id: 'main-aaa', type: 'bank', filenamePrefix: 'shared_prefix_' },
+          { id: 'card-bbb', type: 'bank', filenamePrefix: 'shared_prefix_' },
         ],
       };
       // fails if parseRawConfig does not detect duplicate filenamePrefix values
@@ -234,7 +234,7 @@ describe('parseRawConfig', () => {
       // fails if parseRawConfig accepts an account with an empty id
       const raw = {
         ...minimalValid,
-        accounts: [{ id: '', filenamePrefix: '12345678901_' }],
+        accounts: [{ id: '', type: 'bank', filenamePrefix: '12345678901_' }],
       };
       const result = parseRawConfig(raw);
       expect(result.isFailure).toBe(true);
@@ -244,7 +244,7 @@ describe('parseRawConfig', () => {
       // fails if parseRawConfig accepts an account with an empty filenamePrefix
       const raw = {
         ...minimalValid,
-        accounts: [{ id: 'main-aaa', filenamePrefix: '' }],
+        accounts: [{ id: 'main-aaa', type: 'bank', filenamePrefix: '' }],
       };
       const result = parseRawConfig(raw);
       expect(result.isFailure).toBe(true);

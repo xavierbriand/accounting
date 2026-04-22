@@ -13,7 +13,9 @@ export interface BufferBucket {
 
 export interface AccountConfig {
   readonly id: string;
+  readonly type: 'bank' | 'card';
   readonly filenamePrefix: string;
+  readonly cardSuffix?: string;
 }
 
 export interface AppConfig {

@@ -17,7 +17,7 @@ On conflict between this file and a `docs/` file, `docs/` wins. The retrospectiv
 
 **Couples Expense Sharing App** — a local-first, CLI-based "predictive asset-based financial engine" for couples managing joint finances. Replaces reactive joint-account top-ups with a deterministic engine that predicts fair transfers, buffers volatility, and keeps an immutable ledger.
 
-**Current position:** Epic 1 (Foundation). Stories 1.1 and 1.2 are done. **Next story: 1.3 — Ledger Schema & Repository.** *This line is refreshed by the retrospective phase of each story.*
+**Current position:** Epic 2 (Transaction Ingestion & Tagging). Stories 1.1–1.4 + 2.1 are done. **Next story: 2.3 — Transaction Builder & Auto-Tagging Domain Service.** *This line is refreshed by the retrospective phase of each story.*
 
 **Stack:** Node.js 20, TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
 

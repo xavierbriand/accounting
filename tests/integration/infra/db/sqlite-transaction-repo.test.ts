@@ -185,6 +185,47 @@ describe('SqliteTransactionRepository', () => {
     });
   });
 
+  describe('File permissions (NFR11)', () => {
+    it.skipIf(process.platform === 'win32')(
+      'getDb() chmods a newly-created DB file to 0o600 on POSIX',
+      () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-chmod-test-'));
+        closeDb();
+        try {
+          const dbPath = path.join(tmpDir, 'new.db');
+          // fails if getDb() does not chmod a newly-created DB file to 0o600
+          getDb(dbPath);
+          const stat = fs.statSync(dbPath);
+          expect(stat.mode & 0o777).toBe(0o600);
+        } finally {
+          closeDb();
+          fs.rmSync(tmpDir, { recursive: true });
+        }
+      },
+    );
+
+    it.skipIf(process.platform === 'win32')(
+      'getDb() leaves an existing DB file perms unchanged (0o644 stays 0o644 on POSIX)',
+      () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-chmod-test-'));
+        closeDb();
+        try {
+          const dbPath = path.join(tmpDir, 'existing.db');
+          // Pre-create the file with 0o644 permissions
+          fs.writeFileSync(dbPath, '');
+          fs.chmodSync(dbPath, 0o644);
+          // fails if getDb() modifies permissions on a pre-existing DB file
+          getDb(dbPath);
+          const stat = fs.statSync(dbPath);
+          expect(stat.mode & 0o777).toBe(0o644);
+        } finally {
+          closeDb();
+          fs.rmSync(tmpDir, { recursive: true });
+        }
+      },
+    );
+  });
+
   describe('Repository surface (type-level)', () => {
     it('exposes save and findById', () => {
       expect(typeof repo.save).toBe('function');

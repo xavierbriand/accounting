@@ -91,12 +91,58 @@ function validateBpceHeader(header: string[]): string[] {
   return missing;
 }
 
+function parseRowBpce(
+  row: Record<string, string>,
+  lineNumber: number,
+  opts: ParseOptions,
+): IngestItem | ParseError {
+  const description = (row['Libelle simplifie'] ?? '').trim();
+  if (!description) {
+    return { line: lineNumber, field: 'description', reason: 'empty description' };
+  }
+
+  const rawDate = (row['Date operation'] ?? '').trim();
+  const occurredAt = parseBpceDate(rawDate, opts.timezone);
+  if (occurredAt === null) {
+    return { line: lineNumber, field: 'date', reason: 'invalid date format (expected DD/MM/YYYY with valid calendar date)' };
+  }
+
+  const rawDebit = (row['Debit'] ?? '').trim();
+  const rawCredit = (row['Credit'] ?? '').trim();
+  const hasDebit = rawDebit !== '';
+  const hasCredit = rawCredit !== '';
+
+  if (hasDebit && hasCredit) {
+    return { line: lineNumber, field: 'direction', reason: 'ambiguous: both debit and credit populated' };
+  }
+  if (!hasDebit && !hasCredit) {
+    return { line: lineNumber, field: 'direction', reason: 'no debit or credit amount' };
+  }
+
+  const rawAmount = hasDebit ? rawDebit : rawCredit;
+  const cents = parseCentsFromString(rawAmount);
+  if (cents === null) {
+    return { line: lineNumber, field: 'amount', reason: 'invalid amount format (expected decimal with comma separator)' };
+  }
+
+  const moneyResult = Money.fromCents(Math.abs(cents), opts.currency);
+  if (moneyResult.isFailure) {
+    return { line: lineNumber, field: 'amount', reason: 'could not construct monetary amount' };
+  }
+
+  return {
+    sourceAccount: opts.sourceAccount,
+    occurredAt,
+    description,
+    direction: hasDebit ? 'outflow' : 'inflow',
+    amount: moneyResult.value,
+  };
+}
+
 export class NodeCsvParser implements CsvParser {
   parse(content: string, opts: ParseOptions): Result<ParseOutcome> {
-    // Strip leading BOM if present
     const cleaned = content.startsWith('\uFEFF') ? content.slice(1) : content;
 
-    // Heuristic delimiter check: if no ';' in the first line but many ',', warn
     const firstLine = cleaned.split('\n')[0] ?? '';
     const semiCount = (firstLine.match(/;/g) ?? []).length;
     const commaCount = (firstLine.match(/,/g) ?? []).length;
@@ -115,80 +161,25 @@ export class NodeCsvParser implements CsvParser {
         skip_empty_lines: true,
         trim: true,
         relax_column_count: false,
-        bom: false, // already stripped manually
+        bom: false,
       }) as Record<string, string>[];
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return Result.fail(`Failed to parse CSV: ${msg}`);
     }
 
-    // Validate header (columns are from the first row's keys when rows exist, or empty)
     const header = rawRows.length > 0 ? Object.keys(rawRows[0]) : [];
     const missingCols = validateBpceHeader(header);
     if (missingCols.length > 0) {
-      return Result.fail(
-        `Missing required BPCE columns: ${missingCols.join(', ')}`,
-      );
+      return Result.fail(`Missing required BPCE columns: ${missingCols.join(', ')}`);
     }
 
     const items: IngestItem[] = [];
     const errors: ParseError[] = [];
 
     for (let i = 0; i < rawRows.length; i++) {
-      const row = rawRows[i];
-      // csv-parse with columns:true uses header row as line 1; data rows start at 2
-      const lineNumber = i + 2;
-
-      // Validate description
-      const description = (row['Libelle simplifie'] ?? '').trim();
-      if (!description) {
-        errors.push({ line: lineNumber, field: 'description', reason: 'empty description' });
-        continue;
-      }
-
-      // Validate date (from 'Date operation')
-      const rawDate = (row['Date operation'] ?? '').trim();
-      const occurredAt = parseBpceDate(rawDate, opts.timezone);
-      if (occurredAt === null) {
-        errors.push({ line: lineNumber, field: 'date', reason: 'invalid date format (expected DD/MM/YYYY with valid calendar date)' });
-        continue;
-      }
-
-      // Validate direction and amount
-      const rawDebit = (row['Debit'] ?? '').trim();
-      const rawCredit = (row['Credit'] ?? '').trim();
-      const hasDebit = rawDebit !== '';
-      const hasCredit = rawCredit !== '';
-
-      if (hasDebit && hasCredit) {
-        errors.push({ line: lineNumber, field: 'direction', reason: 'ambiguous: both debit and credit populated' });
-        continue;
-      }
-      if (!hasDebit && !hasCredit) {
-        errors.push({ line: lineNumber, field: 'direction', reason: 'no debit or credit amount' });
-        continue;
-      }
-
-      const rawAmount = hasDebit ? rawDebit : rawCredit;
-      const cents = parseCentsFromString(rawAmount);
-      if (cents === null) {
-        errors.push({ line: lineNumber, field: 'amount', reason: 'invalid amount format (expected decimal with comma separator)' });
-        continue;
-      }
-
-      const moneyResult = Money.fromCents(Math.abs(cents), opts.currency);
-      if (moneyResult.isFailure) {
-        errors.push({ line: lineNumber, field: 'amount', reason: 'could not construct monetary amount' });
-        continue;
-      }
-
-      items.push({
-        sourceAccount: opts.sourceAccount,
-        occurredAt,
-        description,
-        direction: hasDebit ? 'outflow' : 'inflow',
-        amount: moneyResult.value,
-      });
+      const result = parseRowBpce(rawRows[i], i + 2, opts);
+      if ('sourceAccount' in result) items.push(result); else errors.push(result);
     }
 
     return Result.ok({ items, errors });

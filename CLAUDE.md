@@ -74,7 +74,7 @@ The loop has two formal gates:
 
 Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete before merge.
 
-1. **Plan** (Opus): collect intent → diverge on solutions → converge on one → capture Gherkin behaviour → open draft PR → hand-off plan for Sonnet. *Exit:* draft PR exists with template sections 1–6 filled.
+1. **Plan** (Opus): collect intent → diverge on solutions → converge on one → capture Gherkin behaviour → open draft PR → hand-off plan for Sonnet. Plan file lives at `docs/plans/story-<id>.md` (committed alongside the code it plans — Story 2.2 retro finding, action A). *Exit:* draft PR exists with template sections 1–6 filled.
 2. **Critical review on the plan** (Opus, 3 passes before implementation):
    - **P1 — Functional.** Plan satisfies target FR/NFRs in [docs/prd.md](docs/prd.md) and story in [docs/epics.md](docs/epics.md); Gherkin complete and unambiguous.
    - **P2 — Product Quality / QA.** Walk [docs/quality-assurance.md](docs/quality-assurance.md): accounting correctness, privacy compliance, coherence.
@@ -83,7 +83,7 @@ Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete b
    Each suggestion tagged **adopted / deferred / rejected** in the Suggestion Log (template § 7). **Deferred items must link a GitHub issue** from the `deferred-suggestion` template. Rejected items carry a one-line reason. *Exit (DoR gate):* no un-tagged suggestions; plan rewritten; every `deferred` has an issue link.
 3. **Implement** (Sonnet via `Task` with the `sonnet-implementer` agent): writes failing acceptance scenario first, drives down to failing unit tests, makes green, commits per state. Returns the structured report (see 6.3). *Exit:* all tests green, report delivered, branch pushed. PR not yet marked ready.
 4. **Code review on the implementation + refactor plan** (Opus) — re-run P1/P2/P3 **against the actual code**:
-   - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent.
+   - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent. Audit that each `this test fails if …` note identifies the production path it guards, not just any path (Story 1.3 retro action E validated on Story 2.2; codified here per Story 2.2 retro action B).
    - P2 retro-check: walk QA doc against the diff.
    - P3 retro-check: walk engineering-standards + security-checklist against the diff.
 

@@ -52,6 +52,28 @@ function tryCardSettlement(
   };
 }
 
+function makeOutcome(
+  id: string,
+  item: IngestItem,
+  debitAccount: string,
+  creditAccount: string,
+  classification: Classification,
+  category: string,
+  confidence: Confidence,
+): Result<BuildOutcome> {
+  const txResult = Transaction.create({
+    id,
+    occurredAt: item.occurredAt,
+    description: item.description,
+    entries: [
+      { account: debitAccount, side: 'debit', amount: item.amount },
+      { account: creditAccount, side: 'credit', amount: item.amount },
+    ],
+  });
+  if (txResult.isFailure) return Result.fail(txResult.error);
+  return Result.ok({ transaction: txResult.value, category, classification, confidence });
+}
+
 export class TransactionBuilder {
   constructor(
     private readonly accounts: readonly AccountConfig[],
@@ -69,80 +91,29 @@ export class TransactionBuilder {
 
     const settlement = tryCardSettlement(item, source, this.accounts);
     if (settlement) {
-      const txResult = Transaction.create({
-        id,
-        occurredAt: item.occurredAt,
-        description: item.description,
-        entries: [
-          { account: cardAccount(settlement.cardId), side: 'debit', amount: item.amount },
-          { account: bankAccount(source.id), side: 'credit', amount: item.amount },
-        ],
-      });
-      if (txResult.isFailure) return Result.fail(txResult.error);
-      return Result.ok({
-        transaction: txResult.value,
-        category: settlement.category,
-        classification: settlement.classification,
-        confidence: settlement.confidence,
-      });
+      return makeOutcome(
+        id, item,
+        cardAccount(settlement.cardId), bankAccount(source.id),
+        settlement.classification, settlement.category, settlement.confidence,
+      );
     }
 
     const { category, confidence } = tagDescription(item.description, this.rules);
 
     if (source.type === 'bank' && item.direction === 'outflow') {
-      const txResult = Transaction.create({
-        id,
-        occurredAt: item.occurredAt,
-        description: item.description,
-        entries: [
-          { account: expenseAccount(category), side: 'debit', amount: item.amount },
-          { account: bankAccount(source.id), side: 'credit', amount: item.amount },
-        ],
-      });
-      if (txResult.isFailure) return Result.fail(txResult.error);
-      return Result.ok({ transaction: txResult.value, category, classification: 'expense', confidence });
+      return makeOutcome(id, item, expenseAccount(category), bankAccount(source.id), 'expense', category, confidence);
     }
 
     if (source.type === 'bank' && item.direction === 'inflow') {
-      const txResult = Transaction.create({
-        id,
-        occurredAt: item.occurredAt,
-        description: item.description,
-        entries: [
-          { account: bankAccount(source.id), side: 'debit', amount: item.amount },
-          { account: incomeAccount(category), side: 'credit', amount: item.amount },
-        ],
-      });
-      if (txResult.isFailure) return Result.fail(txResult.error);
-      return Result.ok({ transaction: txResult.value, category, classification: 'income', confidence });
+      return makeOutcome(id, item, bankAccount(source.id), incomeAccount(category), 'income', category, confidence);
     }
 
     if (source.type === 'card' && item.direction === 'outflow') {
-      const txResult = Transaction.create({
-        id,
-        occurredAt: item.occurredAt,
-        description: item.description,
-        entries: [
-          { account: expenseAccount(category), side: 'debit', amount: item.amount },
-          { account: cardAccount(source.id), side: 'credit', amount: item.amount },
-        ],
-      });
-      if (txResult.isFailure) return Result.fail(txResult.error);
-      return Result.ok({ transaction: txResult.value, category, classification: 'expense', confidence });
+      return makeOutcome(id, item, expenseAccount(category), cardAccount(source.id), 'expense', category, confidence);
     }
 
     // card + inflow (refund/income)
-    const txResult = Transaction.create({
-      id,
-      occurredAt: item.occurredAt,
-      description: item.description,
-      entries: [
-        { account: cardAccount(source.id), side: 'debit', amount: item.amount },
-        { account: incomeAccount(category), side: 'credit', amount: item.amount },
-      ],
-    });
-    if (txResult.isFailure) return Result.fail(txResult.error);
-    return Result.ok({ transaction: txResult.value, category, classification: 'income', confidence });
+    return makeOutcome(id, item, cardAccount(source.id), incomeAccount(category), 'income', category, confidence);
   }
 
   buildAll(items: readonly IngestItem[]): Result<BuildBatchOutcome> {

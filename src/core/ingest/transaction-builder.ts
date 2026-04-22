@@ -13,9 +13,10 @@ import { Result } from '@core/shared/result.js';
 // Capture group 1 is the 4-digit suffix.
 const CARD_SETTLEMENT_RE = /^PAIEMENT\s+CARTE\s+X?(\d{4})(?:\s.*)?$/i;
 
-const defaultUuidGen: UuidGen = (): string =>
-  // Replaced at the CLI assembly point (Story 2.4). Core has no access to node:crypto.
-  (() => { throw new Error('TransactionBuilder: idGen not wired — provide a UuidGen in constructor'); })();
+// Replaced at the CLI assembly point (Story 2.4). Core has no access to node:crypto.
+const defaultUuidGen: UuidGen = (): string => {
+  throw new Error('TransactionBuilder: idGen not wired — provide a UuidGen in constructor');
+};
 
 function tagDescription(description: string, rules: readonly AutoTagRule[]): { category: string; confidence: Confidence } {
   const matched = rules.find((r) => r.pattern.test(description));

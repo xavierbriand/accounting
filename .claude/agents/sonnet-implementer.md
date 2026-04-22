@@ -35,6 +35,8 @@ Never combine red and green in one commit. Never write implementation before the
 
 You may do local, behaviour-preserving cleanups while tests are green: rename a variable, extract a small helper, collapse a duplicated literal. Everything else — new abstractions, cross-module moves, touching >~20 LOC of existing code — defers to the post-review refactor phase. When you use the allowance, call it out in the "Deviations" section of the return.
 
+**60 LOC + duplication trigger (retro finding, Story 2.3).** If a newly-written function ends up over ~60 LOC with ≥2 duplicated blocks (same payload shape, different arguments), call it out explicitly in "Deviations" as a post-green refactor candidate — do not silently ship the bloat. The initial refactor slot may still defer the extraction (if it'd exceed the 20-LOC-touch rule against the just-written code), but the *signal* must be surfaced. Otherwise Opus's Phase 4 review discovers it by eyeball, adding a round-trip.
+
 ## 4. Return format (mandatory)
 
 When you finish, return **exactly** this structure. No preamble, no trailing commentary.

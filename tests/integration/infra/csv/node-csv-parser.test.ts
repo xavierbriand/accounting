@@ -67,3 +67,91 @@ describe('NodeCsvParser — BPCE happy path', () => {
     expect(creditRow.description).toBe('REMBOURSEMENT MUTUELLE');
   });
 });
+
+describe('NodeCsvParser — direction from column (AC2 proof)', () => {
+  it('maps Debit column to outflow and Credit column to inflow regardless of sign', () => {
+    // fails if: direction is derived from the ± sign inside the cell instead of
+    // from which column is populated
+    const content = readFixture('bpce-valid.csv');
+    const parser = new NodeCsvParser();
+    const result = parser.parse(content, defaultOpts);
+
+    expect(result.isSuccess).toBe(true);
+    const { items } = result.value;
+
+    // Row with Debit populated → outflow (even though cell has '-' prefix)
+    const debitRow = items[0];
+    expect(debitRow.direction).toBe('outflow');
+    expect(debitRow.amount.amount).toBeGreaterThan(0);
+
+    // Row with Credit populated → inflow (even though cell has '+' prefix)
+    const creditRow = items[3];
+    expect(creditRow.direction).toBe('inflow');
+    expect(creditRow.amount.amount).toBeGreaterThan(0);
+  });
+});
+
+describe('NodeCsvParser — per-row error isolation (AC3)', () => {
+  it('skips malformed rows individually and returns valid siblings; PII never in error.reason', () => {
+    // fails if: one bad row aborts the batch, or a raw description leaks into error.reason
+    const content = readFixture('bpce-mixed.csv');
+    const parser = new NodeCsvParser();
+    const result = parser.parse(content, defaultOpts);
+
+    expect(result.isSuccess).toBe(true);
+    const { items, errors } = result.value;
+
+    // 6 data rows: row 3 has invalid date (32/13/2026), row 5 has non-numeric amount (abc),
+    // row 6 has both Debit AND Credit populated (ambiguous)
+    expect(items).toHaveLength(3);
+    expect(errors).toHaveLength(3);
+
+    // Line numbers: header=1, data rows 2..7
+    const errorLines = errors.map(e => e.line);
+    expect(errorLines).toContain(4); // row 3 = line 4 (bad date)
+    expect(errorLines).toContain(6); // row 5 = line 6 (bad amount)
+    expect(errorLines).toContain(7); // row 6 = line 7 (ambiguous direction)
+
+    // Field tags
+    const dateError = errors.find(e => e.line === 4);
+    expect(dateError?.field).toBe('date');
+
+    const amountError = errors.find(e => e.line === 6);
+    expect(amountError?.field).toBe('amount');
+
+    const directionError = errors.find(e => e.line === 7);
+    expect(directionError?.field).toBe('direction');
+
+    // PII safety: none of the Libelle simplifie values appear in error reasons
+    const piiValues = ['LIBRAIRIE FICTIVE', 'MAGASIN FICTIF', 'VIREMENT FICTIF', 'REF012', 'REF014', 'REF015'];
+    errors.forEach(err => {
+      piiValues.forEach(pii => {
+        expect(err.reason).not.toContain(pii);
+      });
+    });
+  });
+});
+
+describe('NodeCsvParser — encoding tolerance', () => {
+  it('parses BOM-prefixed, CRLF line-ended CSV with trailing blank line correctly', () => {
+    // fails if: BOM causes header mismatch, CRLF fragments leak into descriptions,
+    // or the trailing blank line produces a phantom error
+    const content = readFixture('bpce-encoding.csv');
+    const parser = new NodeCsvParser();
+    const result = parser.parse(content, { ...defaultOpts, timezone: 'Europe/Paris' });
+
+    expect(result.isSuccess).toBe(true);
+    const { items, errors } = result.value;
+
+    // 2 data rows + trailing blank = 2 valid items, 0 errors
+    expect(items).toHaveLength(2);
+    expect(errors).toHaveLength(0);
+
+    // French accents in descriptions should be preserved
+    expect(items[0].description).toBe('CAFÉ DES ARTISTES');
+    expect(items[1].description).toBe('BIBLIOTHÈQUE FICTIVE');
+
+    // Winter date (January) → +01:00 (CET)
+    expect(items[0].occurredAt).toBe('2026-01-15T00:00:00+01:00');
+  });
+});

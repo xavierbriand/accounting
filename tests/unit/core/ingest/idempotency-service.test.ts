@@ -14,6 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import fc from 'fast-check';
 import { IdempotencyService } from '../../../../src/core/ingest/idempotency-service.js';
+import { canonicalize } from '../../../../src/core/ingest/canonicalize.js';
 import type { HashFn } from '../../../../src/core/ports/hash-fn.js';
 import type { HashRepository } from '../../../../src/core/ports/hash-repository.js';
 import type { IngestItem } from '../../../../src/core/ingest/types.js';
@@ -43,34 +44,17 @@ function makeRepo(knownHashes: ReadonlySet<string>): HashRepository {
 
 describe('IdempotencyService.filterNew', () => {
   describe('happy path — 3 fresh + 2 duplicates', () => {
-    it('returns items at indices 0, 2, 4 as fresh and 1, 3 as duplicates', async () => {
+    it('returns items at indices 0, 2, 4 as fresh and 1, 3 as duplicates', () => {
       // fails if: ordering is lost (Set-based), a duplicate leaks into fresh,
       //           or an item is double-counted in both arrays
       const items = [makeItem(1), makeItem(2), makeItem(3), makeItem(4), makeItem(5)];
-      // Hash items 2 and 4 (0-indexed: indices 1 and 3) as already known.
-      // With identityHashFn the hash = canonical string, so we need to compute
-      // what canonicalize would produce for those items.
-      // We'll use a mock repo that we'll pre-seed after we know the hashes.
-      // Strategy: use a custom HashFn that returns a simple id-based string
-      // so we can predict which hashes are "known".
-      const predictableHashFn: HashFn = (canonical: string) => canonical.slice(0, 8);
-      const service = new IdempotencyService(predictableHashFn, {
-        listKnownHashes: vi.fn((candidates: readonly string[]) => {
-          // Simulate: items at indices 1 and 3 are already in the ledger
-          // We identify them by checking if the caller includes their hash
-          // For this test, we return the first 2 elements of candidates as known
-          const known = new Set<string>();
-          // items[1] and items[3] will have specific canonical strings
-          // We can identify them by position — but we need a deterministic approach.
-          // Use the sourceAccount + occurredAt discriminator: items 2 and 4 have occurredAt containing '02' and '04'
-          for (const c of candidates) {
-            if (c.includes('2026-04-02') || c.includes('2026-04-04')) {
-              known.add(c);
-            }
-          }
-          return Result.ok(known as ReadonlySet<string>);
-        }),
-      });
+      // Using identityHashFn: hash == canonical string. Seed the known-hashes
+      // set with the canonical strings for items at indices 1 and 3.
+      const knownHashes = new Set([
+        canonicalize(items[1]).value, // item at index 1 (occurredAt 2026-04-02)
+        canonicalize(items[3]).value, // item at index 3 (occurredAt 2026-04-04)
+      ]);
+      const service = new IdempotencyService(identityHashFn, makeRepo(knownHashes));
 
       const result = service.filterNew(items);
       expect(result.isSuccess).toBe(true);
@@ -172,43 +156,36 @@ describe('IdempotencyService.filterNew', () => {
       //           or fresh.length + duplicates.length !== N
       fc.assert(
         fc.property(
-          fc.array(fc.nat({ max: 27 }), { minLength: 0, maxLength: 28 }),
-          fc.uniqueArray(fc.nat({ max: 27 }), { minLength: 0, maxLength: 28 }),
-          (itemIds, duplicateIds) => {
-            const dupeSet = new Set(duplicateIds);
-            const items: IngestItem[] = itemIds.map((id) => makeItem(id + 1));
-            // Build a hash-set using the identity hash fn: hashes = canonical strings
-            // For simplicity, use a hash fn that returns a stable per-item marker
-            const stableHashFn: HashFn = (_canonical: string) => {
-              // We can't easily correlate canonical string to itemId here.
-              // Use a different approach: hash = the item's occurredAt field value
-              return _canonical; // will be canonical string
-            };
-
-            // Build "known hashes" by computing what the canonical strings would be
-            // for items whose id is in duplicateIds. Since we use identityHashFn,
-            // the hash IS the canonical string. But we can't easily pre-compute
-            // without calling canonicalize. So use a simpler deterministic approach:
-            // use a HashFn that returns a fixed prefix based on item content.
-
-            // Simplest approach: use a repo that reads the actual computed hashes
-            // from a first dry run.
-            const allHashes = new Set<string>();
-            const collectRepo: HashRepository = {
-              listKnownHashes: vi.fn((candidates: readonly string[]) => {
-                candidates.forEach((c) => allHashes.add(c));
-                return Result.ok(new Set<string>() as ReadonlySet<string>);
+          // N unique items (0..N-1 as IDs), then a subset of those indices that are "duplicate"
+          fc.nat({ max: 28 }).chain((n) =>
+            fc.tuple(
+              fc.constant(n),
+              fc.uniqueArray(fc.nat({ max: Math.max(0, n - 1) }), {
+                minLength: 0,
+                maxLength: n,
               }),
-            };
-            const collectService = new IdempotencyService(identityHashFn, collectRepo);
-            const collectResult = collectService.filterNew(items);
-            if (collectResult.isFailure) return true; // skip items with US chars
+            ),
+          ),
+          ([n, duplicateIndices]) => {
+            if (n === 0) return true; // trivially passes
 
-            const allHashesArr = [...allHashes];
-            // Mark hashes at duplicateIds positions as known
+            // Build N unique items (each with a distinct id so canonical strings differ)
+            const items: IngestItem[] = Array.from({ length: n }, (_, i) => makeItem(i + 1));
+
+            // Compute canonical strings for all items (using identityHashFn)
+            const canonicals = items.map((item) => {
+              const r = canonicalize(item);
+              return r.isSuccess ? r.value : null;
+            });
+            if (canonicals.some((c) => c === null)) return true; // skip if any canonicalize fails
+
+            // Seed known-hashes with the canonicals at duplicateIndices
             const knownHashes = new Set<string>(
-              [...dupeSet].filter((i) => i < allHashesArr.length).map((i) => allHashesArr[i]),
+              duplicateIndices
+                .filter((i) => i < n)
+                .map((i) => canonicals[i] as string),
             );
+            const dupeIndexSet = new Set(duplicateIndices.filter((i) => i < n));
 
             const service = new IdempotencyService(identityHashFn, makeRepo(knownHashes));
             const result = service.filterNew(items);
@@ -217,28 +194,30 @@ describe('IdempotencyService.filterNew', () => {
             const { fresh, duplicates } = result.value;
 
             // fresh + duplicates = total items
-            if (fresh.length + duplicates.length !== items.length) return false;
+            if (fresh.length + duplicates.length !== n) return false;
 
-            // fresh items appear in same relative order as in input
-            const freshIndices = fresh.map((f) =>
-              items.findIndex((item) => item.occurredAt === f.occurredAt && item.description === f.description),
-            );
-            for (let i = 1; i < freshIndices.length; i++) {
-              if (freshIndices[i] <= freshIndices[i - 1]) return false;
+            // Verify that items at duplicateIndices land in duplicates, others in fresh
+            const expectedFreshCount = n - dupeIndexSet.size;
+            const expectedDupCount = dupeIndexSet.size;
+            if (fresh.length !== expectedFreshCount) return false;
+            if (duplicates.length !== expectedDupCount) return false;
+
+            // Verify relative order of fresh (items NOT in duplicateIndices, in input order)
+            const expectedFreshItems = items.filter((_, i) => !dupeIndexSet.has(i));
+            for (let i = 0; i < expectedFreshItems.length; i++) {
+              if (fresh[i] !== expectedFreshItems[i]) return false;
             }
 
-            // duplicates appear in same relative order as in input
-            const dupIndices = duplicates.map((d) =>
-              items.findIndex((item) => item.occurredAt === d.occurredAt && item.description === d.description),
-            );
-            for (let i = 1; i < dupIndices.length; i++) {
-              if (dupIndices[i] <= dupIndices[i - 1]) return false;
+            // Verify relative order of duplicates (items IN duplicateIndices, in input order)
+            const expectedDupItems = items.filter((_, i) => dupeIndexSet.has(i));
+            for (let i = 0; i < expectedDupItems.length; i++) {
+              if (duplicates[i] !== expectedDupItems[i]) return false;
             }
 
             return true;
           },
         ),
-        { numRuns: 50 },
+        { numRuns: 100 },
       );
     });
   });

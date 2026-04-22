@@ -122,18 +122,8 @@ export class NodeCsvParser implements CsvParser {
       return Result.fail(`Failed to parse CSV: ${msg}`);
     }
 
-    if (rawRows.length === 0) {
-      const missingCols = validateBpceHeader([]);
-      if (missingCols.length > 0) {
-        return Result.fail(
-          `Missing required BPCE columns: ${missingCols.join(', ')}`,
-        );
-      }
-      return Result.ok({ items: [], errors: [] });
-    }
-
-    // Validate header (columns are from the first row's keys)
-    const header = Object.keys(rawRows[0]);
+    // Validate header (columns are from the first row's keys when rows exist, or empty)
+    const header = rawRows.length > 0 ? Object.keys(rawRows[0]) : [];
     const missingCols = validateBpceHeader(header);
     if (missingCols.length > 0) {
       return Result.fail(

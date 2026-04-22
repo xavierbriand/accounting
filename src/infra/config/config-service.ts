@@ -26,7 +26,7 @@ export class FileConfigService implements ConfigService {
     const xdgHome =
       this.opts.xdgConfigHome ??
       process.env['XDG_CONFIG_HOME'] ??
-      path.join(this.opts.homeDir ?? process.env['HOME'] ?? os_homedir(), '.config');
+      path.join(this.opts.homeDir ?? process.env['HOME'] ?? '/tmp', '.config');
 
     const xdgPath = path.join(xdgHome, 'accounting', 'config.yaml');
 
@@ -53,8 +53,4 @@ export class FileConfigService implements ConfigService {
 
     return parseRawConfig(raw);
   }
-}
-
-function os_homedir(): string {
-  return process.env['HOME'] ?? '/tmp';
 }

@@ -1,15 +1,15 @@
 export function bankAccount(id: string): string {
-  throw new Error(`not implemented: ${id}`);
+  return `Assets:Bank:${id}`;
 }
 
 export function cardAccount(id: string): string {
-  throw new Error(`not implemented: ${id}`);
+  return `Liabilities:CreditCard:${id}`;
 }
 
 export function expenseAccount(category: string): string {
-  throw new Error(`not implemented: ${category}`);
+  return `Expense:${category}`;
 }
 
 export function incomeAccount(category: string): string {
-  throw new Error(`not implemented: ${category}`);
+  return `Income:${category}`;
 }

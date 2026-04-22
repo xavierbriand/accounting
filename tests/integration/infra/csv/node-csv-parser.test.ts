@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -188,5 +189,96 @@ describe('NodeCsvParser — file-level failure: wrong delimiter', () => {
     const msg = result.error;
     // The error must hint at the correct delimiter
     expect(msg).toContain('semicolon');
+  });
+});
+
+const BPCE_HEADER = 'Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation';
+
+function buildValidBpceRow(date: string, debitCents: number): string {
+  const debitStr = debitCents === 0 ? '0,00' : `-${Math.floor(debitCents / 100)},${String(debitCents % 100).padStart(2, '0')}`;
+  return `${date};FICTIF LABEL;OP FICTIF;REF;;;Carte;Divers;${debitStr};;${date};${date};0`;
+}
+
+function buildMalformedBpceRow(date: string): string {
+  return `${date};FICTIF LABEL;OP FICTIF;REF;;;Carte;Divers;notanumber;;${date};${date};0`;
+}
+
+describe('NodeCsvParser — property: row-count conservation + sourceAccount stamping', () => {
+  it('items.length + errors.length == N and every item.sourceAccount matches opts', () => {
+    // fails if: rows are silently dropped, a single row produces multiple error entries,
+    // or an item's sourceAccount differs from opts.sourceAccount
+    fc.assert(
+      fc.property(
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 20 }),
+        fc.string({ minLength: 1, maxLength: 30 }).filter(s => s.trim() === s && s.length > 0),
+        (rowValidity, sourceAccount) => {
+          const rows = rowValidity.map((isValid, i) => {
+            const day = String((i % 28) + 1).padStart(2, '0');
+            const month = String((Math.floor(i / 28) % 12) + 1).padStart(2, '0');
+            const date = `${day}/${month}/2026`;
+            return isValid ? buildValidBpceRow(date, 1000 + i * 50) : buildMalformedBpceRow(date);
+          });
+          const content = [BPCE_HEADER, ...rows].join('\n');
+          const parser = new NodeCsvParser();
+          const opts: ParseOptions = { format: 'bpce', currency: 'EUR', timezone: 'Europe/Paris', sourceAccount };
+          const result = parser.parse(content, opts);
+
+          if (!result.isSuccess) return false;
+          const { items, errors } = result.value;
+
+          // Row-count conservation
+          if (items.length + errors.length !== rowValidity.length) return false;
+
+          // sourceAccount stamped correctly on every item
+          return items.every(item => item.sourceAccount === sourceAccount);
+        },
+      ),
+      { numRuns: 50 },
+    );
+  });
+});
+
+describe('NodeCsvParser — property: DST-aware local-midnight offset resolution', () => {
+  it('offset for each date matches Intl.DateTimeFormat longOffset for Europe/Paris', () => {
+    // fails if: the adapter hardcodes a single offset, or picks the wrong side of a DST transition
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 365 }),
+        (dayOfYear) => {
+          const date = new Date(Date.UTC(2026, 0, dayOfYear));
+          const year = date.getUTCFullYear();
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(date.getUTCDate()).padStart(2, '0');
+          const ddmmyyyy = `${day}/${month}/${year}`;
+
+          const row = buildValidBpceRow(ddmmyyyy, 500);
+          const content = [BPCE_HEADER, row].join('\n');
+          const parser = new NodeCsvParser();
+          const opts: ParseOptions = { format: 'bpce', currency: 'EUR', timezone: 'Europe/Paris', sourceAccount: 'test' };
+          const result = parser.parse(content, opts);
+
+          if (!result.isSuccess || result.value.items.length !== 1) return false;
+
+          const occurredAt = result.value.items[0].occurredAt;
+
+          // Extract offset from the parsed occurredAt string
+          const parsedOffsetMatch = /T00:00:00([+-]\d{2}:\d{2})$/.exec(occurredAt);
+          if (!parsedOffsetMatch) return false;
+          const parsedOffset = parsedOffsetMatch[1];
+
+          // Derive expected offset using Intl.DateTimeFormat on the UTC midnight date
+          const formatter = new Intl.DateTimeFormat('en', {
+            timeZone: 'Europe/Paris',
+            timeZoneName: 'longOffset',
+          });
+          const parts = Object.fromEntries(formatter.formatToParts(date).map(p => [p.type, p.value]));
+          const tzName = parts['timeZoneName'] ?? '';
+          const expectedOffset = tzName.replace(/^GMT/, '');
+
+          return parsedOffset === expectedOffset;
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 });

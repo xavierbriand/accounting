@@ -140,7 +140,7 @@ describe('parseRawConfig', () => {
           fc.array(
             fc.record({
               partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
-              weight: fc.float({ min: 0.01, max: 1.0, noNaN: true }),
+              weight: fc.float({ min: Math.fround(0.01), max: Math.fround(1.0), noNaN: true }),
             }),
             { minLength: 1, maxLength: 5 },
           ).filter(items => {
@@ -166,7 +166,7 @@ describe('parseRawConfig', () => {
           fc.array(
             fc.record({
               partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
-              ratio: fc.float({ min: 0.01, max: 0.4, noNaN: true }),
+              ratio: fc.float({ min: Math.fround(0.01), max: Math.fround(0.4), noNaN: true }),
             }),
             { minLength: 1, maxLength: 3 },
           ).filter(items => {

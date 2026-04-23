@@ -81,7 +81,6 @@ describe('NodeSqliteSnapshotService — round-trip', () => {
     expect(createResult.isSuccess).toBe(true);
 
     // Write 2 more transactions after the snapshot
-    writeTwoTxns(db.prepare.bind(db) === db.prepare.bind(db) ? db : db);
     db.prepare("INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)").run(
       'tx-snap-3', '2026-01-03T00:00:00Z', 'Third', 'snap-hash-3',
     );

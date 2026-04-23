@@ -18,9 +18,27 @@ const BufferBucketRawSchema = z.object({
 const AccountConfigSchema = z
   .object({
     id: z.string().min(1),
+    type: z.enum(['bank', 'card']),
     filenamePrefix: z.string().min(1),
+    cardSuffix: z.string().regex(/^\d{4}$/).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((acct, ctx) => {
+    if (acct.type === 'card' && acct.cardSuffix === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cardSuffix'],
+        message: 'cardSuffix is required for card accounts',
+      });
+    }
+    if (acct.type === 'bank' && acct.cardSuffix !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cardSuffix'],
+        message: 'cardSuffix must not be set on bank accounts',
+      });
+    }
+  });
 
 const RawConfigSchema = z
   .object({

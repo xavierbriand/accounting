@@ -1,4 +1,5 @@
 import type { Money } from '@core/shared/money.js';
+import type { Transaction } from '@core/ledger/transaction.js';
 
 // The only supported bank format in Story 2.1. Add a new member when a second bank format lands.
 // Callers reading CSV files via Story 2.4 must decode BPCE files using latin1 encoding:
@@ -30,4 +31,19 @@ export interface ParseOutcome {
 export interface IdempotencyOutcome {
   readonly fresh: readonly IngestItem[];
   readonly duplicates: readonly IngestItem[];
+}
+
+export type Classification = 'expense' | 'income' | 'internal-transfer';
+export type Confidence = 'high' | 'low';
+
+export interface BuildOutcome {
+  readonly transaction: Transaction;
+  readonly category: string;
+  readonly classification: Classification;
+  readonly confidence: Confidence;
+}
+
+export interface BuildBatchOutcome {
+  readonly built: readonly BuildOutcome[];
+  readonly failed: readonly { readonly item: IngestItem; readonly reason: string }[];
 }

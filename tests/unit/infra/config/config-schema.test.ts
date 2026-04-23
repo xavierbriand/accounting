@@ -12,8 +12,8 @@ const minimalValid = {
   buffers: [],
   timezone: 'Europe/Paris',
   accounts: [
-    { id: 'main-12345678901', filenamePrefix: '12345678901_' },
-    { id: 'card-1234', filenamePrefix: 'carte_1234_' },
+    { id: 'main-12345678901', type: 'bank', filenamePrefix: '12345678901_' },
+    { id: 'card-1234', type: 'card', cardSuffix: '1234', filenamePrefix: 'carte_1234_' },
   ],
 };
 
@@ -202,8 +202,8 @@ describe('parseRawConfig', () => {
       const raw = {
         ...minimalValid,
         accounts: [
-          { id: 'main-12345678901', filenamePrefix: '12345678901_' },
-          { id: 'main-12345678901', filenamePrefix: 'carte_1234_' },
+          { id: 'main-12345678901', type: 'bank', filenamePrefix: '12345678901_' },
+          { id: 'main-12345678901', type: 'bank', filenamePrefix: 'carte_1234_' },
         ],
       };
       // fails if parseRawConfig does not detect duplicate account ids
@@ -218,8 +218,8 @@ describe('parseRawConfig', () => {
       const raw = {
         ...minimalValid,
         accounts: [
-          { id: 'main-aaa', filenamePrefix: 'shared_prefix_' },
-          { id: 'card-bbb', filenamePrefix: 'shared_prefix_' },
+          { id: 'main-aaa', type: 'bank', filenamePrefix: 'shared_prefix_' },
+          { id: 'card-bbb', type: 'bank', filenamePrefix: 'shared_prefix_' },
         ],
       };
       // fails if parseRawConfig does not detect duplicate filenamePrefix values
@@ -234,7 +234,7 @@ describe('parseRawConfig', () => {
       // fails if parseRawConfig accepts an account with an empty id
       const raw = {
         ...minimalValid,
-        accounts: [{ id: '', filenamePrefix: '12345678901_' }],
+        accounts: [{ id: '', type: 'bank', filenamePrefix: '12345678901_' }],
       };
       const result = parseRawConfig(raw);
       expect(result.isFailure).toBe(true);
@@ -244,10 +244,111 @@ describe('parseRawConfig', () => {
       // fails if parseRawConfig accepts an account with an empty filenamePrefix
       const raw = {
         ...minimalValid,
-        accounts: [{ id: 'main-aaa', filenamePrefix: '' }],
+        accounts: [{ id: 'main-aaa', type: 'bank', filenamePrefix: '' }],
       };
       const result = parseRawConfig(raw);
       expect(result.isFailure).toBe(true);
+    });
+
+    describe('type field (Story 2.3)', () => {
+      it('accepts a bank account with type: bank', () => {
+        // fails if parseRawConfig rejects a valid bank-type account entry
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'main-1', type: 'bank', filenamePrefix: '12345678901_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isSuccess).toBe(true);
+        expect(result.value.accounts[0].type).toBe('bank');
+      });
+
+      it('accepts a card account with type: card and valid cardSuffix', () => {
+        // fails if parseRawConfig rejects a valid card-type account with a 4-digit cardSuffix
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'main-1', type: 'bank', filenamePrefix: '12345678901_' },
+            { id: 'card-1234', type: 'card', cardSuffix: '1234', filenamePrefix: 'carte_1234_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isSuccess).toBe(true);
+        expect(result.value.accounts[1].type).toBe('card');
+        expect(result.value.accounts[1].cardSuffix).toBe('1234');
+      });
+
+      it('rejects an account with an unknown type value — error names the field not the value', () => {
+        // fails if parseRawConfig accepts an account with type !== 'bank' | 'card'
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'main-1', type: 'savings', filenamePrefix: '12345678901_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isFailure).toBe(true);
+        expect(result.error).toContain('type');
+        // PII-safe: must not echo the user-supplied value
+        expect(result.error).not.toContain('savings');
+      });
+
+      it('rejects a missing type field', () => {
+        // fails if parseRawConfig accepts an account entry with no type field
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'main-1', filenamePrefix: '12345678901_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isFailure).toBe(true);
+        expect(result.error).toContain('type');
+      });
+
+      it('rejects a card account missing cardSuffix — error names the field not the value', () => {
+        // fails if parseRawConfig accepts a card-type account without a cardSuffix
+        // (cross-field superRefine: type==='card' requires cardSuffix)
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'card-1234', type: 'card', filenamePrefix: 'carte_1234_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isFailure).toBe(true);
+        expect(result.error).toContain('cardSuffix');
+      });
+
+      it('rejects a card account with a non-4-digit cardSuffix', () => {
+        // fails if parseRawConfig accepts cardSuffix not matching /^\d{4}$/
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'card-1234', type: 'card', cardSuffix: '12', filenamePrefix: 'carte_1234_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isFailure).toBe(true);
+        expect(result.error).toContain('cardSuffix');
+      });
+
+      it('rejects a bank account that has a cardSuffix — error names the field not the value', () => {
+        // fails if parseRawConfig allows cardSuffix on a bank account
+        // (cross-field superRefine: type==='bank' must not have cardSuffix)
+        const raw = {
+          ...minimalValid,
+          accounts: [
+            { id: 'main-1', type: 'bank', cardSuffix: '1234', filenamePrefix: '12345678901_' },
+          ],
+        };
+        const result = parseRawConfig(raw);
+        expect(result.isFailure).toBe(true);
+        expect(result.error).toContain('cardSuffix');
+        // PII-safe: must not echo the user-supplied suffix value
+        expect(result.error).not.toContain('1234');
+      });
     });
   });
 

@@ -32,8 +32,11 @@ buffers:
     cap: 10000
 accounts:
   - id: main-12345678901
+    type: bank
     filenamePrefix: "12345678901_"
   - id: card-1234
+    type: card
+    cardSuffix: "1234"
     filenamePrefix: "carte_1234_"
 `;
 

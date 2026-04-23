@@ -2,7 +2,8 @@ import Database from 'better-sqlite3';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import { Transaction, EntryDraft } from '@core/ledger/transaction.js';
-import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import type { TransactionRepository, BatchWriteOutcome } from '@core/ports/transaction-repository.js';
+import type { BuildOutcome } from '@core/ingest/types.js';
 
 interface TransactionRow {
   id: string;
@@ -20,6 +21,7 @@ interface EntryRow {
 export class SqliteTransactionRepository implements TransactionRepository {
   private readonly insertHeader: Database.Statement;
   private readonly insertEntry: Database.Statement;
+  private readonly insertHeaderWithHash: Database.Statement;
   private readonly selectHeader: Database.Statement;
   private readonly selectEntries: Database.Statement;
 
@@ -29,6 +31,9 @@ export class SqliteTransactionRepository implements TransactionRepository {
     );
     this.insertEntry = db.prepare(
       'INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES (?, ?, ?, ?, ?)',
+    );
+    this.insertHeaderWithHash = db.prepare(
+      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
     );
     this.selectHeader = db.prepare(
       'SELECT id, occurred_at, description FROM transactions WHERE id = ?',
@@ -59,6 +64,35 @@ export class SqliteTransactionRepository implements TransactionRepository {
     try {
       write();
       return Result.ok();
+    } catch (err) {
+      return Result.fail(String(err));
+    }
+  }
+
+  saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome> {
+    const write = this.db.transaction(() => {
+      for (const o of outcomes) {
+        this.insertHeaderWithHash.run(
+          o.transaction.id,
+          o.transaction.occurredAt,
+          o.transaction.description,
+          o.idempotencyHash,
+        );
+        for (const entry of o.transaction.entries) {
+          this.insertEntry.run(
+            o.transaction.id,
+            entry.account,
+            entry.side,
+            entry.amount.amount,
+            entry.amount.currency,
+          );
+        }
+      }
+    });
+
+    try {
+      write();
+      return Result.ok({ written: outcomes.length });
     } catch (err) {
       return Result.fail(String(err));
     }

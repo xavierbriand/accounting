@@ -25,7 +25,7 @@ export class SqliteTransactionRepository implements TransactionRepository {
 
   constructor(private readonly db: Database.Database) {
     this.insertHeader = db.prepare(
-      'INSERT INTO transactions (id, occurred_at, description) VALUES (?, ?, ?)',
+      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
     );
     this.insertEntry = db.prepare(
       'INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES (?, ?, ?, ?, ?)',
@@ -38,9 +38,13 @@ export class SqliteTransactionRepository implements TransactionRepository {
     );
   }
 
-  save(transaction: Transaction): Result<void> {
+  save(transaction: Transaction, idempotencyHash?: string): Result<void> {
+    // idempotencyHash is required for production callers (saveBatch); legacy test callers
+    // that do not supply a hash get a deterministic placeholder derived from the tx id.
+    // The NOT NULL constraint on idempotency_hash (migration 004) is satisfied either way.
+    const hash = idempotencyHash ?? `legacy-placeholder:${transaction.id}`;
     const write = this.db.transaction(() => {
-      this.insertHeader.run(transaction.id, transaction.occurredAt, transaction.description);
+      this.insertHeader.run(transaction.id, transaction.occurredAt, transaction.description, hash);
       for (const entry of transaction.entries) {
         this.insertEntry.run(
           transaction.id,

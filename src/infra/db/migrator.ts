@@ -37,20 +37,37 @@ export function runMigrations(db: Database.Database): void {
     if (fileVersion > userVersion) {
       console.log(`Running migration: ${file}`);
       const filePath = path.join(migrationsDir, file);
-      const sql = fs.readFileSync(filePath, 'utf-8');
+      const migrationSql = fs.readFileSync(filePath, 'utf-8');
 
-      const runMigration = db.transaction(() => {
-        db.exec(sql);
-        db.pragma(`user_version = ${fileVersion}`);
-      });
+      // PRAGMA foreign_keys is a no-op inside a transaction — it must be toggled
+      // outside the migration's own db.transaction(). This is defense-in-depth for all
+      // migrations: rebuilds (like 004) need FK enforcement OFF to DROP TABLE without
+      // cascading into child tables. We restore the prior value in finally.
+      const priorFk = db.pragma('foreign_keys', { simple: true }) as number;
+      db.pragma('foreign_keys = OFF');
 
       try {
+        const runMigration = db.transaction(() => {
+          db.exec(migrationSql);
+          // PRAGMA foreign_key_check runs INSIDE the transaction (P3 finding #4):
+          // if the check fails, the whole transaction rolls back — including the
+          // PRAGMA user_version bump inside the SQL — leaving the DB cleanly at
+          // its prior version.
+          const fkIssues = db.pragma('foreign_key_check') as unknown[];
+          if (fkIssues.length > 0) {
+            throw new Error(`Migration ${file}: foreign_key_check returned ${fkIssues.length} issue(s)`);
+          }
+        });
+
         runMigration();
         console.log(`Successfully applied migration ${fileVersion}`);
         executedCount++;
       } catch (err) {
         console.error(`Failed to apply migration ${file}:`, err);
         throw err;
+      } finally {
+        // Restore prior FK enforcement regardless of success or failure
+        if (priorFk === 1) db.pragma('foreign_keys = ON');
       }
     }
   }

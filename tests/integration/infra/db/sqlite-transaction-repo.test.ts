@@ -76,7 +76,7 @@ describe('SqliteTransactionRepository', () => {
 
     it('rejects negative amount_cents (CHECK amount_cents >= 0)', () => {
       db.prepare(
-        "INSERT INTO transactions (id, occurred_at, description) VALUES ('tx-neg','2026-01-01T00:00:00Z','test')",
+        "INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('tx-neg','2026-01-01T00:00:00Z','test','hash-tx-neg')",
       ).run();
       expect(() => {
         db.prepare(
@@ -108,7 +108,7 @@ describe('SqliteTransactionRepository', () => {
     it('leaves zero rows when a CHECK failure occurs mid-save', () => {
       const txId = 'tx-atomic';
       db.prepare(
-        `INSERT INTO transactions (id, occurred_at, description) VALUES ('${txId}','2026-01-01T00:00:00Z','test')`,
+        `INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('${txId}','2026-01-01T00:00:00Z','test','hash-${txId}')`,
       ).run();
 
       try {

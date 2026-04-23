@@ -6,6 +6,8 @@ import type { IngestCommandDeps } from '../../../../src/cli/commands/ingest-comm
 import { Result } from '@core/shared/result.js';
 import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
+import type { SnapshotService } from '@core/ports/snapshot-service.js';
+import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
@@ -49,6 +51,22 @@ function makeLowOutcome(description: string, category: string): BuildOutcome {
   return { ...makeHighOutcome(description, category), confidence: 'low' };
 }
 
+const TEST_DB_PATH = '/tmp/test-ingest-flags.db';
+
+function makeNoOpSnapshotService(): SnapshotService {
+  return {
+    create: vi.fn().mockResolvedValue(Result.ok()),
+    restore: vi.fn().mockResolvedValue(Result.ok()),
+    remove: vi.fn().mockResolvedValue(Result.ok()),
+  };
+}
+
+function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
+  return {
+    saveBatch: vi.fn().mockReturnValue(Result.ok({ written: 0 })),
+  };
+}
+
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
   function makeCapture(): Writable & { captured: string } {
     const buf: string[] = [];
@@ -78,6 +96,9 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -104,6 +125,9 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -133,6 +157,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -174,6 +201,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -210,6 +240,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: false }, deps);

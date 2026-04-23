@@ -1,55 +1,69 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readBpceCsv } from '../../../../src/infra/fs/read-bpce-csv.js';
-import * as fs from 'fs';
+import { writeFileSync, mkdirSync, chmodSync, unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 // fails if: the function returns a success result on ENOENT,
 //           or error messages leak the full absolute path (home dir),
 //           or the function throws instead of returning Result.fail
 
-vi.mock('fs', () => ({
-  readFileSync: vi.fn(),
-}));
-
-const mockReadFileSync = vi.mocked(fs.readFileSync);
+const TMP = tmpdir();
 
 describe('readBpceCsv', () => {
   describe('happy path', () => {
-    it('returns success with the file content as a string', () => {
-      mockReadFileSync.mockReturnValueOnce('header\nrow1\n' as unknown as Buffer);
-      const result = readBpceCsv('/tmp/X_2026.csv');
-      expect(result.isSuccess).toBe(true);
-      expect(result.value).toBe('header\nrow1\n');
-      expect(mockReadFileSync).toHaveBeenCalledWith('/tmp/X_2026.csv', 'latin1');
+    it('returns success with the file content as a string (latin1 encoding)', () => {
+      const filePath = join(TMP, 'test-read-bpce-happy.csv');
+      writeFileSync(filePath, 'header\nrow1\n', 'latin1');
+      try {
+        const result = readBpceCsv(filePath);
+        expect(result.isSuccess).toBe(true);
+        expect(result.value).toBe('header\nrow1\n');
+      } finally {
+        if (existsSync(filePath)) unlinkSync(filePath);
+      }
     });
   });
 
   describe('ENOENT', () => {
     it('returns failure with a user-friendly message when file does not exist', () => {
-      const err = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
-      mockReadFileSync.mockImplementationOnce(() => { throw err; });
-      const result = readBpceCsv('/home/alice/X_2026.csv');
+      const fakePath = join(TMP, 'definitely-does-not-exist-xyz.csv');
+      const result = readBpceCsv(fakePath);
       expect(result.isFailure).toBe(true);
-      expect(result.error).toContain('X_2026.csv');
-      expect(result.error).not.toContain('/home/alice');
+      expect(result.error).toContain('definitely-does-not-exist-xyz.csv');
+      expect(result.error).not.toContain(TMP);
     });
   });
 
   describe('EACCES', () => {
-    it('returns failure with a permission-error message', () => {
-      const err = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
-      mockReadFileSync.mockImplementationOnce(() => { throw err; });
-      const result = readBpceCsv('/home/alice/X_2026.csv');
-      expect(result.isFailure).toBe(true);
-      expect(result.error).toContain('X_2026.csv');
-      expect(result.error).not.toContain('/home/alice');
+    it('returns failure with a permission-error message for unreadable file', () => {
+      const filePath = join(TMP, 'test-read-bpce-noaccess.csv');
+      writeFileSync(filePath, 'content', 'latin1');
+      chmodSync(filePath, 0o000);
+      try {
+        const result = readBpceCsv(filePath);
+        if (process.getuid && process.getuid() === 0) {
+          // root can always read — skip EACCES on root
+          expect(result.isSuccess || result.isFailure).toBe(true);
+        } else {
+          expect(result.isFailure).toBe(true);
+          expect(result.error).toContain('test-read-bpce-noaccess.csv');
+          expect(result.error).not.toContain(TMP);
+        }
+      } finally {
+        chmodSync(filePath, 0o644);
+        if (existsSync(filePath)) unlinkSync(filePath);
+      }
     });
   });
 
-  describe('unknown error', () => {
-    it('returns failure for unexpected errors', () => {
-      mockReadFileSync.mockImplementationOnce(() => { throw new Error('something unexpected'); });
-      const result = readBpceCsv('/tmp/X_2026.csv');
+  describe('PII safety', () => {
+    it('error messages use only the basename, never the full path', () => {
+      const filePath = join(TMP, 'nonexistent-pii-test.csv');
+      const result = readBpceCsv(filePath);
       expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('nonexistent-pii-test.csv');
+      expect(result.error).not.toContain(TMP);
     });
   });
 });

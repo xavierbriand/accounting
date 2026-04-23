@@ -32,7 +32,6 @@ import { readBpceCsv } from '../../../src/infra/fs/read-bpce-csv.js';
 import { Result } from '@core/shared/result.js';
 import type { AppConfig } from '@core/config/app-config.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
-import type { BuildOutcome } from '@core/ingest/types.js';
 
 const FIXTURE_CSV = path.join(
   path.dirname(new URL(import.meta.url).pathname),
@@ -66,12 +65,14 @@ function makeRealDeps(
   dbPath: string,
   csvPath: string,
   snapshotOverride?: SnapshotService,
+  repoOverride?: { saveBatch: IngestCommandDeps['transactionRepository']['saveBatch'] },
 ): { deps: IngestCommandDeps; stdout: Writable & { captured: string }; stderr: Writable & { captured: string }; exitCodes: number[] } {
   const stdout = makeCapture();
   const stderr = makeCapture();
   const exitCodes: number[] = [];
 
-  const repo = new SqliteTransactionRepository(db);
+  const realRepo = new SqliteTransactionRepository(db);
+  const transactionRepository = repoOverride ?? realRepo;
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
   const mainAccount = { id: 'main-account', type: 'bank' as const, filenamePrefix: 'bpce-valid' };
@@ -101,7 +102,7 @@ function makeRealDeps(
     stdout: stdout as Writable,
     stderr: stderr as Writable,
     exitCode: (code) => exitCodes.push(code),
-    transactionRepository: { saveBatch: (outcomes) => repo.saveBatch(outcomes) },
+    transactionRepository,
     snapshotService,
     dbPath,
   };
@@ -146,9 +147,12 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     db.close();
   });
 
-  it('(batch failure) zero rows written, snapshot retained, exit 4', async () => {
-    // fails if: partial write occurs, snapshot removed after failure, or wrong exit code
-    // We seed a conflicting hash so the second item causes UNIQUE violation
+  it('(batch failure) snapshot retained and exit 4 when saveBatch returns failure', async () => {
+    // fails if: snapshot removed after saveBatch failure, or wrong exit code,
+    // or stderr missing the expected messages.
+    // Uses a mock saveBatch that returns failure to isolate the commitBatch coordination
+    // logic (snapshot lifecycle, exit codes, stderr). The SQLite rollback path itself
+    // is tested in tests/integration/infra/db/sqlite-transaction-repo.test.ts.
     const tmpDir = makeTmpDir();
     const dbPath = path.join(tmpDir, 'ingest2.db');
     const snapshotPath = dbPath + '.bak';
@@ -160,40 +164,23 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     db.pragma('foreign_keys = ON');
     runMigrations(db);
 
-    // Build real outcomes first to grab a hash
-    const csvParser = new NodeCsvParser();
-    const hashRepo = new SqliteHashRepository(db);
-    const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
-    // Provide the account so TransactionBuilder resolves sourceAccount correctly
-    const mainAccount = { id: 'main-account', type: 'bank' as const, filenamePrefix: 'bpce-valid' };
-    const transactionBuilder = new TransactionBuilder([mainAccount], undefined, nodeUuidGen);
+    // Use real snapshot service (exercises real backup file) but mock saveBatch failure
+    const FAKE_HASH = 'a'.repeat(64);
+    const failingRepo = {
+      saveBatch: () => Result.fail(
+        `SqliteError: UNIQUE constraint failed: transactions.idempotency_hash (hash: ${FAKE_HASH})`,
+      ),
+    };
 
-    const rawCsv = fs.readFileSync(FIXTURE_CSV, 'latin1');
-    const parseResult = csvParser.parse(rawCsv, { format: 'bpce', currency: 'EUR', timezone: 'Europe/Paris', sourceAccount: 'main-account' });
-    expect(parseResult.isSuccess).toBe(true);
-
-    const idempResult = idempotencyService.filterNew(parseResult.value.items);
-    expect(idempResult.isSuccess).toBe(true);
-
-    const buildResult = transactionBuilder.buildAll(idempResult.value.fresh);
-    expect(buildResult.isSuccess).toBe(true);
-    expect(buildResult.value.built.length).toBeGreaterThan(0);
-
-    // Pre-insert the first outcome's hash to force a collision
-    const firstOutcome = buildResult.value.built[0] as BuildOutcome;
-    db.prepare(
-      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
-    ).run('pre-existing', '2026-01-01T00:00:00Z', 'pre-seeded', firstOutcome.idempotencyHash);
-
-    const { deps, stderr, exitCodes } = makeRealDeps(db, dbPath, csvPath);
+    const { deps, stderr, exitCodes } = makeRealDeps(db, dbPath, csvPath, undefined, failingRepo);
 
     await runIngestCommand({ file: csvPath, nonInteractive: false, json: false }, deps);
 
     expect(exitCodes).toContain(4);
 
-    // Only the pre-seeded row should exist (batch rolled back)
+    // Zero rows written (saveBatch failed, nothing persisted)
     const txCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
-    expect(txCount).toBe(1);
+    expect(txCount).toBe(0);
 
     // Snapshot retained for recovery
     expect(fs.existsSync(snapshotPath)).toBe(true);
@@ -206,9 +193,9 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
   });
 
   it('(PII hygiene) commit-failure stderr does NOT contain the raw hex hash (sanitizeSqlError)', async () => {
-    // fails if: raw UNIQUE-constraint error text is passed through to stderr verbatim
+    // fails if: raw saveBatch error text with a ≥32-char hex token is leaked verbatim to stderr.
     // (hashes are transaction fingerprints — correlatable across datasets — PII per security-checklist.md)
-    // P2 adopt #1 lock-in
+    // P2 adopt #1 lock-in. sanitizeSqlError must redact the hex token.
     const tmpDir = makeTmpDir();
     const dbPath = path.join(tmpDir, 'ingest3.db');
     const csvPath = path.join(tmpDir, 'bpce-valid.csv');
@@ -219,34 +206,25 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     db.pragma('foreign_keys = ON');
     runMigrations(db);
 
-    const csvParser = new NodeCsvParser();
-    const hashRepo = new SqliteHashRepository(db);
-    const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
-    const mainAccount = { id: 'main-account', type: 'bank' as const, filenamePrefix: 'bpce-valid' };
-    const transactionBuilder = new TransactionBuilder([mainAccount], undefined, nodeUuidGen);
+    // The raw SQLite UNIQUE-constraint error embeds the offending value verbatim
+    const collidingHash = 'b'.repeat(64);
+    const failingRepo = {
+      saveBatch: () => Result.fail(
+        `SqliteError: UNIQUE constraint failed: transactions.idempotency_hash = ${collidingHash}`,
+      ),
+    };
 
-    const rawCsv = fs.readFileSync(FIXTURE_CSV, 'latin1');
-    const parseResult = csvParser.parse(rawCsv, { format: 'bpce', currency: 'EUR', timezone: 'Europe/Paris', sourceAccount: 'main-account' });
-    const idempResult = idempotencyService.filterNew(parseResult.value.items);
-    const buildResult = transactionBuilder.buildAll(idempResult.value.fresh);
-
-    const firstOutcome = buildResult.value.built[0] as BuildOutcome;
-    const collidingHash = firstOutcome.idempotencyHash;
-
-    // Pre-plant collision
-    db.prepare(
-      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
-    ).run('pre-seed-pii', '2026-01-01T00:00:00Z', 'seed', collidingHash);
-
-    const { deps, stderr, exitCodes } = makeRealDeps(db, dbPath, csvPath);
+    const { deps, stderr, exitCodes } = makeRealDeps(db, dbPath, csvPath, undefined, failingRepo);
 
     await runIngestCommand({ file: csvPath, nonInteractive: false, json: false }, deps);
 
     expect(exitCodes).toContain(4);
 
-    // The hash (a 64-char hex string) must NOT appear verbatim in stderr
+    // The 64-char hex hash must NOT appear verbatim in stderr (sanitizeSqlError must redact it)
     expect(stderr.captured).not.toContain(collidingHash);
     expect(stderr.captured).toContain('Commit failed (batch rolled back)');
+    // The redacted form should be present
+    expect(stderr.captured).toContain('<redacted>');
 
     db.close();
   });

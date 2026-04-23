@@ -5,10 +5,13 @@ import type { IdempotencyService } from '@core/ingest/idempotency-service.js';
 import type { TransactionBuilder } from '@core/ingest/transaction-builder.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 import type { AccountConfig } from '@core/config/app-config.js';
+import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pick-source-account.js';
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
 import { formatSummaryTable } from '../utils/printer.js';
+import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 
 export interface IngestCommandOptions {
   readonly file: string;
@@ -27,6 +30,9 @@ export interface IngestCommandDeps {
   readonly stdout: Writable;
   readonly stderr: Writable;
   readonly exitCode: (code: number) => void;
+  readonly transactionRepository: Pick<TransactionRepository, 'saveBatch'>;
+  readonly snapshotService: SnapshotService;
+  readonly dbPath: string;
 }
 
 function writeln(stream: Writable, msg: string): void {
@@ -37,7 +43,7 @@ export async function runIngestCommand(
   opts: IngestCommandOptions,
   deps: IngestCommandDeps,
 ): Promise<void> {
-  const { configService, csvParser, idempotencyService, transactionBuilder, pickSourceAccount, readFile, prompt, stdout, stderr, exitCode } = deps;
+  const { configService, csvParser, idempotencyService, transactionBuilder, pickSourceAccount, readFile, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath } = deps;
 
   const configResult = configService.load();
   if (configResult.isFailure) {
@@ -127,7 +133,41 @@ export async function runIngestCommand(
     return;
   }
 
-  writeln(stderr, `${resolvedOutcomes.length} transaction(s) confirmed. (DB writes pending — Story 2.5)`);
+  await commitBatch(resolvedOutcomes, { transactionRepository, snapshotService, dbPath, stderr, exitCode });
+}
+
+async function commitBatch(
+  outcomes: readonly BuildOutcome[],
+  deps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'stderr' | 'exitCode'>,
+): Promise<void> {
+  const { transactionRepository, snapshotService, dbPath, stderr, exitCode } = deps;
+  const snapshotPath = dbPath + '.bak';
+
+  const snapResult = await snapshotService.create(dbPath, snapshotPath);
+  if (snapResult.isFailure) {
+    writeln(stderr, `Snapshot failed: ${snapResult.error}`);
+    exitCode(3);
+    return;
+  }
+
+  const writeResult = transactionRepository.saveBatch(outcomes);
+  if (writeResult.isFailure) {
+    // sanitizeSqlError redacts hex-like tokens (≥32 consecutive hex chars) from
+    // SQLite's raw UNIQUE/CHECK-violation messages; hashes are PII-adjacent
+    // fingerprints per security-checklist.md (P2 adopt #1).
+    writeln(stderr, `Commit failed (batch rolled back): ${sanitizeSqlError(writeResult.error)}`);
+    writeln(stderr, `Snapshot retained at ${snapshotPath} for recovery.`);
+    exitCode(4);
+    return;
+  }
+
+  const removeResult = await snapshotService.remove(snapshotPath);
+  if (removeResult.isFailure) {
+    // Snapshot-removal failure is non-fatal — the write succeeded. Warn, don't abort.
+    writeln(stderr, `Warning: committed successfully but could not remove snapshot at ${snapshotPath}: ${removeResult.error}`);
+  }
+
+  writeln(stderr, `${writeResult.value.written} transaction(s) committed.`);
   exitCode(0);
 }
 

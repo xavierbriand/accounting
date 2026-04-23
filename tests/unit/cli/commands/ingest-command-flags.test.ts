@@ -118,13 +118,15 @@ describe('--json mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
+    const dupItem = { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR };
+    const parseErrorRow = { line: 1, reason: 'bad date', raw: 'x' };
 
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
-      csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
-      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      pickSourceAccount: () => Result.ok(makeAccount('acct-42', 'X_')),
       readFile: () => Result.ok('csv-content'),
       prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
       stdout: stdout as Writable,
@@ -136,6 +138,8 @@ describe('--json mode', () => {
 
     const captured = (stdout as unknown as { captured: string }).captured;
     const parsed = JSON.parse(captured.trim()) as {
+      source_account: string;
+      summary: { duplicates: number; parseErrors: number };
       items: Array<{ debit: string; credit: string; category: string; classification: string; idempotencyHash?: string }>;
     };
 
@@ -145,6 +149,9 @@ describe('--json mode', () => {
     expect(parsed.items[0]).toHaveProperty('category', 'Groceries');
     expect(parsed.items[0]).toHaveProperty('classification', 'expense');
     expect(parsed.items[0]).not.toHaveProperty('idempotencyHash');
+    expect(parsed.source_account).toBe('acct-42');
+    expect(parsed.summary.duplicates).toBe(1);
+    expect(parsed.summary.parseErrors).toBe(1);
     expect(exitCodes).toContain(0);
   });
 
@@ -152,13 +159,15 @@ describe('--json mode', () => {
     const outcomes = [makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
+    const dupItem = { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR };
+    const parseErrorRow = { line: 2, reason: 'missing amount', raw: 'y' };
 
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
-      csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow, parseErrorRow] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem, dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
-      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      pickSourceAccount: () => Result.ok(makeAccount('acct-77', 'X_')),
       readFile: () => Result.ok('csv-content'),
       prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
       stdout: stdout as Writable,
@@ -169,12 +178,20 @@ describe('--json mode', () => {
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
 
     const captured = (stdout as unknown as { captured: string }).captured;
-    const parsed = JSON.parse(captured.trim()) as { needsReview: string[]; items: unknown[] };
+    const parsed = JSON.parse(captured.trim()) as {
+      source_account: string;
+      summary: { duplicates: number; parseErrors: number };
+      needsReview: string[];
+      items: unknown[];
+    };
 
     expect(exitCodes).toContain(2);
     expect(parsed.needsReview).toHaveLength(1);
     expect(parsed.needsReview[0]).toBe('tx-UBER TRIP');
     expect(parsed.items).toHaveLength(0);
+    expect(parsed.source_account).toBe('acct-77');
+    expect(parsed.summary.duplicates).toBe(2);
+    expect(parsed.summary.parseErrors).toBe(2);
   });
 
   it('ambiguous filename match exits 2', async () => {

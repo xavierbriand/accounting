@@ -112,7 +112,7 @@ export async function runIngestCommand(
   }
 
   if (opts.nonInteractive || opts.json) {
-    return runNonInteractive(opts, built, lowConfidence, stdout, stderr, exitCode);
+    return runNonInteractive(opts, account, built, lowConfidence, duplicates.length, parseOutcome.errors.length, stdout, stderr, exitCode);
   }
 
   const resolvedOutcomes = await runInteractiveLoop(built, lowConfidence, prompt, stderr, exitCode);
@@ -169,8 +169,11 @@ async function runInteractiveLoop(
 
 function runNonInteractive(
   opts: IngestCommandOptions,
+  account: AccountConfig,
   built: readonly BuildOutcome[],
   lowConfidence: readonly BuildOutcome[],
+  duplicatesCount: number,
+  parseErrorsCount: number,
   stdout: Writable,
   stderr: Writable,
   exitCode: (code: number) => void,
@@ -187,8 +190,8 @@ function runNonInteractive(
       stdout.write(
         JSON.stringify({
           file: opts.file,
-          source_account: null,
-          summary: { total: built.length, autoTagged: built.length - lowConfidence.length, needsReview: lowConfidence.length, duplicates: 0, parseErrors: 0 },
+          source_account: account.id,
+          summary: { total: built.length, autoTagged: built.length - lowConfidence.length, needsReview: lowConfidence.length, duplicates: duplicatesCount, parseErrors: parseErrorsCount },
           items: [],
           needsReview,
         }) + '\n',
@@ -219,8 +222,8 @@ function runNonInteractive(
     stdout.write(
       JSON.stringify({
         file: opts.file,
-        source_account: null,
-        summary: { total: built.length, autoTagged: built.length, needsReview: 0, duplicates: 0, parseErrors: 0 },
+        source_account: account.id,
+        summary: { total: built.length, autoTagged: built.length, needsReview: 0, duplicates: duplicatesCount, parseErrors: parseErrorsCount },
         items,
       }) + '\n',
     );

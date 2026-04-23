@@ -8,14 +8,17 @@
  * Slice 2 (card-settlement classifier): see bottom of this file — tests are initially skipped
  * and enabled in the separate failing-test commit for that slice.
  *
+ * Story 2.5: BuildOutcome carries idempotencyHash from the FreshIngestItem input.
+ *
  * fails if: direction→debit/credit rows wrong, auto-tag seed absent, Uncategorized fallback
  *   not implemented, buildAll aborts on one failure, ordering lost, idGen called once and reused,
- *   description/occurredAt mutated by the builder.
+ *   description/occurredAt mutated by the builder,
+ *   or BuildOutcome.idempotencyHash is missing/incorrect (Story 2.5).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TransactionBuilder } from '../../../../src/core/ingest/transaction-builder.js';
 import type { AccountConfig } from '../../../../src/core/config/app-config.js';
-import type { IngestItem } from '../../../../src/core/ingest/types.js';
+import type { IngestItem, FreshIngestItem } from '../../../../src/core/ingest/types.js';
 import { Money } from '../../../../src/core/shared/money.js';
 
 const bankAccount: AccountConfig = {
@@ -247,6 +250,42 @@ describe('TransactionBuilder — obvious basics', () => {
       });
       const outcome = builder.build(item).value;
       expect(outcome.transaction.occurredAt).toBe('2026-04-20T00:00:00+02:00');
+    });
+  });
+
+  describe('Story 2.5: buildAll accepts FreshIngestItem[] and threads idempotencyHash into BuildOutcome', () => {
+    it('BuildOutcome.idempotencyHash equals the hash supplied in FreshIngestItem', () => {
+      // fails if: buildAll drops or ignores idempotencyHash from FreshIngestItem,
+      //           or if the hash is overwritten with a different value in makeOutcome.
+      //           This guards the chain: IdempotencyService → buildAll → saveBatch.
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow' });
+      const freshItem: FreshIngestItem = { item, idempotencyHash: 'abc123hash' };
+
+      const result = builder.buildAll([freshItem]);
+      expect(result.isSuccess).toBe(true);
+      const { built, failed } = result.value;
+      expect(failed).toHaveLength(0);
+      expect(built).toHaveLength(1);
+      expect(built[0].idempotencyHash).toBe('abc123hash');
+    });
+
+    it('each outcome carries its own hash when multiple fresh items are provided', () => {
+      // fails if: hash from item[0] is applied to all outcomes (off-by-one in loop)
+      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const freshItems: FreshIngestItem[] = [
+        { item: makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 1' }), idempotencyHash: 'hash-one' },
+        { item: makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2' }), idempotencyHash: 'hash-two' },
+        { item: makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 3' }), idempotencyHash: 'hash-three' },
+      ];
+
+      const result = builder.buildAll(freshItems);
+      expect(result.isSuccess).toBe(true);
+      const { built } = result.value;
+      expect(built).toHaveLength(3);
+      expect(built[0].idempotencyHash).toBe('hash-one');
+      expect(built[1].idempotencyHash).toBe('hash-two');
+      expect(built[2].idempotencyHash).toBe('hash-three');
     });
   });
 });

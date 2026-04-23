@@ -41,6 +41,7 @@ function makeHighOutcome(description: string, category: string): BuildOutcome {
     category,
     classification: 'expense',
     confidence: 'high',
+    idempotencyHash: `hash-${description}`,
   };
 }
 
@@ -69,7 +70,7 @@ describe('--non-interactive mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -95,7 +96,7 @@ describe('--non-interactive mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -124,7 +125,7 @@ describe('--json mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('acct-42', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -165,7 +166,7 @@ describe('--json mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow, parseErrorRow] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem, dupItem] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem, dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('acct-77', 'X_')),
       readFile: () => Result.ok('csv-content'),

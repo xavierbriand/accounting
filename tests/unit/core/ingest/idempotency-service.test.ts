@@ -6,10 +6,12 @@
  *   - same CSV ingested twice produces zero new items on second run
  *   - AC1: field discrimination property (all six fields contribute to hash)
  *   - order preservation under arbitrary duplicates (property)
+ *   - Story 2.5: fresh items are FreshIngestItem ({ item, idempotencyHash }) shape
  *
  * fails if: IdempotencyService module does not exist, ordering is lost (Set-based),
  *            a duplicate leaks into fresh, an item is double-counted in both arrays,
- *            or re-ingest still returns items as fresh (violates FR7)
+ *            or re-ingest still returns items as fresh (violates FR7),
+ *            or fresh items do not carry their idempotency hash (Story 2.5)
  */
 import { describe, it, expect, vi } from 'vitest';
 import fc from 'fast-check';
@@ -64,11 +66,35 @@ describe('IdempotencyService.filterNew', () => {
       expect(duplicates).toHaveLength(2);
 
       // Verify specific items (by their occurredAt which is unique per item)
-      expect(fresh[0].occurredAt).toContain('2026-04-01');
-      expect(fresh[1].occurredAt).toContain('2026-04-03');
-      expect(fresh[2].occurredAt).toContain('2026-04-05');
+      // Story 2.5: fresh[i] is FreshIngestItem { item, idempotencyHash }
+      expect(fresh[0].item.occurredAt).toContain('2026-04-01');
+      expect(fresh[1].item.occurredAt).toContain('2026-04-03');
+      expect(fresh[2].item.occurredAt).toContain('2026-04-05');
       expect(duplicates[0].occurredAt).toContain('2026-04-02');
       expect(duplicates[1].occurredAt).toContain('2026-04-04');
+    });
+
+    it('fresh items carry their idempotency hash (FreshIngestItem shape)', () => {
+      // fails if: filterNew drops the hash after dedup (Story 2.5 — hash must survive
+      // from IdempotencyService all the way to saveBatch for correct DB population)
+      const items = [makeItem(1), makeItem(2)];
+      const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+
+      const result = service.filterNew(items);
+      expect(result.isSuccess).toBe(true);
+      const { fresh } = result.value;
+
+      expect(fresh).toHaveLength(2);
+      // Each fresh entry must have .item (the original IngestItem) and .idempotencyHash (string)
+      for (const entry of fresh) {
+        expect(entry).toHaveProperty('item');
+        expect(entry).toHaveProperty('idempotencyHash');
+        expect(typeof entry.idempotencyHash).toBe('string');
+        expect(entry.idempotencyHash.length).toBeGreaterThan(0);
+      }
+      // Hash equality: identityHashFn returns the canonical string, so we can derive expected
+      const expectedHash0 = canonicalize(items[0]).value;
+      expect(fresh[0].idempotencyHash).toBe(expectedHash0);
     });
   });
 
@@ -90,7 +116,11 @@ describe('IdempotencyService.filterNew', () => {
       const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
       const result = service.filterNew(items);
       expect(result.isSuccess).toBe(true);
+      // Story 2.5: fresh is FreshIngestItem[] — each has .item wrapping the original IngestItem
       expect(result.value.fresh).toHaveLength(3);
+      expect(result.value.fresh[0].item).toBe(items[0]);
+      expect(result.value.fresh[1].item).toBe(items[1]);
+      expect(result.value.fresh[2].item).toBe(items[2]);
       expect(result.value.duplicates).toHaveLength(0);
     });
   });
@@ -101,7 +131,7 @@ describe('IdempotencyService.filterNew', () => {
       // Simulate: first run returned 3 items as fresh; now those hashes are known in the ledger.
       const items = [makeItem(10), makeItem(11), makeItem(12)];
 
-      // Capture the hashes produced on "first run"
+      // Capture the hashes produced on "first run" — Story 2.5: fresh[i].idempotencyHash
       const capturedHashes = new Set<string>();
       const capturingRepo: HashRepository = {
         listKnownHashes: vi.fn((candidates: readonly string[]) => {
@@ -113,6 +143,10 @@ describe('IdempotencyService.filterNew', () => {
       const firstRun = service1.filterNew(items);
       expect(firstRun.isSuccess).toBe(true);
       expect(firstRun.value.fresh).toHaveLength(3);
+      // Capture hashes from the FreshIngestItem shape
+      for (const freshEntry of firstRun.value.fresh) {
+        capturedHashes.add(freshEntry.idempotencyHash);
+      }
 
       // Second run: all captured hashes are now "known"
       const service2 = new IdempotencyService(identityHashFn, makeRepo(capturedHashes));
@@ -203,9 +237,10 @@ describe('IdempotencyService.filterNew', () => {
             if (duplicates.length !== expectedDupCount) return false;
 
             // Verify relative order of fresh (items NOT in duplicateIndices, in input order)
+            // Story 2.5: fresh[i] is FreshIngestItem { item, idempotencyHash }
             const expectedFreshItems = items.filter((_, i) => !dupeIndexSet.has(i));
             for (let i = 0; i < expectedFreshItems.length; i++) {
-              if (fresh[i] !== expectedFreshItems[i]) return false;
+              if (fresh[i].item !== expectedFreshItems[i]) return false;
             }
 
             // Verify relative order of duplicates (items IN duplicateIndices, in input order)

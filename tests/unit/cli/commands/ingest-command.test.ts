@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
 import { PassThrough } from 'stream';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
@@ -60,8 +60,6 @@ function makeStdout(): Writable & { captured: string } {
 function makeStderr(): Writable & { captured: string } {
   return makeStdout();
 }
-
-function noop(_code: number): void {}
 
 describe('runIngestCommand — happy path (interactive)', () => {
   it('writes summary table to stdout and calls final confirm once', async () => {

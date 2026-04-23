@@ -59,40 +59,6 @@ function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writa
   return { stdout: makeCapture(), stderr: makeCapture() };
 }
 
-function makeDeps(
-  outcomes: readonly BuildOutcome[],
-  overrides: Partial<IngestCommandDeps> = {},
-): IngestCommandDeps & { stdout: Writable & { captured: string }; stderr: Writable & { captured: string }; exitCodes: number[] } {
-  const { stdout, stderr } = makeStreams();
-  const exitCodes: number[] = [];
-  return {
-    configService: { load: () => Result.ok(baseConfig) },
-    csvParser: {
-      parse: () => Result.ok({
-        items: outcomes.map((o) => ({
-          sourceAccount: 'main-X',
-          occurredAt: o.transaction.occurredAt,
-          description: o.transaction.description,
-          direction: 'outflow' as const,
-          amount: EUR,
-        })),
-        errors: [],
-      }),
-    },
-    idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
-    transactionBuilder: { buildAll: () => Result.ok({ built: outcomes as BuildOutcome[], failed: [] }) },
-    pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
-    readFile: () => Result.ok('csv-content'),
-    prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
-    stdout: stdout as Writable,
-    stderr: stderr as Writable,
-    exitCode: (code) => exitCodes.push(code),
-    ...overrides,
-    // Expose captured streams and exit codes as non-interface extras
-    get captured() { return null; },
-  } as unknown as IngestCommandDeps & { stdout: Writable & { captured: string }; stderr: Writable & { captured: string }; exitCodes: number[] };
-}
-
 describe('--non-interactive mode', () => {
   it({ timeout: 500 }, 'exits 0 with only high-confidence items — no prompts fired', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];

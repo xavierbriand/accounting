@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readBpceCsv } from '../../../../src/infra/fs/read-bpce-csv.js';
-import { writeFileSync, mkdirSync, chmodSync, unlinkSync, existsSync } from 'fs';
+import { writeFileSync, chmodSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 

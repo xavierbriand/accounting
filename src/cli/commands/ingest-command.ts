@@ -5,7 +5,6 @@ import type { IdempotencyService } from '@core/ingest/idempotency-service.js';
 import type { TransactionBuilder } from '@core/ingest/transaction-builder.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 import type { AccountConfig } from '@core/config/app-config.js';
-import type { Result } from '@core/shared/result.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pick-source-account.js';
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';

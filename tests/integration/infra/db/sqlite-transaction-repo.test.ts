@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
+import fc from 'fast-check';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -8,6 +9,7 @@ import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { Transaction } from '@core/ledger/transaction.js';
 import { Money } from '@core/shared/money.js';
+import type { BuildOutcome } from '@core/ingest/types.js';
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;
@@ -237,6 +239,161 @@ describe('SqliteTransactionRepository', () => {
       expect(repo.update).toBeUndefined();
       // @ts-expect-error — delete should not exist on TransactionRepository
       expect(repo.delete).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // saveBatch tests (Story 2.5)
+  // ---------------------------------------------------------------------------
+
+  describe('saveBatch — Story 2.5', () => {
+    function makeBuildOutcome(id: string, hash: string): BuildOutcome {
+      return {
+        transaction: Transaction.create({
+          id,
+          occurredAt: '2026-04-21T14:30:00+02:00',
+          description: `Txn ${id}`,
+          entries: [
+            { account: 'Expense:Transport', side: 'debit', amount: makeEur(1000) },
+            { account: 'Assets:Bank:main-1', side: 'credit', amount: makeEur(1000) },
+          ],
+        }).value,
+        category: 'Transport',
+        classification: 'expense',
+        confidence: 'high',
+        idempotencyHash: hash,
+      };
+    }
+
+    it('(a) happy-path: 3 outcomes → 3 header rows with matching idempotency_hash + 6 entry rows', () => {
+      // fails if: saveBatch does not exist, any hash is NULL, or entry count is wrong
+      const outcomes = [
+        makeBuildOutcome('tx-a1', 'hash-a1'),
+        makeBuildOutcome('tx-a2', 'hash-a2'),
+        makeBuildOutcome('tx-a3', 'hash-a3'),
+      ];
+
+      // saveBatch does not exist yet — this call will fail (expected red)
+      const result = repo.saveBatch(outcomes);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.written).toBe(3);
+
+      // Verify header rows + hash equality
+      for (const outcome of outcomes) {
+        const row = db.prepare('SELECT idempotency_hash FROM transactions WHERE id = ?').get(outcome.transaction.id) as { idempotency_hash: string } | undefined;
+        expect(row).toBeDefined();
+        expect(row!.idempotency_hash).toBe(outcome.idempotencyHash);
+      }
+
+      // 6 entry rows total
+      const entryCount = (db.prepare('SELECT COUNT(*) as n FROM transaction_entries').get() as { n: number }).n;
+      expect(entryCount).toBe(6);
+    });
+
+    it('(b) mid-batch Transaction invariant failure → entire batch rolled back', () => {
+      // fails if: the first valid outcome is persisted while the second fails
+      // Build a bad outcome by pre-inserting a duplicate id to force a PK collision
+      const outcomes = [
+        makeBuildOutcome('tx-b1', 'hash-b1'),
+        makeBuildOutcome('tx-b2', 'hash-b2'),
+        makeBuildOutcome('tx-b3', 'hash-b3'),
+      ];
+      // Pre-insert tx-b2 to force a UNIQUE/PK constraint on the second outcome
+      db.prepare("INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('tx-b2', '2026-01-01T00:00:00Z', 'pre', 'pre-hash-b2')").run();
+
+      const result = repo.saveBatch(outcomes);
+      expect(result.isFailure).toBe(true);
+
+      // tx-b1 must NOT be in the DB (entire batch rolled back)
+      const txB1 = db.prepare('SELECT id FROM transactions WHERE id = ?').get('tx-b1');
+      expect(txB1).toBeUndefined();
+      // entries must be zero for all three
+      const entryCount = (db.prepare('SELECT COUNT(*) as n FROM transaction_entries WHERE transaction_id IN (?,?,?)').get('tx-b1', 'tx-b2', 'tx-b3') as { n: number }).n;
+      expect(entryCount).toBe(0);
+    });
+
+    it('(c) duplicate hash within same batch → entire batch rolled back by UNIQUE index', () => {
+      // fails if: saveBatch does not run inside a single SQL transaction
+      const outcomes = [
+        makeBuildOutcome('tx-c1', 'same-hash'),
+        makeBuildOutcome('tx-c2', 'same-hash'), // UNIQUE violation
+      ];
+
+      const result = repo.saveBatch(outcomes);
+      expect(result.isFailure).toBe(true);
+
+      const rowCount = (db.prepare('SELECT COUNT(*) as n FROM transactions WHERE id IN (?,?)').get('tx-c1', 'tx-c2') as { n: number }).n;
+      expect(rowCount).toBe(0);
+    });
+
+    it('(d) cross-batch hash collision (pre-existing hash in DB) → batch rolled back', () => {
+      // fails if: UNIQUE index only prevents duplicates within a single batch
+      db.prepare("INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('tx-existing', '2026-01-01T00:00:00Z', 'pre', 'existing-hash')").run();
+
+      const outcomes = [
+        makeBuildOutcome('tx-d1', 'new-hash-d1'),
+        makeBuildOutcome('tx-d2', 'existing-hash'), // collides with pre-existing row
+      ];
+
+      const result = repo.saveBatch(outcomes);
+      expect(result.isFailure).toBe(true);
+
+      // tx-d1 must NOT be in the DB
+      const txD1 = db.prepare('SELECT id FROM transactions WHERE id = ?').get('tx-d1');
+      expect(txD1).toBeUndefined();
+    });
+
+    it('(e) property: saveBatch populates idempotency_hash 1:1 for every outcome', () => {
+      // fails if: the INSERT binds idempotency_hash from the wrong outcome (off-by-one in loop),
+      //   defaults to a placeholder, stores NULL, or writes the hash column out-of-order.
+      // Core coverage invariant for hash-population (P3 finding #2 lock-in).
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(
+            fc.record({
+              id: fc.string({ minLength: 1, maxLength: 10 }).map((s) => `prop-${s}`),
+              hash: fc.string({ minLength: 1, maxLength: 40 }).map((s) => `h-${s}`),
+            }),
+            { selector: (x) => x.id, minLength: 1, maxLength: 20 },
+          ).chain((items) =>
+            fc.constant(items.filter((_, i, arr) => {
+              // deduplicate by hash too (unique hash required for UNIQUE index)
+              const seen = new Set<string>();
+              return !seen.has(arr[i].hash) && seen.add(arr[i].hash);
+            }))
+          ),
+          (items) => {
+            if (items.length === 0) return true;
+            const db2 = new Database(':memory:');
+            db2.pragma('foreign_keys = ON');
+            runMigrations(db2);
+            const repo2 = new SqliteTransactionRepository(db2);
+
+            const outcomes: BuildOutcome[] = items.map(({ id, hash }) => makeBuildOutcome(id, hash));
+
+            const result = repo2.saveBatch(outcomes);
+            if (result.isFailure) {
+              db2.close();
+              return false; // unexpected failure
+            }
+
+            let allMatch = true;
+            for (const outcome of outcomes) {
+              const row = db2.prepare('SELECT idempotency_hash FROM transactions WHERE id = ?').get(outcome.transaction.id) as { idempotency_hash: string } | undefined;
+              if (!row || row.idempotency_hash !== outcome.idempotencyHash) {
+                allMatch = false;
+                break;
+              }
+            }
+
+            // Also check no NULL rows
+            const nullCount = (db2.prepare('SELECT COUNT(*) as n FROM transactions WHERE idempotency_hash IS NULL').get() as { n: number }).n;
+            db2.close();
+            return allMatch && nullCount === 0;
+          },
+        ),
+        { numRuns: 50 },
+      );
     });
   });
 });

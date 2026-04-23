@@ -84,7 +84,7 @@ Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete b
 3. **Implement** (Sonnet via `Task` with the `sonnet-implementer` agent): writes failing acceptance scenario first, drives down to failing unit tests, makes green, commits per state. Returns the structured report (see 6.3). *Exit:* all tests green, report delivered, branch pushed. PR not yet marked ready.
 4. **Code review on the implementation + refactor plan** (Opus) — re-run P1/P2/P3 **against the actual code**:
    - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent. Audit that each `this test fails if …` note identifies the production path it guards, not just any path (Story 1.3 retro action E validated on Story 2.2; codified here per Story 2.2 retro action B).
-   - P2 retro-check: walk QA doc against the diff.
+   - P2 retro-check: walk QA doc against the diff. **Mock diversity check (Story 2.4 retro action A):** when the diff includes structured output (JSON payloads, tables, machine-readable formats), spot-check that at least one test assertion runs against a non-default mock fixture — e.g. a `--json` test must cover `duplicates: [item]`, not only `duplicates: []`, to catch hardcoded-default regressions that pass a zero-mock test suite.
    - P3 retro-check: walk engineering-standards + security-checklist against the diff.
 
    Produce a refactor plan; blockers are fixed before merge, not deferred. Delegate execution to Sonnet. *Exit:* refactor merged back into the branch, CI green.

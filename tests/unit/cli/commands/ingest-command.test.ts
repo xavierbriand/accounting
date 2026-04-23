@@ -6,7 +6,7 @@ import type { IngestCommandDeps, IngestCommandOptions } from '../../../../src/cl
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
 import { Result } from '@core/shared/result.js';
 import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
-import type { BuildOutcome, FreshIngestItem } from '@core/ingest/types.js';
+import type { BuildOutcome } from '@core/ingest/types.js';
 
 // fails if: the summary table is not written to stdout,
 //           or the interactive loop is skipped for low-confidence items,
@@ -50,12 +50,6 @@ function makeLowOutcome(description: string, category: string): BuildOutcome {
   return { ...makeHighOutcome(description, category), confidence: 'low' };
 }
 
-function makeFreshItem(sourceAccount: string, occurredAt: string, description: string): FreshIngestItem {
-  return {
-    item: { sourceAccount, occurredAt, description, direction: 'outflow', amount: EUR },
-    idempotencyHash: `hash-${description}`,
-  };
-}
 
 function makeStdout(): Writable & { captured: string } {
   const buf: string[] = [];
@@ -261,7 +255,6 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
     // Ensure it has a specific hash we can verify
     const lowOutcomeWithSpecificHash: BuildOutcome = { ...lowOutcomeWithHash, idempotencyHash: 'specific-hash-xyz' };
 
-    const resolvedOutcomes: BuildOutcome[] = [];
 
     const prompter: InteractivePrompter = {
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),

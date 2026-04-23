@@ -54,6 +54,18 @@ function makeItem(
 let idSeq = 0;
 const seqIdGen = (): string => `test-id-${++idSeq}`;
 
+// Helper: wrap an IngestItem in a FreshIngestItem for builder.build() calls.
+// Existing tests that call builder.build(item) use a sentinel hash; the hash value
+// is not what these tests assert, so any non-empty string works.
+function asFresh(item: IngestItem): FreshIngestItem {
+  return { item, idempotencyHash: 'test-hash' };
+}
+
+// Helper: wrap an IngestItem array in FreshIngestItem[] for buildAll() calls.
+function asFreshArray(items: IngestItem[]): FreshIngestItem[] {
+  return items.map((item) => ({ item, idempotencyHash: 'test-hash' }));
+}
+
 describe('TransactionBuilder — obvious basics', () => {
   beforeEach(() => { idSeq = 0; });
 
@@ -62,7 +74,7 @@ describe('TransactionBuilder — obvious basics', () => {
       // fails if: bank→outflow row routes to wrong accounts, or Uber rule absent
       const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
       const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2026' });
-      const result = builder.build(item);
+      const result = builder.build(asFresh(item));
 
       expect(result.isSuccess).toBe(true);
       const outcome = result.value;
@@ -75,7 +87,7 @@ describe('TransactionBuilder — obvious basics', () => {
       // fails if: direction table maps bank+outflow to wrong credit account
       const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
       const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2026', amount: eur(2000) });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       const entries = outcome.transaction.entries;
 
       const debit = entries.find((e) => e.side === 'debit');
@@ -97,7 +109,7 @@ describe('TransactionBuilder — obvious basics', () => {
         description: 'CARREFOUR MARKET',
         amount: eur(4200),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       const entries = outcome.transaction.entries;
 
       expect(outcome.category).toBe('Groceries');
@@ -118,7 +130,7 @@ describe('TransactionBuilder — obvious basics', () => {
         description: 'REMBOURSEMENT MUTUELLE',
         amount: eur(1500),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
 
       expect(outcome.classification).toBe('income');
       expect(outcome.category).toBe('Insurance');
@@ -139,7 +151,7 @@ describe('TransactionBuilder — obvious basics', () => {
         description: 'REMBOURSEMENT EDF',
         amount: eur(5000),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
 
       expect(outcome.classification).toBe('income');
       const debit = outcome.transaction.entries.find((e) => e.side === 'debit');
@@ -158,7 +170,7 @@ describe('TransactionBuilder — obvious basics', () => {
         direction: 'outflow',
         description: 'WEIRD MERCHANT XYZ',
       });
-      const result = builder.build(item);
+      const result = builder.build(asFresh(item));
 
       expect(result.isSuccess).toBe(true);
       expect(result.value.category).toBe('Uncategorized');
@@ -182,7 +194,7 @@ describe('TransactionBuilder — obvious basics', () => {
         goodItem('UBER TRIP E'),
       ];
 
-      const result = builder.buildAll(items);
+      const result = builder.buildAll(asFreshArray(items));
       expect(result.isSuccess).toBe(true);
       const batch = result.value;
       expect(batch.built).toHaveLength(4);
@@ -198,7 +210,7 @@ describe('TransactionBuilder — obvious basics', () => {
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'CARREFOUR', amount: eur(200) }),
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'NETFLIX', amount: eur(1499) }),
       ];
-      const batch = builder.buildAll(items).value;
+      const batch = builder.buildAll(asFreshArray(items)).value;
       expect(batch.built[0].transaction.description).toBe('UBER TRIP 1');
       expect(batch.built[1].transaction.description).toBe('CARREFOUR');
       expect(batch.built[2].transaction.description).toBe('NETFLIX');
@@ -216,7 +228,7 @@ describe('TransactionBuilder — obvious basics', () => {
       const items: IngestItem[] = Array.from({ length: 5 }, (_, i) =>
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: `UBER ${i}` }),
       );
-      const batch = builder.buildAll(items).value;
+      const batch = builder.buildAll(asFreshArray(items)).value;
 
       const ids = batch.built.map((o) => o.transaction.id);
       expect(new Set(ids).size).toBe(5);
@@ -232,7 +244,7 @@ describe('TransactionBuilder — obvious basics', () => {
         direction: 'outflow',
         description: 'UBER TRIP 2026-04-20',
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       expect(outcome.transaction.description).toBe('UBER TRIP 2026-04-20');
       expect(outcome.transaction.description).not.toBe('Transport');
     });
@@ -248,7 +260,7 @@ describe('TransactionBuilder — obvious basics', () => {
         direction: 'outflow',
         occurredAt: '2026-04-20T00:00:00+02:00',
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       expect(outcome.transaction.occurredAt).toBe('2026-04-20T00:00:00+02:00');
     });
   });
@@ -303,7 +315,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
         description: 'PAIEMENT CARTE X1234 AVRIL',
         amount: eur(52345),
       });
-      const result = builder.build(item);
+      const result = builder.build(asFresh(item));
       expect(result.isSuccess).toBe(true);
       const outcome = result.value;
       expect(outcome.classification).toBe('internal-transfer');
@@ -321,7 +333,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
         description: 'PAIEMENT CARTE X1234 AVRIL',
         amount: eur(52345),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       const debit = outcome.transaction.entries.find((e) => e.side === 'debit');
       const credit = outcome.transaction.entries.find((e) => e.side === 'credit');
       expect(debit?.account).toBe('Liabilities:CreditCard:card-1234');
@@ -339,7 +351,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
         description: 'PAIEMENT CARTE 1234',
         amount: eur(10000),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       expect(outcome.classification).toBe('internal-transfer');
     });
   });
@@ -354,7 +366,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
         description: 'PAIEMENT CARTE X9999',
         amount: eur(10000),
       });
-      const result = builder.build(item);
+      const result = builder.build(asFresh(item));
       expect(result.isSuccess).toBe(true);
       const outcome = result.value;
       expect(outcome.classification).toBe('expense');
@@ -374,7 +386,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
         description: 'PAIEMENT CARTE X1234',
         amount: eur(10000),
       });
-      const outcome = builder.build(item).value;
+      const outcome = builder.build(asFresh(item)).value;
       expect(outcome.classification).not.toBe('internal-transfer');
       expect(outcome.classification).toBe('expense');
     });

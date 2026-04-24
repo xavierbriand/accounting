@@ -70,7 +70,7 @@ function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
   function makeCapture(): Writable & { captured: string } {
     const buf: string[] = [];
-    const stream = new PassThrough() as Writable & { captured: string };
+    const stream = new PassThrough() as unknown as Writable & { captured: string };
     stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
     Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
     return stream;

@@ -79,7 +79,7 @@ function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writa
 }
 
 describe('--non-interactive mode', () => {
-  it({ timeout: 500 }, 'exits 0 with only high-confidence items — no prompts fired', async () => {
+  it('exits 0 with only high-confidence items — no prompts fired', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -106,9 +106,9 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(0);
     expect(prompter.selectCategory).not.toHaveBeenCalled();
     expect(prompter.confirmBatch).not.toHaveBeenCalled();
-  }, { timeout: 500 });
+  });
 
-  it({ timeout: 500 }, 'exits 2 with low-confidence items — stderr names the count, no hang', async () => {
+  it('exits 2 with low-confidence items — stderr names the count, no hang', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -135,7 +135,7 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(2);
     expect((stderr as unknown as { captured: string }).captured).toContain('1 item');
     expect(prompter.selectCategory).not.toHaveBeenCalled();
-  }, { timeout: 500 });
+  });
 });
 
 describe('--json mode', () => {

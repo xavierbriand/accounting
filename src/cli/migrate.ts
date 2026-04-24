@@ -1,9 +1,8 @@
-import path from 'path';
 import { getDb } from '../infra/db/sqlite-client.js';
 import { runMigrations } from '../infra/db/migrator.js';
 
-export function runMigrate(dbPath: string): void {
-  const db = getDb(path.resolve(dbPath));
+export function runMigrate(resolvedDbPath: string): void {
+  const db = getDb(resolvedDbPath);
   try {
     runMigrations(db);
     console.log('Migration completed successfully.');

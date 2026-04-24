@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { parse as yamlParse } from 'yaml';
 import type { ConfigService } from '@core/ports/config-service.js';
@@ -26,7 +27,7 @@ export class FileConfigService implements ConfigService {
     const xdgHome =
       this.opts.xdgConfigHome ??
       process.env['XDG_CONFIG_HOME'] ??
-      path.join(this.opts.homeDir ?? process.env['HOME'] ?? '/tmp', '.config');
+      path.join(this.opts.homeDir ?? os.homedir(), '.config');
 
     const xdgPath = path.join(xdgHome, 'accounting', 'config.yaml');
 

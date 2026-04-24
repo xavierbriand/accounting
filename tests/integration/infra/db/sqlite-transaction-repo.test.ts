@@ -355,13 +355,7 @@ describe('SqliteTransactionRepository', () => {
               hash: fc.string({ minLength: 1, maxLength: 40 }).map((s) => `h-${s}`),
             }),
             { selector: (x) => x.id, minLength: 1, maxLength: 20 },
-          ).chain((items) =>
-            fc.constant(items.filter((_, i, arr) => {
-              // deduplicate by hash too (unique hash required for UNIQUE index)
-              const seen = new Set<string>();
-              return !seen.has(arr[i].hash) && seen.add(arr[i].hash);
-            }))
-          ),
+          ).filter((items) => new Set(items.map((x) => x.hash)).size === items.length),
           (items) => {
             if (items.length === 0) return true;
             const db2 = new Database(':memory:');
@@ -392,7 +386,7 @@ describe('SqliteTransactionRepository', () => {
             return allMatch && nullCount === 0;
           },
         ),
-        { numRuns: 50 },
+        { numRuns: 500 },
       );
     });
   });

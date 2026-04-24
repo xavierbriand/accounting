@@ -62,6 +62,21 @@ to tighten the signature and update the N callers." Otherwise Opus's Phase 4
 review discovers the shim by diff-reading (Story 2.5 caught a silent
 `legacy-placeholder:` fallback in `save()` this way), adding a round-trip.
 
+**Safeguard-removal deviations must name the guard's purpose (retro finding, story-maint-01).**
+When a slice removes a timeout, fail-fast check, validation, assertion, retry,
+backpressure guard, or other defensive construct — even when the removal is
+necessary to make a type check or lint pass — the Deviations entry must:
+(1) name the guard's purpose (e.g., "catches a hypothetical hang in the
+code-under-test that would otherwise take 10× longer to surface"),
+(2) assess whether the replacement preserves it (same purpose via a different
+mechanism, OR explicit gap acknowledged). "Tests are fast today" is not a
+preservation argument — the guard exists for *future* regressions, not the
+current run. If the replacement does NOT preserve the guard's purpose, escalate
+to a question-before-proceeding rather than silent shipping. Otherwise Opus's
+Phase 4 review discovers the gap by reading test names / comments
+(story-maint-01 caught a 500ms timeout silently dropped this way), adding a
+round-trip.
+
 ## Gherkin coverage checklist
 <Tick every Gherkin scenario in the plan against the test it maps to, one line each:
 `✓ <scenario name> → <test file>:<describe name>` — or `✗ <scenario name> → not covered: <rationale>`.

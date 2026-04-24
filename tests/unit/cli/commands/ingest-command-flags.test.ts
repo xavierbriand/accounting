@@ -8,13 +8,14 @@ import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import { Money } from '@core/shared/money.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
 //           or --json output contains idempotencyHash,
 //           or exit codes are wrong for any flag combination
 
-const EUR = { amount: 1000, currency: 'EUR' };
+const EUR = Money.zero('EUR');
 
 function makeAccount(id: string, prefix: string): AccountConfig {
   return { id, type: 'bank', filenamePrefix: prefix };

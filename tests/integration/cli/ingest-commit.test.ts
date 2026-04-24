@@ -34,6 +34,7 @@ import { readBpceCsv } from '../../../src/infra/fs/read-bpce-csv.js';
 import { Result } from '@core/shared/result.js';
 import type { AppConfig } from '@core/config/app-config.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
+import type { BatchWriteOutcome } from '@core/ports/transaction-repository.js';
 
 const FIXTURE_CSV = path.join(
   path.dirname(new URL(import.meta.url).pathname),
@@ -169,7 +170,7 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     // Use real snapshot service (exercises real backup file) but mock saveBatch failure
     const FAKE_HASH = 'a'.repeat(64);
     const failingRepo = {
-      saveBatch: () => Result.fail(
+      saveBatch: () => Result.fail<BatchWriteOutcome>(
         `SqliteError: UNIQUE constraint failed: transactions.idempotency_hash (hash: ${FAKE_HASH})`,
       ),
     };
@@ -267,7 +268,7 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     // The raw SQLite UNIQUE-constraint error embeds the offending value verbatim
     const collidingHash = 'b'.repeat(64);
     const failingRepo = {
-      saveBatch: () => Result.fail(
+      saveBatch: () => Result.fail<BatchWriteOutcome>(
         `SqliteError: UNIQUE constraint failed: transactions.idempotency_hash = ${collidingHash}`,
       ),
     };

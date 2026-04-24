@@ -7,7 +7,8 @@
     "test": "vitest run",
     "test:perf": "vitest run tests/perf/",
     "lint": "eslint .",
-    "build": "tsc && cp -R src/infra/db/migrations dist/infra/db/",
+    "build": "tsc && tsc -p tsconfig.test.json && cp -R src/infra/db/migrations dist/infra/db/",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "migrate": "tsx src/cli/program.ts migrate",
     "ingest": "tsx src/cli/program.ts ingest"
   },

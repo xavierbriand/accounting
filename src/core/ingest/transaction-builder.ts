@@ -1,6 +1,6 @@
 import type { AccountConfig } from '@core/config/app-config.js';
 import type { UuidGen } from '@core/ports/uuid-gen.js';
-import type { IngestItem, BuildOutcome, BuildBatchOutcome, Classification, Confidence } from './types.js';
+import type { IngestItem, FreshIngestItem, BuildOutcome, BuildBatchOutcome, Classification, Confidence } from './types.js';
 import type { AutoTagRule } from './auto-tag-rules.js';
 import { DEFAULT_RULES } from './auto-tag-rules.js';
 import { bankAccount, cardAccount, expenseAccount, incomeAccount } from './account-names.js';
@@ -60,6 +60,7 @@ function makeOutcome(
   classification: Classification,
   category: string,
   confidence: Confidence,
+  idempotencyHash: string,
 ): Result<BuildOutcome> {
   const txResult = Transaction.create({
     id,
@@ -71,7 +72,7 @@ function makeOutcome(
     ],
   });
   if (txResult.isFailure) return Result.fail(txResult.error);
-  return Result.ok({ transaction: txResult.value, category, classification, confidence });
+  return Result.ok({ transaction: txResult.value, category, classification, confidence, idempotencyHash });
 }
 
 export class TransactionBuilder {
@@ -81,7 +82,8 @@ export class TransactionBuilder {
     private readonly idGen: UuidGen = defaultUuidGen,
   ) {}
 
-  build(item: IngestItem): Result<BuildOutcome> {
+  build(freshItem: FreshIngestItem): Result<BuildOutcome> {
+    const { item, idempotencyHash } = freshItem;
     const source = this.accounts.find((a) => a.id === item.sourceAccount);
     if (!source) {
       return Result.fail(`Unknown sourceAccount: ${item.sourceAccount}`);
@@ -95,37 +97,38 @@ export class TransactionBuilder {
         id, item,
         cardAccount(settlement.cardId), bankAccount(source.id),
         settlement.classification, settlement.category, settlement.confidence,
+        idempotencyHash,
       );
     }
 
     const { category, confidence } = tagDescription(item.description, this.rules);
 
     if (source.type === 'bank' && item.direction === 'outflow') {
-      return makeOutcome(id, item, expenseAccount(category), bankAccount(source.id), 'expense', category, confidence);
+      return makeOutcome(id, item, expenseAccount(category), bankAccount(source.id), 'expense', category, confidence, idempotencyHash);
     }
 
     if (source.type === 'bank' && item.direction === 'inflow') {
-      return makeOutcome(id, item, bankAccount(source.id), incomeAccount(category), 'income', category, confidence);
+      return makeOutcome(id, item, bankAccount(source.id), incomeAccount(category), 'income', category, confidence, idempotencyHash);
     }
 
     if (source.type === 'card' && item.direction === 'outflow') {
-      return makeOutcome(id, item, expenseAccount(category), cardAccount(source.id), 'expense', category, confidence);
+      return makeOutcome(id, item, expenseAccount(category), cardAccount(source.id), 'expense', category, confidence, idempotencyHash);
     }
 
     // card + inflow (refund/income)
-    return makeOutcome(id, item, cardAccount(source.id), incomeAccount(category), 'income', category, confidence);
+    return makeOutcome(id, item, cardAccount(source.id), incomeAccount(category), 'income', category, confidence, idempotencyHash);
   }
 
-  buildAll(items: readonly IngestItem[]): Result<BuildBatchOutcome> {
+  buildAll(items: readonly FreshIngestItem[]): Result<BuildBatchOutcome> {
     const built: BuildOutcome[] = [];
     const failed: { item: IngestItem; reason: string }[] = [];
 
-    for (const item of items) {
-      const result = this.build(item);
+    for (const freshItem of items) {
+      const result = this.build(freshItem);
       if (result.isSuccess) {
         built.push(result.value);
       } else {
-        failed.push({ item, reason: result.error });
+        failed.push({ item: freshItem.item, reason: result.error });
       }
     }
 

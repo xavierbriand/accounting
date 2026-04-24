@@ -3,12 +3,15 @@ import type { ConfigService } from '@core/ports/config-service.js';
 import type { CsvParser } from '@core/ports/csv-parser.js';
 import type { IdempotencyService } from '@core/ingest/idempotency-service.js';
 import type { TransactionBuilder } from '@core/ingest/transaction-builder.js';
-import type { BuildOutcome } from '@core/ingest/types.js';
-import type { AccountConfig } from '@core/config/app-config.js';
+import type { BuildOutcome, ParseOutcome } from '@core/ingest/types.js';
+import type { AccountConfig, AppConfig } from '@core/config/app-config.js';
+import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pick-source-account.js';
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
 import { formatSummaryTable } from '../utils/printer.js';
+import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 
 export interface IngestCommandOptions {
   readonly file: string;
@@ -27,23 +30,26 @@ export interface IngestCommandDeps {
   readonly stdout: Writable;
   readonly stderr: Writable;
   readonly exitCode: (code: number) => void;
+  readonly transactionRepository: Pick<TransactionRepository, 'saveBatch'>;
+  readonly snapshotService: SnapshotService;
+  readonly dbPath: string;
 }
 
 function writeln(stream: Writable, msg: string): void {
   stream.write(msg + '\n');
 }
 
-export async function runIngestCommand(
+async function loadAndParse(
   opts: IngestCommandOptions,
-  deps: IngestCommandDeps,
-): Promise<void> {
-  const { configService, csvParser, idempotencyService, transactionBuilder, pickSourceAccount, readFile, prompt, stdout, stderr, exitCode } = deps;
+  deps: Pick<IngestCommandDeps, 'configService' | 'csvParser' | 'pickSourceAccount' | 'readFile' | 'stderr' | 'exitCode'>,
+): Promise<{ config: AppConfig; account: AccountConfig; parseOutcome: ParseOutcome } | null> {
+  const { configService, csvParser, pickSourceAccount, readFile, stderr, exitCode } = deps;
 
   const configResult = configService.load();
   if (configResult.isFailure) {
     writeln(stderr, `Configuration error: ${configResult.error}`);
     exitCode(1);
-    return;
+    return null;
   }
   const config = configResult.value;
 
@@ -51,7 +57,7 @@ export async function runIngestCommand(
   if (accountResult.isFailure) {
     writeln(stderr, accountResult.error);
     exitCode(2);
-    return;
+    return null;
   }
   const account: AccountConfig = accountResult.value;
 
@@ -59,7 +65,7 @@ export async function runIngestCommand(
   if (readResult.isFailure) {
     writeln(stderr, readResult.error);
     exitCode(1);
-    return;
+    return null;
   }
 
   const parseResult = csvParser.parse(readResult.value, {
@@ -71,7 +77,7 @@ export async function runIngestCommand(
   if (parseResult.isFailure) {
     writeln(stderr, `Parse error: ${parseResult.error}`);
     exitCode(1);
-    return;
+    return null;
   }
   const parseOutcome = parseResult.value;
 
@@ -81,6 +87,18 @@ export async function runIngestCommand(
     }
   }
 
+  return { config, account, parseOutcome };
+}
+
+export async function runIngestCommand(
+  opts: IngestCommandOptions,
+  deps: IngestCommandDeps,
+): Promise<void> {
+  const { idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath } = deps;
+
+  const parsed = await loadAndParse(opts, deps);
+  if (parsed === null) return;
+  const { account, parseOutcome } = parsed;
   const idempotencyResult = idempotencyService.filterNew(parseOutcome.items);
   if (idempotencyResult.isFailure) {
     writeln(stderr, `Idempotency check failed: ${idempotencyResult.error}`);
@@ -104,9 +122,7 @@ export async function runIngestCommand(
   }
 
   const lowConfidence = built.filter((o) => o.confidence === 'low');
-  const highConfidence = built.filter((o) => o.confidence === 'high');
-
-  writeln(stderr, `Found ${built.length} new transactions — ${highConfidence.length} auto-tagged, ${lowConfidence.length} need review.`);
+  writeln(stderr, `Found ${built.length} new transactions — ${built.length - lowConfidence.length} auto-tagged, ${lowConfidence.length} need review.`);
   if (duplicates.length > 0) {
     writeln(stderr, `  (${duplicates.length} duplicate(s) skipped)`);
   }
@@ -127,7 +143,41 @@ export async function runIngestCommand(
     return;
   }
 
-  writeln(stderr, `${resolvedOutcomes.length} transaction(s) confirmed. (DB writes pending — Story 2.5)`);
+  await commitBatch(resolvedOutcomes, { transactionRepository, snapshotService, dbPath, stderr, exitCode });
+}
+
+async function commitBatch(
+  outcomes: readonly BuildOutcome[],
+  deps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'stderr' | 'exitCode'>,
+): Promise<void> {
+  const { transactionRepository, snapshotService, dbPath, stderr, exitCode } = deps;
+  const snapshotPath = dbPath + '.bak';
+
+  const snapResult = await snapshotService.create(dbPath, snapshotPath);
+  if (snapResult.isFailure) {
+    writeln(stderr, `Snapshot failed: ${snapResult.error}`);
+    exitCode(3);
+    return;
+  }
+
+  const writeResult = transactionRepository.saveBatch(outcomes);
+  if (writeResult.isFailure) {
+    // sanitizeSqlError redacts hex-like tokens (≥32 consecutive hex chars) from
+    // SQLite's raw UNIQUE/CHECK-violation messages; hashes are PII-adjacent
+    // fingerprints per security-checklist.md (P2 adopt #1).
+    writeln(stderr, `Commit failed (batch rolled back): ${sanitizeSqlError(writeResult.error)}`);
+    writeln(stderr, `Snapshot retained at ${snapshotPath} for recovery.`);
+    exitCode(4);
+    return;
+  }
+
+  const removeResult = await snapshotService.remove(snapshotPath);
+  if (removeResult.isFailure) {
+    // Snapshot-removal failure is non-fatal — the write succeeded. Warn, don't abort.
+    writeln(stderr, `Warning: committed successfully but could not remove snapshot at ${snapshotPath}: ${removeResult.error}`);
+  }
+
+  writeln(stderr, `${writeResult.value.written} transaction(s) committed.`);
   exitCode(0);
 }
 

@@ -34,29 +34,31 @@ function seedHashes(db: Database.Database, hashes: string[]): void {
   }
 }
 
-describe('migration 003 (idempotency_hash column)', () => {
-  it('adds the idempotency_hash column on a fresh DB (user_version 0→3)', () => {
+describe('migration 003 (idempotency_hash column) + migration 004 (NOT NULL)', () => {
+  it('adds the idempotency_hash column on a fresh DB (user_version 0→4 after all migrations)', () => {
     // fails if: migration 003 does not exist, or the migrator skips it
+    // Note: full migration run now goes to user_version 4 (migration 004 tightens NOT NULL)
     const db = freshDb();
     runMigrations(db);
     const version = db.pragma('user_version', { simple: true }) as number;
-    expect(version).toBe(3);
+    expect(version).toBe(4);
 
-    // Column must exist
-    const cols = db.pragma('table_info(transactions)') as { name: string }[];
+    // Column must exist and be NOT NULL (migration 004)
+    const cols = db.pragma('table_info(transactions)') as { name: string; notnull: number }[];
     const hashCol = cols.find((c) => c.name === 'idempotency_hash');
     expect(hashCol).toBeDefined();
+    expect(hashCol!.notnull).toBe(1);
     db.close();
   });
 
-  it('re-running migrator is a no-op (user_version stays 3, ALTER TABLE not fired twice)', () => {
+  it('re-running migrator is a no-op (user_version stays 4 after two runs)', () => {
     // fails if: the migrator does not gate on user_version — SQLite would throw
     // "duplicate column name: idempotency_hash" if ALTER TABLE fired twice
     const db = freshDb();
-    runMigrations(db); // first run: 0→3
+    runMigrations(db); // first run: 0→4
     expect(() => runMigrations(db)).not.toThrow(); // second run: no-op
     const version = db.pragma('user_version', { simple: true }) as number;
-    expect(version).toBe(3);
+    expect(version).toBe(4);
     db.close();
   });
 });
@@ -166,17 +168,14 @@ describe('SqliteHashRepository.listKnownHashes', () => {
     }).toThrow(/UNIQUE constraint failed/);
   });
 
-  it('allows multiple NULL idempotency_hash values (nullable UNIQUE)', () => {
-    // fails if: migration used NOT NULL — multiple NULLs must be allowed per SQLite spec
+  it('rejects NULL idempotency_hash (NOT NULL enforced after migration 004)', () => {
+    // fails if: migration 004 did not tighten the column to NOT NULL
+    // (prior to 004, NULLs were allowed; this replaces the old "allows multiple NULLs" test)
     const insert = db.prepare(
       "INSERT INTO transactions (id, occurred_at, description) VALUES (?, ?, ?)",
     );
     expect(() => {
       insert.run('tx-null-1', '2026-04-20T00:00:00+00:00', 'test null 1');
-      insert.run('tx-null-2', '2026-04-21T00:00:00+00:00', 'test null 2');
-    }).not.toThrow();
-
-    const rows = db.prepare('SELECT id FROM transactions WHERE idempotency_hash IS NULL').all();
-    expect(rows).toHaveLength(2);
+    }).toThrow(/NOT NULL constraint failed/);
   });
 });

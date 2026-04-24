@@ -6,6 +6,8 @@ import { NodeCsvParser } from '../infra/csv/node-csv-parser.js';
 import { IdempotencyService } from '../core/ingest/idempotency-service.js';
 import { TransactionBuilder } from '../core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../infra/db/repositories/sqlite-hash-repository.js';
+import { SqliteTransactionRepository } from '../infra/db/repositories/sqlite-transaction-repo.js';
+import { NodeSqliteSnapshotService } from '../infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../infra/crypto/node-uuid-gen.js';
 import { pickSourceAccount } from '../infra/fs/pick-source-account.js';
@@ -44,6 +46,8 @@ program
     const hashRepo = new SqliteHashRepository(db);
     const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
     const transactionBuilder = new TransactionBuilder([], undefined, nodeUuidGen);
+    const transactionRepository = new SqliteTransactionRepository(db);
+    const snapshotService = new NodeSqliteSnapshotService(db);
 
     await runIngestCommand(
       { file: options.file, nonInteractive: options.nonInteractive, json: options.json },
@@ -58,6 +62,9 @@ program
         stdout: process.stdout,
         stderr: process.stderr,
         exitCode: (code) => process.exit(code),
+        transactionRepository,
+        snapshotService,
+        dbPath: resolvedDb,
       },
     );
   });

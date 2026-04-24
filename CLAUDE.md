@@ -17,7 +17,7 @@ On conflict between this file and a `docs/` file, `docs/` wins. The retrospectiv
 
 **Couples Expense Sharing App** — a local-first, CLI-based "predictive asset-based financial engine" for couples managing joint finances. Replaces reactive joint-account top-ups with a deterministic engine that predicts fair transfers, buffers volatility, and keeps an immutable ledger.
 
-**Current position:** Epic 2 (Transaction Ingestion & Tagging). Stories 1.1–1.4 + 2.1–2.3 are done. **Next story: 2.4 — Interactive Ingest Command (CLI).** *This line is refreshed by the retrospective phase of each story.*
+**Current position:** Epic 2 (Transaction Ingestion & Tagging) is **complete** — Stories 1.1–1.4 + 2.1–2.5 shipped. **Next: Epic 3 planning** (Predictive Transfer Engine — see [docs/epics.md](docs/epics.md)). *This line is refreshed by the retrospective phase of each story.*
 
 **Stack:** Node.js 20, TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
 
@@ -83,7 +83,7 @@ Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete b
    Each suggestion tagged **adopted / deferred / rejected** in the Suggestion Log (template § 7). **Deferred items must link a GitHub issue** from the `deferred-suggestion` template. Rejected items carry a one-line reason. *Exit (DoR gate):* no un-tagged suggestions; plan rewritten; every `deferred` has an issue link.
 3. **Implement** (Sonnet via `Task` with the `sonnet-implementer` agent): writes failing acceptance scenario first, drives down to failing unit tests, makes green, commits per state. Returns the structured report (see 6.3). *Exit:* all tests green, report delivered, branch pushed. PR not yet marked ready.
 4. **Code review on the implementation + refactor plan** (Opus) — re-run P1/P2/P3 **against the actual code**:
-   - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent. Audit that each `this test fails if …` note identifies the production path it guards, not just any path (Story 1.3 retro action E validated on Story 2.2; codified here per Story 2.2 retro action B).
+   - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent. Audit that each `this test fails if …` note identifies the production path it guards, not just any path (Story 1.3 retro action E validated on Story 2.2; codified here per Story 2.2 retro action B). **Gherkin-to-test mapping audit (Story 2.5 retro action C):** walk every Gherkin scenario in the plan against the integration/unit test suite and confirm each scenario has at least one corresponding test whose `fails if …` clause regresses when the scenario's production path breaks. Missing scenarios are P1 blockers — file them as in-PR fixes, not follow-up issues. Example: Story 2.5's "round-trip idempotency" scenario shipped without a test; P1 caught it only via this audit.
    - P2 retro-check: walk QA doc against the diff. **Mock diversity check (Story 2.4 retro action A):** when the diff includes structured output (JSON payloads, tables, machine-readable formats), spot-check that at least one test assertion runs against a non-default mock fixture — e.g. a `--json` test must cover `duplicates: [item]`, not only `duplicates: []`, to catch hardcoded-default regressions that pass a zero-mock test suite.
    - P3 retro-check: walk engineering-standards + security-checklist against the diff.
 

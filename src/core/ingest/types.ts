@@ -28,8 +28,13 @@ export interface ParseOutcome {
   readonly errors: readonly ParseError[];
 }
 
+export interface FreshIngestItem {
+  readonly item: IngestItem;
+  readonly idempotencyHash: string;
+}
+
 export interface IdempotencyOutcome {
-  readonly fresh: readonly IngestItem[];
+  readonly fresh: readonly FreshIngestItem[];
   readonly duplicates: readonly IngestItem[];
 }
 
@@ -41,6 +46,7 @@ export interface BuildOutcome {
   readonly category: string;
   readonly classification: Classification;
   readonly confidence: Confidence;
+  readonly idempotencyHash: string;
 }
 
 export interface BuildBatchOutcome {

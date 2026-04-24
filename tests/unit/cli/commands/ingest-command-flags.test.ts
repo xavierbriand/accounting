@@ -6,6 +6,8 @@ import type { IngestCommandDeps } from '../../../../src/cli/commands/ingest-comm
 import { Result } from '@core/shared/result.js';
 import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
+import type { SnapshotService } from '@core/ports/snapshot-service.js';
+import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
@@ -41,11 +43,28 @@ function makeHighOutcome(description: string, category: string): BuildOutcome {
     category,
     classification: 'expense',
     confidence: 'high',
+    idempotencyHash: `hash-${description}`,
   };
 }
 
 function makeLowOutcome(description: string, category: string): BuildOutcome {
   return { ...makeHighOutcome(description, category), confidence: 'low' };
+}
+
+const TEST_DB_PATH = '/tmp/test-ingest-flags.db';
+
+function makeNoOpSnapshotService(): SnapshotService {
+  return {
+    create: vi.fn().mockResolvedValue(Result.ok()),
+    restore: vi.fn().mockResolvedValue(Result.ok()),
+    remove: vi.fn().mockResolvedValue(Result.ok()),
+  };
+}
+
+function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
+  return {
+    saveBatch: vi.fn().mockReturnValue(Result.ok({ written: 0 })),
+  };
 }
 
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
@@ -69,7 +88,7 @@ describe('--non-interactive mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -77,6 +96,9 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -95,7 +117,7 @@ describe('--non-interactive mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -103,6 +125,9 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -124,7 +149,7 @@ describe('--json mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('acct-42', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -132,6 +157,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -165,7 +193,7 @@ describe('--json mode', () => {
     const deps: IngestCommandDeps = {
       configService: { load: () => Result.ok(baseConfig) },
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow, parseErrorRow] }) },
-      idempotencyService: { filterNew: (items) => Result.ok({ fresh: [...items], duplicates: [dupItem, dupItem] }) },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem, dupItem] }) },
       transactionBuilder: { buildAll: () => Result.ok({ built: outcomes, failed: [] }) },
       pickSourceAccount: () => Result.ok(makeAccount('acct-77', 'X_')),
       readFile: () => Result.ok('csv-content'),
@@ -173,6 +201,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -209,6 +240,9 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: false }, deps);

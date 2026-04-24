@@ -195,11 +195,12 @@ Commit: `test(cli): mock ParseOutcome/IdempotencyOutcome with real Money values 
   - [tests/unit/cli/commands/ingest-command-flags.test.ts](tests/unit/cli/commands/ingest-command-flags.test.ts) (6 errors: 90, 119, 151, 152, 195, 196)
   - [tests/integration/cli/ingest-commit.test.ts](tests/integration/cli/ingest-commit.test.ts) (2 errors: 177, 275)
 - Root cause: mock `csvParser.parse` / `idempotencyService.filterNew` return objects where `amount` is `{ amount: number; currency: string }` — the literal Core `Money` type is a class instance with `_dinero`, `add`, `subtract`, `equals`, `allocate` methods.
-- Fix: use real `Money` values in mocks. Define a test helper (probably inline or in a shared `tests/helpers/money.ts` — see slice 7 refactor decision):
-  ```ts
-  const EUR: Money = Money.ofMinorUnits(100, 'EUR').value; // or equivalent
-  ```
-  and substitute in every affected mock literal. The tests do not assert on `amount` methods, so the shape fix does not change any `expect(...)` call.
+- Fix: use real `Money` values in mocks. Two primitives from [src/core/shared/money.ts](src/core/shared/money.ts):
+  - `Money.zero('EUR')` → returns `Money` directly, no `Result` unwrap. Use wherever the amount **does not matter** to the assertion (most mock cases).
+  - `Money.fromCents(cents, 'EUR').value` → returns `Result<Money>`; unwrap `.value` after an `ok` guard in a test helper, or inline when confidence is high that cents is a positive integer. Use wherever the amount **does matter**.
+- No `Money.ofMinorUnits` — that was an early-draft guess; corrected per P1 critical review (see Suggestion Log P1.1).
+- Substitute in every affected mock literal. The tests do not assert on `amount` methods, so the shape fix does not change any `expect(...)` call.
+- **Escape hatch** (per P3.3): if any specific mock proves fussy to satisfy with a real `Money` instance (e.g. a deeply-frozen fixture), fall back to `as unknown as Money` double-cast with a one-line TODO comment referencing story-maint-01. Acceptable in tests; never in `src/`.
 - `tsc` error count: 15 → 1 (TS2345 included in this slice since they're the same `saveBatch` mock family).
 - `npm test` green — the test assertions don't touch `Money` methods.
 
@@ -238,14 +239,15 @@ Commit: `feat(tooling): enforce test type-check in npm run build (story-maint-01
 
 Commit: `refactor(test): extract shared makeEurMoney + captured-stream helpers (story-maint-01)`
 
-- If the Money-mock pattern in slice 4 or the stream-cast pattern in slice 3 repeated ≥3× each, extract:
-  - `tests/helpers/money.ts` — `export const EUR_CENTS = (cents: number) => Money.ofMinorUnits(cents, 'EUR').value;`
-  - `tests/helpers/streams.ts` — `export const makeCapturingStream = (): Writable & { captured: string } => { ... }`
+- If the Money-mock pattern in slice 4 or the stream-cast pattern in slice 3 repeated ≥3× each, extract to a **new `tests/_helpers/` directory** (leading underscore signals "not a test suite" — differentiates from `tests/unit/`, `tests/integration/`, `tests/perf/`):
+  - `tests/_helpers/money.ts` — thin wrappers around `Money.zero(...)` / `Money.fromCents(...).value`.
+  - `tests/_helpers/streams.ts` — `export const makeCapturingStream = (): Writable & { captured: string } => { ... }`.
+- `tsconfig.test.json`'s `include: ["src/**/*", "tests/**/*"]` picks up `tests/_helpers/**/*` automatically.
 - Otherwise, **empty `refactor:` commit** with a one-line justification body, per CLAUDE.md § 6.4 ("No-op: no proliferation threshold hit; inline casts and literals are more local").
 
 ## Risks & deferred items
 
-- **Vitest config duplication (out-of-scope for this story).** [vitest.config.js](vitest.config.js) and [vitest.config.ts](vitest.config.ts) coexist and are near-identical. Vitest picks one at runtime (probably `.ts` when both exist, depending on its internal resolver). Drift risk if a future change updates only one. Flag as follow-up; do not touch in this PR (scope creep).
+- **Vitest config duplication (out-of-scope for this story; now tracked).** [vitest.config.js](vitest.config.js) and [vitest.config.ts](vitest.config.ts) coexist and are near-identical. Vitest picks one at runtime (probably `.ts` when both exist, depending on its internal resolver). Drift risk if a future change updates only one. Filed as [#42](https://github.com/xavierbriand/accounting/issues/42) during Phase 2 review (deferred).
 - **Path-alias resolution across `rootDir` widening.** Verified mentally: `baseUrl: "./src"` is inherited; `paths: { "@core/*": ["core/*"] }` means `@core/shared/result.js` resolves to `src/core/shared/result.js`. This is independent of the extending config's `rootDir`. Cross-checked by the probe run (no `TS2307 Cannot find module '@core/...'` errors among the 21). **Low risk; covered by slice 1's probe baseline.**
 - **`npm run build` wall time.** Second `tsc` adds ~300ms on my machine (measured: first tsc ~400ms, second tsc ~300ms, total ~700ms). Acceptable.
 - **Tests touching `Money` methods in the future.** If a future test calls `mockParseOutcome.items[0].amount.add(...)`, the slice-4 fix will still work (real Money instance has the method). No behavioural regression surface.
@@ -253,15 +255,22 @@ Commit: `refactor(test): extract shared makeEurMoney + captured-stream helpers (
 
 ## Suggestion log
 
-*To be populated by the P1 / P2 / P3 critical review phase (CLAUDE.md § 6.1 phase 2). Each suggestion tagged `adopted` / `deferred` / `rejected`; deferred items link a `deferred-suggestion` issue.*
+Phase 2 (P1 / P2 / P3) run by Opus on 2026-04-24. All items tagged; no un-tagged rows.
 
 | # | Phase | Suggestion | Disposition | Link / reason |
 | - | ----- | ---------- | ----------- | ------------- |
+| P1.1 | P1 (Functional) | Plan drafted with `Money.ofMinorUnits(...)` — that API does not exist. Real API is `Money.fromCents(n, currency): Result<Money>` + `Money.zero(currency): Money` for amount-agnostic cases. | adopted | Plan slice 4 rewritten with both primitives + escape hatch. |
+| P2.1 | P2 (Product QA) | Slice 4's real-Money mocks could couple test behaviour to `Money`'s methods. | rejected | Mocks are used as data, never invoked — behaviour coupling is zero. Real types in mocks strengthen faithfulness, not weaken. |
+| P3.1 | P3 (Engineering) | `tests/helpers/` directory naming under-specified — breaks the `tests/{unit,integration,perf}/` convention. | adopted | Plan slice 7 rewritten to extract to `tests/_helpers/` (underscore prefix signals non-suite). Inline first, extract only at ≥3 callers. |
+| P3.2 | P3 (Engineering) | `vitest.config.js` + `vitest.config.ts` coexist (near-duplicates). Drift risk; out of scope here but requires a tracked issue per § 6.1 phase 2 DoR rule. | deferred | Filed [#42](https://github.com/xavierbriand/accounting/issues/42). |
+| P3.3 | P3 (Engineering) | Slice 4 could stall on a fussy `Money` mock fixture. | adopted | Plan slice 4 documents an `as unknown as Money` double-cast escape hatch with mandatory inline TODO referencing story-maint-01. |
 
 ## DoR checklist
 
 Per CLAUDE.md § 6.1:
 
 - [x] Phase 1 (Plan): intent, divergent options, convergence, Gherkin, slice plan, risks — complete in this document.
-- [ ] Phase 2 (Critical review): P1 / P2 / P3 passes on this plan, Suggestion Log populated, all items tagged, deferred items have issue links. **Next action.**
-- [ ] Draft PR open with template sections 1–6 filled (will be opened after this plan file is committed).
+- [x] Phase 2 (Critical review): P1 / P2 / P3 passes done; Suggestion Log populated; all items tagged; deferred items link a GitHub issue.
+- [x] Draft PR [#41](https://github.com/xavierbriand/accounting/pull/41) open with template sections 1–6 filled; section 7 mirrors this table.
+
+**DoR gate met. Ready for Phase 3 (Sonnet implementation).**

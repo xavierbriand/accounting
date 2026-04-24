@@ -184,8 +184,7 @@ describe('ingest-throughput (perf)', () => {
 
       db.close();
 
-      // Gate 4: wall-clock threshold
-      // eslint-disable-next-line no-console
+      // Gate 4: wall-clock threshold (log the measured value for visibility in CI output)
       console.log(`[perf] ${ROW_COUNT} rows in ${elapsed.toFixed(0)}ms (threshold: ${THRESHOLD_MS}ms)`);
       expect(elapsed).toBeLessThan(THRESHOLD_MS);
     },

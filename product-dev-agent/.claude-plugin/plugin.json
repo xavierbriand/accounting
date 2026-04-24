@@ -1,0 +1,9 @@
+{
+  "name": "product-dev-agent",
+  "version": "0.1.0",
+  "description": "Opus-plans / Sonnet-implements product development loop with 3-pass critical review, TDD rhythm, and retrospective discipline.",
+  "homepage": "https://github.com/xavierbriand/product-dev-agent",
+  "repository": "https://github.com/xavierbriand/product-dev-agent",
+  "license": "MIT",
+  "keywords": ["workflow", "tdd", "bdd", "review", "opus", "sonnet", "retrospective"]
+}

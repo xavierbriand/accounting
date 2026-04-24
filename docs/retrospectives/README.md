@@ -4,6 +4,8 @@ Each completed story produces a retrospective here. Format: Keep / Change / Try.
 
 The retrospective phase of the development loop is described in [CLAUDE.md § 6.1](../../CLAUDE.md). The retro must be committed **before** the merge checklist can be ticked.
 
+> **Legacy references.** Pre-`product-dev-agent`-plugin retrospectives (Stories 1.3 through 2.4) cite `CLAUDE.md § 6.x` and `§ 7` by section number. After accounting completes its migration to the plugin (planned for Story 3.1's retro), those references resolve to the plugin's authoritative workflow doc: `CLAUDE.md § 6.1` → `${CLAUDE_PLUGIN_ROOT}/docs/workflow.md` § "Phases"; `CLAUDE.md § 6.4` → workflow.md § "Commit convention inside a story"; `CLAUDE.md § 6.7` → workflow.md § "Maintenance sub-loop"; `CLAUDE.md § 7` → workflow.md § "Definition of Done". Frozen retro files are not rewritten; this paragraph is the single redirect.
+
 ## Template for a new retrospective
 
 Copy into `story-<id>.md` (e.g. `story-1.3.md`) and fill in.

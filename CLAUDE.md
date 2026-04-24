@@ -13,6 +13,8 @@ This file is an AI-facing cheat sheet. The authoritative canon lives under `docs
 
 On conflict between this file and a `docs/` file, `docs/` wins. The retrospective phase reconciles drift.
 
+> **Loop reference (side-by-side migration in progress).** This project's development workflow is being migrated to the [`product-dev-agent`](https://github.com/xavierbriand/product-dev-agent) plugin. The plugin is scaffolded at `product-dev-agent/` in this branch and will move to its own repo. Until **Story 3.1** validates the plugin end-to-end, both the plugin skills (`/product-dev-agent:plan-story`, `/review-plan`, `/implement`, `/review-impl`, `/retro`, `/maintenance`, `/bootstrap`) **and** the in-repo `CLAUDE.md` §§ 6–7 / `.claude/agents/sonnet-implementer.md` / `.github/*template*` files remain in force. They are equivalent by design. After Story 3.1 ships cleanly through the plugin, the duplicated in-repo workflow content will be stripped in that story's retro and accounting will consume only the plugin. The plugin's authoritative loop reference: `${CLAUDE_PLUGIN_ROOT}/docs/workflow.md`.
+
 ## 1. Project
 
 **Couples Expense Sharing App** — a local-first, CLI-based "predictive asset-based financial engine" for couples managing joint finances. Replaces reactive joint-account top-ups with a deterministic engine that predicts fair transfers, buffers volatility, and keeps an immutable ledger.

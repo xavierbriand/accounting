@@ -1,10 +1,10 @@
-# Story maint-04 — Migrate `@inquirer/prompts` 5.5.0 → 8.4.2
+# Story maint-05 — Migrate `@inquirer/prompts` 5.5.0 → 8.4.2
 
 ## Context
 
 `@inquirer/prompts` is a runtime dep currently pinned at `^5.5.0` ([package.json:28](package.json)). Latest is `8.4.2` — a 3-major-version jump. Filed as [#38](https://github.com/xavierbriand/accounting/issues/38) by the 2026-04-24 maintenance sub-loop and explicitly flagged in [CLAUDE.md § 6.7](CLAUDE.md) as a major runtime bump that must go through the main story loop (DoR/DoD/retro), not merged directly.
 
-**Position in the pre-Epic-3 sequence** (from [story-maint-01 plan](docs/plans/story-maint-01.md) § Context): `#18 → #22 → #35 → #21 → #38 → #12 → #11 → Epic 3`. #18, #22 shipped; #35 in flight as [PR #45](https://github.com/xavierbriand/accounting/pull/45). #21 (dbPath traversal) is still open — taking #38 first is a user call, not a protocol change.
+**Position in the pre-Epic-3 sequence** (from [story-maint-01 plan](docs/plans/story-maint-01.md) § Context): `#18 → #22 → #35 → #21 → #38 → #12 → #11 → Epic 3`. #18, #22, #35 shipped as stories maint-01/02/03. #21 (dbPath traversal) went in flight as PR #50 (= story-maint-04) in parallel with this story. #38 is therefore **story-maint-05** — renamed from the originally-planned `maint-04` to resolve the namespace collision with PR #50 (PR #50 was opened minutes after PR #48 but #21 precedes #38 in the sequence).
 
 **Maintenance sub-loop (CLAUDE.md § 6.7) — 2026-04-24, this run.**
 - **Open Dependabot PRs:** none. (PRs #45 and #36 are draft `story-maint-03` + plugin scaffold, not dep bumps.)
@@ -158,12 +158,12 @@ Per [CLAUDE.md § 6.4](CLAUDE.md) the canonical rhythm is `test: → feat: → r
 
 Sequence (4 commits):
 
-1. `chore(docs): story-maint-04 plan + P1/P2/P3 review (story-maint-04)` — this plan doc.
-2. `chore(deps): bump @inquirer/prompts from 5.5.0 to 8.4.2 (story-maint-04)` — `package.json` + `package-lock.json` only. Body:
-   > 3-major-version skip (5 → 6 → 7 → 8). Breaking-change audit in docs/plans/story-maint-04.md § 4: zero impact — our usage is `select` + `confirm` with `{ message, choices, default }` only. No theming, no `cancel()`, no `instructions`, no legacy `inquirer` alias. Closes the low-sev `@inquirer/editor → external-editor → tmp` audit chain (GHSA-52f5-9888-hmc6). Closes #38.
-3. `refactor(cli): empty slot — interactive.ts unchanged (story-maint-04)` — following the story-maint-02 "empty refactor slot with justification" pattern ([CLAUDE.md § 6.4](CLAUDE.md)). Body:
-   > No-op: src/cli/utils/interactive.ts is byte-identical to its pre-bump state. All v6/v7/v8 breaking changes are N/A to our usage per docs/plans/story-maint-04.md § 4. Nothing to refactor.
-4. `chore(retro): story-maint-04 retrospective (story-maint-04)` — `docs/retrospectives/story-maint-04.md`.
+1. `chore(docs): story-maint-05 plan + P1/P2/P3 review (story-maint-05)` — this plan doc.
+2. `chore(deps): bump @inquirer/prompts from 5.5.0 to 8.4.2 (story-maint-05)` — `package.json` + `package-lock.json` only. Body:
+   > 3-major-version skip (5 → 6 → 7 → 8). Breaking-change audit in docs/plans/story-maint-05.md § 4: zero impact — our usage is `select` + `confirm` with `{ message, choices, default }` only. No theming, no `cancel()`, no `instructions`, no legacy `inquirer` alias. Closes the low-sev `@inquirer/editor → external-editor → tmp` audit chain (GHSA-52f5-9888-hmc6). Closes #38.
+3. `refactor(cli): empty slot — interactive.ts unchanged (story-maint-05)` — following the story-maint-02 "empty refactor slot with justification" pattern ([CLAUDE.md § 6.4](CLAUDE.md)). Body:
+   > No-op: src/cli/utils/interactive.ts is byte-identical to its pre-bump state. All v6/v7/v8 breaking changes are N/A to our usage per docs/plans/story-maint-05.md § 4. Nothing to refactor.
+4. `chore(retro): story-maint-05 retrospective (story-maint-05)` — `docs/retrospectives/story-maint-05.md`.
 
 Squash on merge optional.
 
@@ -204,13 +204,13 @@ _Empty — awaits Phase 3 return report._
 
 ## Retrospective
 
-Full retrospective: [docs/retrospectives/story-maint-04.md](docs/retrospectives/story-maint-04.md). Headline: second data point for the pre-planning probe pattern from story-maint-01; first data point for Phase 3 collapse into probe (and for commit-rhythm skip on a major-bump-zero-code-change story). Both flagged as passive observation targets for the next major dep bump ([#11](https://github.com/xavierbriand/accounting/issues/11) or [#12](https://github.com/xavierbriand/accounting/issues/12)); CLAUDE.md § 6.7 codification deferred until a second data point confirms the pattern.
+Full retrospective: [docs/retrospectives/story-maint-05.md](docs/retrospectives/story-maint-05.md). Headline: second data point for the pre-planning probe pattern from story-maint-01; first data point for Phase 3 collapse into probe (and for commit-rhythm skip on a major-bump-zero-code-change story). Both flagged as passive observation targets for the next major dep bump ([#11](https://github.com/xavierbriand/accounting/issues/11) or [#12](https://github.com/xavierbriand/accounting/issues/12)); CLAUDE.md § 6.7 codification deferred until a second data point confirms the pattern.
 
 ## Merge checklist
 
 - [ ] `lint` / `build` / `test` green on CI
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-04.md`
+- [ ] Retrospective file committed at `docs/retrospectives/story-maint-05.md`
 - [ ] All suggestion-log items resolved (no blank `Resolution` cells)
 - [ ] All Phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)
 - [ ] Manual smoke-test executed locally (scenario in § 5)

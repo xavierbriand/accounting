@@ -2,7 +2,7 @@
 
 **PR:** [#48](https://github.com/xavierbriand/accounting/pull/48)  **Closed:** pending merge  **Closes issue:** [#38](https://github.com/xavierbriand/accounting/issues/38)
 
-Tenth end-to-end run of the loop; third story on the pre-Epic-3 maintenance track. First pure-dependency story where the breaking-change audit produced a zero-code-change verdict against the stack. Diff: 1 LOC in [package.json](package.json), 578 LOC regenerated lockfile, 210 LOC plan doc, 0 LOC in [src/](src/) or [tests/](tests/). Cleared the `@inquirer/editor → external-editor → tmp` audit chain (GHSA-52f5-9888-hmc6) without changing any behaviour.
+Tenth end-to-end run of the loop; third story on the pre-Epic-3 maintenance track. First pure-dependency story where the breaking-change audit produced a zero-code-change verdict against the stack. Diff: 1 LOC in [package.json](package.json), 578 LOC regenerated lockfile, 210 LOC plan doc, 0 LOC in [src/](src/) or [tests/](tests/). Cleared the `@inquirer/editor → external-editor → tmp` audit chain (GHSA-52f5-9888-hmc6) without changing any behaviour. Mid-story ([#45](https://github.com/xavierbriand/accounting/pull/45) and [#47](https://github.com/xavierbriand/accounting/pull/47) merged to main) forced a rebase; all four commits replayed cleanly including the empty-refactor slot under `--keep-empty`.
 
 ## Keep
 
@@ -42,7 +42,7 @@ Tenth end-to-end run of the loop; third story on the pre-Epic-3 maintenance trac
 - **Issues closed by this story:** [#38](https://github.com/xavierbriand/accounting/issues/38).
 - **Issues opened:** 0.
 - **Total commits on branch:** 4 (plan / deps / empty-refactor / this retro).
-- **Test count:** 213 → 213 (unchanged; no new tests, no modified tests).
+- **Test count:** 213 → 213 (pre-bump probe to post-bump probe; zero delta from this story). Post-rebase baseline is 217/217 green — the +4 came from [#45](https://github.com/xavierbriand/accounting/pull/45) (story-maint-03) landing on main mid-story, not from this bump.
 - **Diff stats:** 1 LOC prod ([package.json](package.json)) + 578 LOC regenerated lockfile + 210 LOC plan + ~90 LOC retro + 0 LOC src/ + 0 LOC tests/.
 - **Bugs squashed:** 0 (supply-chain + audit-hygiene story).
 - **`npm audit`:** 4 low → 0 on `@inquirer/*` chain. 4 moderate on `quickpickle / @cucumber/* / uuid` chain remain (out of scope — tracked in [#24](https://github.com/xavierbriand/accounting/issues/24)).

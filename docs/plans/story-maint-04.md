@@ -64,7 +64,7 @@ Ran `npm install @inquirer/prompts@8.4.2 --save` + `npm run lint && npm run buil
 | --- | --- | --- | --- |
 | `npm run lint` | green | green | 0 |
 | `npm run build` (`tsc` + `tsc -p tsconfig.test.json`) | green | green | 0 |
-| `npm test` | 213 tests pass across 23 files | 213 tests pass across 23 files | 0 |
+| `npm test` | 213 tests pass across 23 files (probe time) | 213 post-bump / 217 post-rebase across 25 files[^rebase] | 0 (bump delta) |
 | `npm audit` — `@inquirer/*` chain | 4 low (`@inquirer/editor`, `@inquirer/prompts`, `external-editor`, `tmp`) | 0 findings | chain cleared |
 | `npm audit` — `quickpickle / @cucumber/* / uuid` chain | 4 moderate | 4 moderate (unchanged) | out of scope (#24) |
 | `src/cli/utils/interactive.ts` diff | — | byte-identical | 0 LOC changed |
@@ -72,6 +72,8 @@ Ran `npm install @inquirer/prompts@8.4.2 --save` + `npm run lint && npm run buil
 Transitive churn: `@inquirer/prompts@8` internalises `external-editor` as `@inquirer/external-editor@3` and migrates colouring from `yoctocolors` to Node `util.styleText` — this is what clears the `tmp` GHSA-52f5-9888-hmc6 chain. `@inquirer/core@11`, `@inquirer/ansi@2`, `@inquirer/figures@2` come along as internal restructuring.
 
 The probe confirms the plan's § 5 scenarios 1–4 pass verbatim. Scenario 5 (manual smoke-test) remains a user-executed AC, unchanged.
+
+[^rebase]: Mid-story, [PR #45](https://github.com/xavierbriand/accounting/pull/45) (story-maint-03) and [PR #47](https://github.com/xavierbriand/accounting/pull/47) (CI token scope hardening) merged to main. The branch was rebased onto the new tip. #45 added 4 tests in 2 new files; the bump itself still contributes 0 tests. Post-rebase suite is 217/217 green with `@inquirer/*` audit chain still 0. Historical probe-time count (213) kept above as the authoritative delta-0 proof for this story.
 
 ## Selected solution
 
@@ -118,7 +120,7 @@ Feature: @inquirer/prompts 5.5.0 → 8.4.2 migration
     And moderate findings on quickpickle / @cucumber/* / uuid remain unchanged (tracked in #24)
 
   Scenario: full test suite green, unmodified
-    Given the existing 172+ test suite passes pre-bump
+    Given the existing test suite passes pre-bump (213 at probe time; 217 post-rebase after #45 + #47 landed on main)
     When the dep is bumped to 8.4.2
     Then `npm run lint && npm run build && npm test` completes green on the developer machine and on CI
     And no test file is modified

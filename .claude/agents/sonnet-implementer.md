@@ -52,6 +52,23 @@ When you finish, return **exactly** this structure. No preamble, no trailing com
 <Each deviation in one bullet: what · why · what the alternative would have been.
 If none, write "None.">
 
+**Shim-for-tests compromises must be flagged here (retro finding, Story 2.5).**
+When the plan says "keep X for test compatibility" or "X stays as-is for now", and
+you add a shim (optional parameter with fallback, default placeholder value, or
+backwards-compat branch) rather than tightening the contract and updating the
+tests, that IS a structural deviation — surface it as:
+"Added `<shim>` to preserve existing test call sites; planned alternative was
+to tighten the signature and update the N callers." Otherwise Opus's Phase 4
+review discovers the shim by diff-reading (Story 2.5 caught a silent
+`legacy-placeholder:` fallback in `save()` this way), adding a round-trip.
+
+## Gherkin coverage checklist
+<Tick every Gherkin scenario in the plan against the test it maps to, one line each:
+`✓ <scenario name> → <test file>:<describe name>` — or `✗ <scenario name> → not covered: <rationale>`.
+If all scenarios are covered, still list them (cheap; catches "scenario-drop" regressions
+per Story 2.5 retro action C). Missing scenarios without rationale are a stop condition —
+fix before returning.>
+
 ## Unknowns encountered
 <Things you couldn't resolve from the plan + docs alone. If none, write "None.">
 

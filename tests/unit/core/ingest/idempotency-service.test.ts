@@ -161,7 +161,7 @@ describe('IdempotencyService.filterNew', () => {
     it('returns Result.fail when repo.listKnownHashes fails', () => {
       // fails if: service swallows the repo error
       const failingRepo: HashRepository = {
-        listKnownHashes: vi.fn(() => Result.fail('db error')),
+        listKnownHashes: vi.fn<HashRepository['listKnownHashes']>(() => Result.fail<ReadonlySet<string>>('db error')),
       };
       const service = new IdempotencyService(identityHashFn, failingRepo);
       const result = service.filterNew([makeItem(1)]);

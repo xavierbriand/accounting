@@ -5,9 +5,11 @@
  *   - "happy path — batch commits with snapshot then cleans up"
  *   - "mid-batch failure — ENTIRE batch rolled back, snapshot retained and intact"
  *   - "commit-failure stderr excludes idempotency_hash values (PII hygiene)"
+ *   - "round-trip idempotency — second ingest of same CSV yields zero fresh"
  *
  * fails if: snapshot skipped, partial writes, hashes stored as NULL, snapshot retained
- *   after success, snapshot removed after failure, or raw SQL UNIQUE error leaked to stderr.
+ *   after success, snapshot removed after failure, raw SQL UNIQUE error leaked to stderr,
+ *   or idempotency dedup misses on re-ingest (FR8 regression).
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
@@ -188,6 +190,62 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     // stderr has the rolled-back message
     expect(stderr.captured).toContain('Commit failed (batch rolled back)');
     expect(stderr.captured).toContain('Snapshot retained at');
+
+    db.close();
+  });
+
+  it('(round-trip idempotency) second ingest of same CSV yields 0 fresh, 5 duplicates, no new rows, exit 0', async () => {
+    // fails if: idempotency_hash is not populated on first pass (dedup would never hit),
+    // or the stored hash is not the canonical hashFn(canonicalize(item)) so a second
+    // pass re-inserts duplicates. This is the core FR8 (idempotent re-ingest) gate —
+    // walks QA "No silent data loss" invariant end-to-end.
+    const tmpDir = makeTmpDir();
+    const dbPath = path.join(tmpDir, 'ingest-round-trip.db');
+    const snapshotPath = dbPath + '.bak';
+    const csvPath = path.join(tmpDir, 'bpce-valid.csv');
+    fs.copyFileSync(FIXTURE_CSV, csvPath);
+
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    runMigrations(db);
+
+    // First pass — commit 5 rows
+    const firstDeps = makeRealDeps(db, dbPath, csvPath);
+    await runIngestCommand({ file: csvPath, nonInteractive: false, json: false }, firstDeps.deps);
+    expect(firstDeps.exitCodes).toContain(0);
+
+    const firstCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
+    expect(firstCount).toBe(5);
+
+    // Capture the canonical hashes persisted by the first pass
+    const firstHashes = (db.prepare('SELECT idempotency_hash FROM transactions ORDER BY id').all() as { idempotency_hash: string }[])
+      .map((r) => r.idempotency_hash);
+    expect(firstHashes).toHaveLength(5);
+    expect(firstHashes.every((h) => h != null && h.length > 0)).toBe(true);
+
+    expect(fs.existsSync(snapshotPath)).toBe(false);
+
+    // Second pass — same CSV, same DB. All items should be dedup'd as duplicates.
+    const secondDeps = makeRealDeps(db, dbPath, csvPath);
+    await runIngestCommand({ file: csvPath, nonInteractive: false, json: false }, secondDeps.deps);
+    expect(secondDeps.exitCodes).toContain(0);
+
+    // No additional rows
+    const secondCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
+    expect(secondCount).toBe(5);
+
+    // Hashes still the same set (no bleed / no replacement)
+    const secondHashes = (db.prepare('SELECT idempotency_hash FROM transactions ORDER BY id').all() as { idempotency_hash: string }[])
+      .map((r) => r.idempotency_hash);
+    expect(secondHashes).toEqual(firstHashes);
+
+    // The CLI surface signals dedup to the user
+    expect(secondDeps.stderr.captured).toContain('Found 0 new transactions');
+    expect(secondDeps.stderr.captured).toContain('5 duplicate(s) skipped');
+
+    // Snapshot removed after second (empty-batch) commit — lifecycle still correct
+    expect(fs.existsSync(snapshotPath)).toBe(false);
 
     db.close();
   });

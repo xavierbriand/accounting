@@ -107,7 +107,7 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(0);
     expect(prompter.selectCategory).not.toHaveBeenCalled();
     expect(prompter.confirmBatch).not.toHaveBeenCalled();
-  });
+  }, 500);
 
   it('exits 2 with low-confidence items — stderr names the count, no hang', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
@@ -136,7 +136,7 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(2);
     expect((stderr as unknown as { captured: string }).captured).toContain('1 item');
     expect(prompter.selectCategory).not.toHaveBeenCalled();
-  });
+  }, 500);
 });
 
 describe('--json mode', () => {

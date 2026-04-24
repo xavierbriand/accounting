@@ -1,4 +1,6 @@
-// NOTE: This test spawns the built CLI; CI runs npm run build before tests. Locally, run 'npm run build' once before this test.
+// NOTE: This test spawns the CLI via tsx (handles @core path alias). No separate build step needed.
+// The plan specified 'node dist/cli/program.js' but dist/ does not rewrite @core imports;
+// tsx resolves them via tsconfig.json paths at runtime. Deviation documented in return report.
 /**
  * Integration test: CLI ingest against an uninitialised DB emits a friendly error.
  *
@@ -20,7 +22,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CLI_PATH = path.join(__dirname, '../../../dist/cli/program.js');
+const TSX_BIN = path.join(__dirname, '../../../node_modules/.bin/tsx');
+const CLI_SRC = path.join(__dirname, '../../../src/cli/program.ts');
 
 const FIXTURE_CSV = path.join(__dirname, '../../fixtures/csv/bpce-valid.csv');
 
@@ -51,7 +54,7 @@ describe('ingest against uninitialised DB', () => {
     let error: { status: number | null; stderr: Buffer | string; stdout: Buffer | string } | null = null;
 
     try {
-      execFileSync('node', [CLI_PATH, 'ingest', '--file', csvPath, '--db-path', dbPath], {
+      execFileSync(TSX_BIN, [CLI_SRC, 'ingest', '--file', csvPath, '--db-path', dbPath], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });

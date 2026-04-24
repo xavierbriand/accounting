@@ -15,6 +15,7 @@ import { readBpceCsv } from '../infra/fs/read-bpce-csv.js';
 import { inquirerPrompter } from './utils/interactive.js';
 import { runIngestCommand } from './commands/ingest-command.js';
 import { runMigrate } from './migrate.js';
+import { assertMigrated } from '../infra/db/migration-check.js';
 
 const program = new Command();
 
@@ -41,6 +42,13 @@ program
   .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPath: string }) => {
     const resolvedDb = path.resolve(options.dbPath);
     const db = getDb(resolvedDb);
+
+    const migrationCheck = assertMigrated(db, resolvedDb);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+
     const configService = new FileConfigService({ projectDir: process.cwd() });
     const csvParser = new NodeCsvParser();
     const hashRepo = new SqliteHashRepository(db);

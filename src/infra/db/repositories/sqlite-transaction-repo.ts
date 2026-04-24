@@ -21,7 +21,6 @@ interface EntryRow {
 export class SqliteTransactionRepository implements TransactionRepository {
   private readonly insertHeader: Database.Statement;
   private readonly insertEntry: Database.Statement;
-  private readonly insertHeaderWithHash: Database.Statement;
   private readonly selectHeader: Database.Statement;
   private readonly selectEntries: Database.Statement;
 
@@ -32,9 +31,6 @@ export class SqliteTransactionRepository implements TransactionRepository {
     this.insertEntry = db.prepare(
       'INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES (?, ?, ?, ?, ?)',
     );
-    this.insertHeaderWithHash = db.prepare(
-      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
-    );
     this.selectHeader = db.prepare(
       'SELECT id, occurred_at, description FROM transactions WHERE id = ?',
     );
@@ -43,13 +39,9 @@ export class SqliteTransactionRepository implements TransactionRepository {
     );
   }
 
-  save(transaction: Transaction, idempotencyHash?: string): Result<void> {
-    // idempotencyHash is required for production callers (saveBatch); legacy test callers
-    // that do not supply a hash get a deterministic placeholder derived from the tx id.
-    // The NOT NULL constraint on idempotency_hash (migration 004) is satisfied either way.
-    const hash = idempotencyHash ?? `legacy-placeholder:${transaction.id}`;
+  save(transaction: Transaction, idempotencyHash: string): Result<void> {
     const write = this.db.transaction(() => {
-      this.insertHeader.run(transaction.id, transaction.occurredAt, transaction.description, hash);
+      this.insertHeader.run(transaction.id, transaction.occurredAt, transaction.description, idempotencyHash);
       for (const entry of transaction.entries) {
         this.insertEntry.run(
           transaction.id,
@@ -72,7 +64,7 @@ export class SqliteTransactionRepository implements TransactionRepository {
   saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome> {
     const write = this.db.transaction(() => {
       for (const o of outcomes) {
-        this.insertHeaderWithHash.run(
+        this.insertHeader.run(
           o.transaction.id,
           o.transaction.occurredAt,
           o.transaction.description,

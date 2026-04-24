@@ -43,7 +43,7 @@ describe('SqliteTransactionRepository', () => {
 
   it('save + findById round-trip preserves all fields', () => {
     const tx = makeBalancedTx('tx-round-trip');
-    const saveResult = repo.save(tx);
+    const saveResult = repo.save(tx, 'hash-round-trip');
 
     expect(saveResult.isSuccess).toBe(true);
 
@@ -146,7 +146,7 @@ describe('SqliteTransactionRepository', () => {
           { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(1000) },
         ],
       }).value;
-      expect(repo.save(first).isSuccess).toBe(true);
+      expect(repo.save(first, 'hash-dup-first').isSuccess).toBe(true);
 
       // Second save with same id: PK collision on the header INSERT must roll back
       const second = Transaction.create({
@@ -158,7 +158,7 @@ describe('SqliteTransactionRepository', () => {
           { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(5000) },
         ],
       }).value;
-      const saveResult = repo.save(second);
+      const saveResult = repo.save(second, 'hash-dup-second');
       expect(saveResult.isFailure).toBe(true);
 
       // DB state must match the original tx exactly — no bleed from second attempt

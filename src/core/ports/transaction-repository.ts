@@ -7,7 +7,7 @@ export interface BatchWriteOutcome {
 }
 
 export interface TransactionRepository {
-  save(transaction: Transaction): Result<void>;
+  save(transaction: Transaction, idempotencyHash: string): Result<void>;
   saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome>;
   findById(id: string): Result<Transaction | null>;
 }

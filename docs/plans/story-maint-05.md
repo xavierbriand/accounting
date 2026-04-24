@@ -66,7 +66,7 @@ Ran `npm install @inquirer/prompts@8.4.2 --save` + `npm run lint && npm run buil
 | `npm run build` (`tsc` + `tsc -p tsconfig.test.json`) | green | green | 0 |
 | `npm test` | 213 tests pass across 23 files (probe time) | 213 post-bump / 217 post-rebase across 25 files[^rebase] | 0 (bump delta) |
 | `npm audit` — `@inquirer/*` chain | 4 low (`@inquirer/editor`, `@inquirer/prompts`, `external-editor`, `tmp`) | 0 findings | chain cleared |
-| `npm audit` — `quickpickle / @cucumber/* / uuid` chain | 4 moderate | 4 moderate (unchanged) | out of scope (#24) |
+| `npm audit` — `quickpickle / @cucumber/* / uuid` chain | 4 moderate | 4 moderate at probe time; **0 post-rebase** after [PR #49](https://github.com/xavierbriand/accounting/pull/49) merged `tmp>=0.2.4` + `uuid>=14` overrides | out of scope for *this* story — cleared by #49 on main |
 | `src/cli/utils/interactive.ts` diff | — | byte-identical | 0 LOC changed |
 
 Transitive churn: `@inquirer/prompts@8` internalises `external-editor` as `@inquirer/external-editor@3` and migrates colouring from `yoctocolors` to Node `util.styleText` — this is what clears the `tmp` GHSA-52f5-9888-hmc6 chain. `@inquirer/core@11`, `@inquirer/ansi@2`, `@inquirer/figures@2` come along as internal restructuring.

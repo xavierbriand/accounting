@@ -45,7 +45,7 @@ Tenth end-to-end run of the loop. Originally planned as `story-maint-04` but **r
 - **Test count:** 213 → 213 (pre-bump probe to post-bump probe; zero delta from this story). Post-rebase baseline is 217/217 green — the +4 came from [#45](https://github.com/xavierbriand/accounting/pull/45) (story-maint-03) landing on main mid-story, not from this bump.
 - **Diff stats:** 1 LOC prod ([package.json](package.json)) + 578 LOC regenerated lockfile + 210 LOC plan + ~90 LOC retro + 0 LOC src/ + 0 LOC tests/.
 - **Bugs squashed:** 0 (supply-chain + audit-hygiene story).
-- **`npm audit`:** 4 low → 0 on `@inquirer/*` chain. 4 moderate on `quickpickle / @cucumber/* / uuid` chain remain (out of scope — tracked in [#24](https://github.com/xavierbriand/accounting/issues/24)).
+- **`npm audit`:** 4 low → 0 on `@inquirer/*` chain (this story's contribution). Total findings **4 low + 4 moderate → 0** after [PR #49](https://github.com/xavierbriand/accounting/pull/49) landed mid-story with `tmp>=0.2.4` + `uuid>=14` overrides. Repo is now at a fully-clean `npm audit` — first time in the project's history.
 - **New runtime deps:** 0 (upgrade, not addition). **New dev deps:** 0.
 - **Time-to-DoD:** ~15-minute implementation (probe = install + test + audit); ~30 min total including plan + Phase-2 review + Phase-4 retro-check + this retro.
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -52,6 +52,7 @@ describe('FileConfigService', () => {
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true });
     fs.rmSync(xdgDir, { recursive: true });
+    vi.unstubAllEnvs();
   });
 
   it('loads accounting.yaml from projectDir when present', () => {
@@ -131,5 +132,19 @@ describe('FileConfigService', () => {
     const result = service.load();
 
     expect(result.isSuccess).toBe(true);
+  });
+
+  it('falls back to os.homedir() when HOME is unset and no explicit homeDir is provided', () => {
+    const systemHome = os.homedir();
+    vi.stubEnv('HOME', undefined);
+    const service = new FileConfigService({ projectDir: tmpDir });
+
+    // fails if FileConfigService uses /tmp instead of os.homedir() when HOME is unset
+    const result = service.load();
+
+    expect(result.isFailure).toBe(true);
+    const expectedXdgPath = path.join(systemHome, '.config', 'accounting', 'config.yaml');
+    expect(result.error).toContain(expectedXdgPath);
+    expect(result.error).not.toContain('/tmp/.config');
   });
 });

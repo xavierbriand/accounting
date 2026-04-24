@@ -190,6 +190,11 @@ Phase 2 (pre-implementation P1/P2/P3) entries are populated below. Phase 4 (retr
 | P3 | Story 2.5 retro action C (Gherkin-to-test-mapping audit in Phase 4 P1) doesn't cleanly apply here — scenarios assert invariants about the bump, not new production paths. | adopted | Documented in § 5 with a scenario-to-verification-mechanism table. Phase 4 reviewer should substitute probe-diff audit + suite-green check for the standard walk. |
 | P3 | Verify CI baseline matches v8 Node ≥ 20 requirement. | adopted | Checked: [.github/workflows/ci.yml:18](.github/workflows/ci.yml) pins `node-version: '20'`. Exact match. Documented in § 4 breaking-change table. |
 | P3 | Plan should state that the probe already happened (reality over fiction) and mark Phase 3 as collapsed. | adopted | § 4 "Pre-planning probe findings" section added; § 8 "Implementation phase" rewritten to declare collapse into Phase 1. |
+| P4-retro | Confirm diff matches plan: `git diff main...HEAD -- src/ tests/` produces 0 lines. | verified | Ran post-commit: 0 LOC in src/ or tests/. [package.json](package.json) diff is 1 line (version pin). [package-lock.json](package-lock.json) regen. |
+| P4-retro | CI gate green: `npm run lint && npm run build && npm test`. | verified | [gh pr checks 48](https://github.com/xavierbriand/accounting/pull/48) → `build` pass (24s). CodeQL still pending at time of this commit (non-blocking security-scan side-channel). |
+| P4-retro | Gherkin-to-test-mapping substitution from plan § 5 holds. | verified | Scenarios 1–4 verified by `git diff` + CI; scenario 5 (smoke-test) remains user-executed. |
+| P4-retro | No mock-diversity-class regression in the diff (Story 2.4 retro action A). | N/A | No structured-output assertions in the diff. |
+| P4-retro | No safeguard-removal concerns (Story-maint-01 retro action A rule). | N/A | No code change. |
 
 ## Sonnet's learnings
 
@@ -197,7 +202,7 @@ _Empty — awaits Phase 3 return report._
 
 ## Retrospective
 
-_Empty — awaits Phase 5. Link target: [docs/retrospectives/story-maint-04.md](docs/retrospectives/story-maint-04.md)._
+Full retrospective: [docs/retrospectives/story-maint-04.md](docs/retrospectives/story-maint-04.md). Headline: second data point for the pre-planning probe pattern from story-maint-01; first data point for Phase 3 collapse into probe (and for commit-rhythm skip on a major-bump-zero-code-change story). Both flagged as passive observation targets for the next major dep bump ([#11](https://github.com/xavierbriand/accounting/issues/11) or [#12](https://github.com/xavierbriand/accounting/issues/12)); CLAUDE.md § 6.7 codification deferred until a second data point confirms the pattern.
 
 ## Merge checklist
 

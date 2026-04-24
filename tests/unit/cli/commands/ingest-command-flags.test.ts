@@ -8,13 +8,14 @@ import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import { Money } from '@core/shared/money.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
 //           or --json output contains idempotencyHash,
 //           or exit codes are wrong for any flag combination
 
-const EUR = { amount: 1000, currency: 'EUR' };
+const EUR = Money.zero('EUR');
 
 function makeAccount(id: string, prefix: string): AccountConfig {
   return { id, type: 'bank', filenamePrefix: prefix };
@@ -70,7 +71,7 @@ function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
   function makeCapture(): Writable & { captured: string } {
     const buf: string[] = [];
-    const stream = new PassThrough() as Writable & { captured: string };
+    const stream = new PassThrough() as unknown as Writable & { captured: string };
     stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
     Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
     return stream;
@@ -79,7 +80,7 @@ function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writa
 }
 
 describe('--non-interactive mode', () => {
-  it({ timeout: 500 }, 'exits 0 with only high-confidence items — no prompts fired', async () => {
+  it('exits 0 with only high-confidence items — no prompts fired', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -106,9 +107,9 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(0);
     expect(prompter.selectCategory).not.toHaveBeenCalled();
     expect(prompter.confirmBatch).not.toHaveBeenCalled();
-  }, { timeout: 500 });
+  }, 500);
 
-  it({ timeout: 500 }, 'exits 2 with low-confidence items — stderr names the count, no hang', async () => {
+  it('exits 2 with low-confidence items — stderr names the count, no hang', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -135,7 +136,7 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(2);
     expect((stderr as unknown as { captured: string }).captured).toContain('1 item');
     expect(prompter.selectCategory).not.toHaveBeenCalled();
-  }, { timeout: 500 });
+  }, 500);
 });
 
 describe('--json mode', () => {

@@ -9,13 +9,14 @@ import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
+import { Money } from '@core/shared/money.js';
 
 // fails if: the summary table is not written to stdout,
 //           or the interactive loop is skipped for low-confidence items,
 //           or a per-item change is not applied to the BuildOutcome,
 //           or exit code is wrong for any case
 
-const EUR = { amount: 1000, currency: 'EUR' };
+const EUR = Money.zero('EUR');
 const TEST_DB_PATH = '/tmp/test-ingest.db';
 
 function makeAccount(id: string, prefix: string): AccountConfig {
@@ -56,7 +57,7 @@ function makeLowOutcome(description: string, category: string): BuildOutcome {
 
 function makeStdout(): Writable & { captured: string } {
   const buf: string[] = [];
-  const stream = new PassThrough() as Writable & { captured: string };
+  const stream = new PassThrough() as unknown as Writable & { captured: string };
   stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
   Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
   return stream;

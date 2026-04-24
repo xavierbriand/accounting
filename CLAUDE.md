@@ -87,7 +87,7 @@ Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete b
    - P2 retro-check: walk QA doc against the diff. **Mock diversity check (Story 2.4 retro action A):** when the diff includes structured output (JSON payloads, tables, machine-readable formats), spot-check that at least one test assertion runs against a non-default mock fixture — e.g. a `--json` test must cover `duplicates: [item]`, not only `duplicates: []`, to catch hardcoded-default regressions that pass a zero-mock test suite.
    - P3 retro-check: walk engineering-standards + security-checklist against the diff.
 
-   Produce a refactor plan; blockers are fixed before merge, not deferred. Delegate execution to Sonnet. *Exit:* refactor merged back into the branch, CI green.
+   Produce a refactor plan; blockers are fixed before merge, not deferred. Delegate execution to Sonnet, with one exception: **trivial inline fixes** (retro finding, story-maint-01) — Opus may execute the refactor directly when **all** of: diff is under 5 LOC, a single file, the fix coordinates are pre-specified in the retro-check finding, and no design question remains (no helper naming, no cross-module placement, no type-surface judgment). Anything larger delegates to Sonnet. *Exit:* refactor merged back into the branch, CI green.
 5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. Action items either land in the same PR or become follow-up issues. *Exit:* file committed. Merge is user-gated.
 
 ### 6.2 Model tier
@@ -109,7 +109,7 @@ Emit exactly these sections, in order:
 ```
 Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md).
 
-**Invocation note (retro finding, Story 1.3):** in the current Claude Code harness, custom agent IDs defined in `.claude/agents/*.md` are **not** registered with the Task / Agent tool — only built-in subagent types are selectable (`claude-code-guide`, `Explore`, `general-purpose`, `Plan`, `statusline-setup`). Treat "sonnet-implementer" as a role description, not a `subagent_type` value. Working invocation pattern: `subagent_type: "general-purpose"` + `model: "sonnet"` override + inline the full operating brief from the agent spec file into the `prompt`. If a future harness registers custom agents, switch back to `subagent_type: "sonnet-implementer"` and drop the inline brief.
+**Invocation note (updated, story-maint-01 retro finding):** the Claude Code harness now registers `.claude/agents/*.md` custom agents with the Task / Agent tool. Invoke directly with `subagent_type: "sonnet-implementer"` — no `model` override or inline brief needed; the agent spec file's frontmatter supplies both. Prior Story 1.3 retro guidance ("use `subagent_type: 'general-purpose'` + inline brief") is superseded. If a future harness regression removes custom-agent support, fall back to the general-purpose + inline-brief pattern.
 
 ### 6.4 Commit convention inside a story
 

@@ -122,11 +122,11 @@ export class Money {
   /**
    * Helper for tests
    */
-  public static zero(currency: string = 'EUR'): Money {
+  public static zero(currency: string = 'USD'): Result<Money> {
     const currencyDef = currencyMap[currency];
     if (!currencyDef) {
-      throw new Error(`Unknown currency code: ${currency}. Must be a valid ISO 4217 currency.`);
+      return Result.fail<Money>(`Unknown currency code: ${currency}. Must be a valid ISO 4217 currency.`);
     }
-    return new Money(dinero({ amount: 0, currency: currencyDef }));
+    return Result.ok(new Money(dinero({ amount: 0, currency: currencyDef })));
   }
 }

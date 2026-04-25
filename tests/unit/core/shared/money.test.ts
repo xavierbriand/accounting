@@ -16,6 +16,12 @@ describe('Money Value Object', () => {
       expect(m.isFailure).toBe(true);
     });
 
+    it('should fail for an unknown currency code', () => {
+      const m = Money.fromCents(100, 'XXX');
+      expect(m.isFailure).toBe(true);
+      expect(m.error).toMatch(/currency/i);
+    });
+
     it('should implement Bankers Rounding for decimals', () => {
       // 2.5 cents -> 2 cents (Round Half to Even)
       // Note: fromDecimal takes "Units". 0.025 units = 2.5 cents.

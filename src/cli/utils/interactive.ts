@@ -38,7 +38,7 @@ export const inquirerPrompter: InteractivePrompter = {
 
   async confirmBatch(count) {
     return confirm({
-      message: `Commit these ${count} transactions? (nothing will be written yet — Story 2.5 adds DB writes)`,
+      message: `Commit these ${count} transactions?`,
       default: false,
     });
   },

@@ -16,10 +16,12 @@ Eleventh end-to-end run of the loop; sixth story on the pre-Epic-3 maintenance t
 
 - **A. Initial draft of the suggestion log hedged on rejections.** First pass had `@eslint/js` direct-pin marked "rejected (this story)" with "**File as follow-up issue** if X recurs". That's not a rejection — it's a conditional defer pretending to be a rejection. Cleaned up in a single re-pass to drop the hedging. **Lesson:** if a suggestion is "we won't do it now but might later if X happens", that's still a rejection — the "X happens" trigger creates a fresh suggestion in the future, not a tracked-deferred one. Don't preemptively log future scope. Personal-checklist note, not a docs change.
 - **B. The CLAUDE.md edit's "exemplars" line will go stale.** Currently lists maint-05 + maint-06. Each future story that hits the carve-out adds itself or doesn't — no rule for which. **Don't fix yet** — wait until 4+ stories hit the pattern, then drop the exemplar list and replace with a one-line "see retrospectives matching pattern" pointer or similar. Single data point of staleness risk; not worth a fix now.
+- **C. Probe blind spot — local `npm install` + `npm ci` resolved a transitive dep from the parent repo's stale `node_modules`.** Phase 4 retro-check ran `git diff` + `npm test` + `npm audit` + a local re-run of lint, and all passed. CI build failed with `ERR_MODULE_NOT_FOUND: Cannot find package '@eslint/js'`. Root cause: this worktree lives under `/Users/xavier.briand/Projects/accounting/.claude/worktrees/admiring-diffie-4f4c8a`, and Node's module resolution walks up to `/Users/xavier.briand/Projects/accounting/node_modules` where `@eslint/js@9.x` was still installed from before this story. Local lint resolved against the parent's stale package — the worktree's own `node_modules/@eslint/js` was empty post-`npm ci`. CI's fresh `gh actions/checkout` has no parent fallback. ESLint v10.0.1 changed `@eslint/js` to declare `eslint` in `peerDependencies` (eslint#20467), so without a direct devDep entry the package isn't in the lockfile's top-level resolution. Fix: add `@eslint/js@^10.0.1` as direct devDep — exactly the [Phase 2 P3-1 suggestion](docs/plans/story-maint-06.md) I rejected. **Lesson: probe under a worktree-with-parent layout can mask package-resolution failures.** Concrete mitigation for future stories — when running a probe inside a worktree under a parent repo with `node_modules`, also do one of: (1) `ls node_modules/<pkg>` to confirm the import target lives in the worktree's own tree, not the parent's; (2) probe in a temporary `git clone` outside the parent path; (3) probe specifically for direct vs transitive imports of changed deps in the eslint/build config. Captured as Try item below + future plan-doc checklist note.
 
 ## Try
 
 - **Agent-delegated breaking-change audit as a default for major dep bumps.** Maint-06 saved ~30 min via agent delegation (vs maint-05's manual cross-walk). One data point. **If maint-07 or another major bump reuses the pattern with similar gains**, propose adding to the [CLAUDE.md § 6.7](../../CLAUDE.md) sidebar: "When the issue body lacks a pre-built breaking-change audit, delegate to a `general-purpose` agent before running the probe." Not yet — wait for the second data point (per the maint-05 → maint-06 codification cadence).
+- **Worktree-parent-aware probe checklist.** Add to personal plan-writing checklist (not codifying yet — one data point): when the probe touches `eslint.config.js` or any other build-config file with direct imports, do a quick `ls node_modules/<imported-package>` check after `npm ci` to confirm the package resolves from the worktree's own tree, not the parent's. If the next dep-bump story hits a similar "local probe green, CI red" failure, propose a [CLAUDE.md § 6.7](../../CLAUDE.md) addition: "Probes inside a worktree under a parent repo with `node_modules` should verify package resolution against the worktree's own `node_modules`, not the parent's hoisted state."
 
 ## Action items
 
@@ -27,22 +29,23 @@ Eleventh end-to-end run of the loop; sixth story on the pre-Epic-3 maintenance t
 | --- | --- | --- |
 | A. Observe whether the next major dep-bump story benefits from agent-delegated breaking-change audits at similar magnitude (~30 min saved). If yes, propose the § 6.7 addition. | Retro of next major-bump story (likely [#11](https://github.com/xavierbriand/accounting/issues/11) — TypeScript 6, more complex than ESLint or `@inquirer/prompts`). | open, passive |
 | B. Watch the CLAUDE.md § 6.7 "exemplars" line for staleness — drop the explicit list and replace with a pattern pointer once 4+ stories cumulatively hit the carve-out. | Next pure-dependency major bump after this one. | open, passive |
+| C. Worktree-parent-aware probe checklist (Change C). When a dep bump changes a package that's imported by a build-config file (`eslint.config.js`, `tsconfig.json`, etc.), the probe must verify the import resolves from the worktree's own `node_modules`, not the parent's. Concrete checks: `ls node_modules/<imported-package>` after `npm ci`. | Personal plan-writing checklist; codify in CLAUDE.md if recurs. | informal |
 
 ## Loop metrics (eleventh run; sixth maintenance-track story)
 
 - **Plan phase:** 1 maintenance sub-loop (0 new Dependabot PRs; 1 newly-opened deferred-suggestion issue [#51](https://github.com/xavierbriand/accounting/issues/51), out of scope for this story; `npm audit` 0 findings) + 1 agent-delegated breaking-change audit + 1 pre-planning probe + Opus P1/P2/P3 plan review (9 findings: 7 adopted, 2 rejected with reasons, 0 deferred).
-- **Implementation:** Phase 3 collapsed into the pre-planning probe per the now-codified [CLAUDE.md § 6.7 carve-out](../../CLAUDE.md). No Sonnet invocation. 5 commits pre-retro (plan / deps / empty-refactor / CLAUDE.md edit / [retro = this commit]).
-- **Phase-4 retro-check:** _pending — runs after dep-bump commit lands._
-- **Retro fixes:** _pending._
+- **Implementation:** Phase 3 collapsed into the pre-planning probe per the now-codified [CLAUDE.md § 6.7 carve-out](../../CLAUDE.md). No Sonnet invocation. 7 commits total: plan / deps / empty-refactor / CLAUDE.md / retro / **fix(deps): @eslint/js direct-pin (CI fix)** / retro update.
+- **Phase-4 retro-check:** **incomplete** — passed locally but missed the worktree-parent `node_modules` resolution shadow. CI surfaced the real failure (Change C).
+- **Retro fixes:** 1 — `@eslint/js@^10.0.1` added as direct devDep (commit 6).
 - **Issues closed by this story:** [#12](https://github.com/xavierbriand/accounting/issues/12).
 - **Issues opened:** 0 (two suggestions cleanly rejected; neither warranted a follow-up issue).
-- **Total commits on branch:** 5 (plan / deps / empty-refactor / CLAUDE.md / retro).
+- **Total commits on branch:** 7 (plan / deps / empty-refactor / CLAUDE.md / retro / fix(@eslint/js) / retro update).
 - **Test count:** 217 → 217 (unchanged; no new tests, no modified tests).
-- **Diff stats:** 1 LOC prod (package.json) + ~150 LOC regenerated lockfile + 214 LOC plan + 4 LOC CLAUDE.md + ~80 LOC retro + 0 LOC src/ + 0 LOC tests/ + 0 LOC eslint.config.js.
+- **Diff stats:** 2 LOC prod (package.json: eslint pin shift + new @eslint/js direct-pin) + ~170 LOC regenerated lockfile + 215 LOC plan + 4 LOC CLAUDE.md + ~120 LOC retro + 0 LOC src/ + 0 LOC tests/ + 0 LOC eslint.config.js.
 - **Bugs squashed:** 0 (hygiene story).
 - **`npm audit`:** 0 → 0 findings. Repo remains at the fully-clean state established by [PR #49](https://github.com/xavierbriand/accounting/pull/49) + [PR #48](https://github.com/xavierbriand/accounting/pull/48) (story-maint-05).
 - **New runtime deps:** 0. **New dev deps:** 0 (upgrade, not addition).
-- **Time-to-DoD:** ~10 min agent-audit + probe; ~5 min plan/review/commit; ~5 min CLAUDE.md edit + commit; ~5 min retro. Total ~25 min — slightly faster than maint-05's ~30 min, mostly from no mid-story disruption.
+- **Time-to-DoD:** ~10 min agent-audit + probe; ~5 min plan/review/commit; ~5 min CLAUDE.md edit + commit; ~5 min retro. CI surfaced Change C → ~10 min CI failure diagnosis + fix-forward + retro update. Total ~35 min — slightly above maint-05's ~30 min once Change C work is included; the post-fix loop ran clean.
 
 ## Carryovers resolved
 

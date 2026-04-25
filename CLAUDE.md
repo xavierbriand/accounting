@@ -147,6 +147,8 @@ Runs **before the planning phase of every new story**. Unconditional.
 - **Review open Dependabot PRs:** CI + diff + changelog. Routine bumps (patch or minor, any dep) → merge directly after CI + changelog check, no DoR/DoD/retro. **Major bumps** of runtime deps, **critical-path major bumps** (`better-sqlite3`, `dinero.js`, `zod`, `commander`, `vitest`), or any **breaking change** flagged in a changelog → issue + full story through the main loop. Minor/patch bumps of critical-path deps still merge routinely, but with a slightly closer changelog read (check for deprecations, removed exports, runtime-behaviour notes) — if anything looks non-trivial, escalate.
 - **`npm audit`:** `high`/`critical` → immediate issue, fix before the next story.
 
+**Major-bump-with-zero-code-change subcase.** When a major dep bump goes through the main loop and the breaking-change audit produces a zero-code-change verdict against a pre-planning probe (run `install` + `lint` + `build` + `test` + `audit` *before* committing the plan), the TDD rhythm in § 6.4 cannot apply by construction — there is no behaviour to test-drive. Sequence collapses to `chore(docs): plan` + `chore(deps): bump` + `refactor: empty slot` + `chore(retro)` (+ rebase/rename housekeeping commits as needed). Phase 3 (implementation) collapses into the Phase 1 probe — Sonnet delegation is pure ceremony for a two-file dep diff. Flag the collapse explicitly in the plan's "Implementation phase" section. Exemplars: [story-maint-05](docs/retrospectives/story-maint-05.md) (`@inquirer/prompts` 5→8), [story-maint-06](docs/retrospectives/story-maint-06.md) (ESLint 9→10). The same-PR landing of this rule satisfies § 7 item 10 for the triggering story (story-maint-06).
+
 Lighter than feature work. Aggregate learnings surface at the next per-story retrospective.
 
 ## 7. Definition of Done
@@ -157,7 +159,7 @@ A story is merge-ready only when **all** of:
 2. Migrations idempotent.
 3. Every new invariant in Core has a property test.
 4. No `any`, no TODO comments left behind, no dead code.
-5. Commits follow the `test:` / `feat:` / `refactor:` rhythm of § 6.4. Each subject references the story id.
+5. Commits follow the `test:` / `feat:` / `refactor:` rhythm of § 6.4 — or the `chore(docs)` / `chore(deps)` / `refactor: empty slot` / `chore(retro)` collapse of § 6.7's major-bump-with-zero-code-change subcase, when applicable. Each subject references the story id.
 6. All 10 sections of the PR template are filled — no `TBD` at merge.
 7. Suggestion log has no un-tagged items. Every `deferred` row links a GitHub issue.
 8. P1 / P2 / P3 retro-checks (§ 6.1 phase 4) all pass.

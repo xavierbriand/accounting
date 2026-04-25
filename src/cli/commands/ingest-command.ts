@@ -19,11 +19,14 @@ export interface IngestCommandOptions {
   readonly json: boolean;
 }
 
+export type TransactionBuilderFactory =
+  (accounts: readonly AccountConfig[]) => Pick<TransactionBuilder, 'buildAll'>;
+
 export interface IngestCommandDeps {
   readonly configService: Pick<ConfigService, 'load'>;
   readonly csvParser: Pick<CsvParser, 'parse'>;
   readonly idempotencyService: Pick<IdempotencyService, 'filterNew'>;
-  readonly transactionBuilder: Pick<TransactionBuilder, 'buildAll'>;
+  readonly transactionBuilder: TransactionBuilderFactory;
   readonly pickSourceAccount: typeof PickSourceAccountFn;
   readonly readFile: typeof ReadBpceCsvFn;
   readonly prompt: InteractivePrompter;
@@ -107,7 +110,8 @@ export async function runIngestCommand(
   }
   const { fresh, duplicates } = idempotencyResult.value;
 
-  const buildResult = transactionBuilder.buildAll(fresh);
+  const builder = transactionBuilder(parsed.config.accounts);
+  const buildResult = builder.buildAll(fresh);
   if (buildResult.isFailure) {
     writeln(stderr, `Build error: ${buildResult.error}`);
     exitCode(1);

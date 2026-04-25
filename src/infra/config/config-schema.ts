@@ -9,6 +9,36 @@ const SplitRuleSchema = z.object({
   ratio: z.number().min(0).max(1),
 });
 
+const SplitWindowSchema = z
+  .object({
+    validFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be ISO 8601 date (YYYY-MM-DD)'),
+    // min(2): enforces the couples-app product constraint — at least two partners.
+    rules: z.array(SplitRuleSchema).min(2),
+  })
+  .strict()
+  .superRefine((win, ctx) => {
+    const sum = win.rules.reduce((a, r) => a + r.ratio, 0);
+    if (Math.abs(sum - 1.0) > 1e-9) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['rules'],
+        message: `ratios must sum to 1.0 (got ${sum.toFixed(4)})`,
+      });
+    }
+    const names = win.rules.map(r => r.partner);
+    names.forEach((n, i) => {
+      if (names.indexOf(n) !== i) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rules', i, 'partner'],
+          message: 'duplicate partner',
+        });
+      }
+    });
+  });
+
 const BufferBucketRawSchema = z.object({
   name: z.string().min(1),
   target: z.number().nonnegative(),
@@ -75,26 +105,31 @@ const RawConfigSchema = z
         });
       }),
     splits: z
-      .array(SplitRuleSchema)
+      .array(SplitWindowSchema)
       .min(1)
-      .superRefine((splits, ctx) => {
-        const sum = splits.reduce((acc, s) => acc + s.ratio, 0);
-        if (Math.abs(sum - 1.0) > 1e-9) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `ratios must sum to 1.0 (got ${sum.toFixed(4)})`,
-          });
-        }
-        const names = splits.map(s => s.partner);
-        names.forEach((name, i) => {
-          if (names.indexOf(name) !== i) {
+      .superRefine((wins, ctx) => {
+        for (let i = 1; i < wins.length; i++) {
+          if (wins[i].validFrom <= wins[i - 1].validFrom) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: [i, 'partner'],
-              message: 'duplicate name',
+              path: [i, 'validFrom'],
+              message: `must be strictly after the previous window's validFrom`,
             });
           }
-        });
+        }
+        // Partner roster must be identical across all windows (set equality,
+        // order-insensitive). Path-cited, partner names NOT echoed (PII).
+        const ref = new Set(wins[0].rules.map(r => r.partner));
+        for (let i = 1; i < wins.length; i++) {
+          const here = new Set(wins[i].rules.map(r => r.partner));
+          if (here.size !== ref.size || [...here].some(p => !ref.has(p))) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, 'rules'],
+              message: `partner roster differs from window 0`,
+            });
+          }
+        }
       }),
     buffers: z
       .array(BufferBucketRawSchema)

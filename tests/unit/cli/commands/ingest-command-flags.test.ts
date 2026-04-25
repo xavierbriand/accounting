@@ -25,7 +25,7 @@ const baseConfig: AppConfig = {
   dbPath: './test.db',
   defaultCurrency: 'EUR',
   timezone: 'Europe/Paris',
-  splits: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }],
+  splits: [{ validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] }],
   buffers: [],
   accounts: [makeAccount('main-X', 'X_')],
 };

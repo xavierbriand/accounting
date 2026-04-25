@@ -5,6 +5,11 @@ export interface SplitRule {
   readonly ratio: number;
 }
 
+export interface SplitWindow {
+  readonly validFrom: string;
+  readonly rules: readonly SplitRule[];
+}
+
 export interface BufferBucket {
   readonly name: string;
   readonly target: Money;
@@ -22,7 +27,7 @@ export interface AppConfig {
   readonly dbPath: string;
   readonly defaultCurrency: string;
   readonly timezone: string;
-  readonly splits: readonly SplitRule[];
+  readonly splits: readonly SplitWindow[];
   readonly buffers: readonly BufferBucket[];
   readonly accounts: readonly AccountConfig[];
 }

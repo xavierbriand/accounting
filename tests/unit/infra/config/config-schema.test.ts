@@ -6,8 +6,13 @@ const minimalValid = {
   dbPath: './data/ledger.db',
   defaultCurrency: 'EUR',
   splits: [
-    { partner: 'Alex', ratio: 0.5 },
-    { partner: 'Sam', ratio: 0.5 },
+    {
+      validFrom: '2024-01-01',
+      rules: [
+        { partner: 'Alex', ratio: 0.5 },
+        { partner: 'Sam', ratio: 0.5 },
+      ],
+    },
   ],
   buffers: [],
   timezone: 'Europe/Paris',
@@ -24,7 +29,8 @@ describe('parseRawConfig', () => {
     expect(result.isSuccess).toBe(true);
     const config = result.value;
     expect(config.defaultCurrency).toBe('EUR');
-    expect(config.splits).toHaveLength(2);
+    expect(config.splits).toHaveLength(1);
+    expect(config.splits[0].rules).toHaveLength(2);
   });
 
   it('rejects missing splits with friendly message', () => {
@@ -41,8 +47,13 @@ describe('parseRawConfig', () => {
     const raw = {
       ...minimalValid,
       splits: [
-        { partner: 'Alex', ratio: 0.4 },
-        { partner: 'Sam', ratio: 0.5 },
+        {
+          validFrom: '2024-01-01',
+          rules: [
+            { partner: 'Alex', ratio: 0.4 },
+            { partner: 'Sam', ratio: 0.5 },
+          ],
+        },
       ],
     };
     // fails if parseRawConfig does not validate that split ratios sum to 1.0
@@ -55,8 +66,13 @@ describe('parseRawConfig', () => {
     const raw = {
       ...minimalValid,
       splits: [
-        { partner: 'Alex', ratio: 0.5 },
-        { partner: 'Alex', ratio: 0.5 },
+        {
+          validFrom: '2024-01-01',
+          rules: [
+            { partner: 'Alex', ratio: 0.5 },
+            { partner: 'Alex', ratio: 0.5 },
+          ],
+        },
       ],
     };
     // fails if parseRawConfig does not detect duplicate partner names
@@ -71,8 +87,13 @@ describe('parseRawConfig', () => {
     const raw = {
       ...minimalValid,
       splits: [
-        { partner: 'Alex', ratio: 1.5 },
-        { partner: 'Sam', ratio: -0.5 },
+        {
+          validFrom: '2024-01-01',
+          rules: [
+            { partner: 'Alex', ratio: 1.5 },
+            { partner: 'Sam', ratio: -0.5 },
+          ],
+        },
       ],
     };
     // fails if parseRawConfig does not validate ratio range [0, 1]
@@ -352,6 +373,170 @@ describe('parseRawConfig', () => {
     });
   });
 
+  describe('split windows', () => {
+    it('(a) accepts grouped-window shape (one window)', () => {
+      // fails if: parseRawConfig rejects the new grouped-window splits format
+      const result = parseRawConfig(minimalValid);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.splits).toHaveLength(1);
+      expect(result.value.splits[0].validFrom).toBe('2024-01-01');
+      expect(result.value.splits[0].rules).toHaveLength(2);
+    });
+
+    it('(b) rejects flat (old-shape) splits with a clear error citing the missing validFrom field', () => {
+      // fails if: parseRawConfig still accepts the old flat splits format — Story 3.1
+      // breaks backward compatibility intentionally (no production users)
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { partner: 'Alex', ratio: 0.5 },
+          { partner: 'Sam', ratio: 0.5 },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('validFrom');
+    });
+
+    it('(c) rejects duplicate validFrom across windows (path-cited)', () => {
+      // fails if: schema accepts two windows with the same validFrom — would create
+      // non-deterministic getSplitsAsOf results (whichever sorted first wins)
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Sam', ratio: 0.4 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('validFrom');
+    });
+
+    it('(d) rejects out-of-order windows (path-cited)', () => {
+      // fails if: schema accepts windows in non-ascending validFrom order —
+      // getSplitsAsOf linear scan relies on ascending order for correctness
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2026-03-15', rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Sam', ratio: 0.4 }] },
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('validFrom');
+    });
+
+    it('(e) rejects per-window ratios not summing to 1.0', () => {
+      // fails if: per-window ratio sum check is missing from the window-level superRefine
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.4 }, { partner: 'Sam', ratio: 0.4 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('ratios must sum to 1.0');
+    });
+
+    it('(f) rejects partner roster drift between windows — error cites path, no PII', () => {
+      // fails if: cross-window partner roster check is missing, allowing mismatched rosters
+      // into downstream consumers (getSplitsAsOf would silently return different partner sets)
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
+          { validFrom: '2026-03-15', rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Jordan', ratio: 0.4 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      // path citation (P3 #9): error must cite the path of the offending window
+      expect(result.error).toContain('splits.1.rules');
+      // PII safety (P2 #1.f): partner names are user-controlled — must not echo them
+      expect(result.error).not.toContain('Alex');
+      expect(result.error).not.toContain('Jordan');
+    });
+
+    it.each([
+      ['2024-01-01T00:00:00Z', 'timestamp with Z suffix'],
+      ['2024-1-1', 'single-digit month/day'],
+      ['', 'empty string'],
+      [' 2024-01-01', 'leading whitespace'],
+    ])('(g) rejects malformed validFrom %s (%s) — error cites validFrom by path', (value) => {
+      // fails if: validFrom regex allows timestamps, single-digit dates, empty strings,
+      // or whitespace-padded dates — these would pass string comparison but violate the
+      // date-only contract; FR22 depends on consistent lexicographic ordering
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: value, rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('validFrom');
+    });
+
+    it('(h) rejects a window with fewer than 2 rules (couples-app constraint)', () => {
+      // fails if: min(2) rules per window is not enforced — PRD mandates at least 2 partners
+      // (couples app); a single-rule window would allow 100% allocation with no second partner
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 1.0 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('(i) accepts a single-window config (open-ended, the default first-time setup)', () => {
+      // fails if: parseRawConfig rejects a single-window config (the most common first
+      // setup where only one ratio set has ever applied)
+      const result = parseRawConfig(minimalValid);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.splits).toHaveLength(1);
+    });
+
+    it('(j) accepts two windows with identical partner sets in different order (set equality)', () => {
+      // fails if: roster check uses array equality instead of set equality —
+      // [Alex, Sam] and [Sam, Alex] are the same partner set and must be accepted
+      const raw = {
+        ...minimalValid,
+        splits: [
+          { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
+          { validFrom: '2026-03-15', rules: [{ partner: 'Sam', ratio: 0.4 }, { partner: 'Alex', ratio: 0.6 }] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isSuccess).toBe(true);
+    });
+
+    it('duplicate partner within a window is rejected with "duplicate partner" message', () => {
+      // fails if: per-window duplicate partner check is missing or returns wrong message
+      // (P2 #2: testpinned wording "duplicate partner")
+      const raw = {
+        ...minimalValid,
+        splits: [
+          {
+            validFrom: '2024-01-01',
+            rules: [
+              { partner: 'Alex', ratio: 0.5 },
+              { partner: 'Alex', ratio: 0.5 },
+            ],
+          },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate partner');
+      expect(result.error).not.toContain('Alex');
+    });
+  });
+
   describe('property tests', () => {
     it('succeeds for any splits where ratios sum to 1 with unique partners', () => {
       fc.assert(
@@ -361,16 +546,17 @@ describe('parseRawConfig', () => {
               partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
               weight: fc.float({ min: Math.fround(0.01), max: Math.fround(1.0), noNaN: true }),
             }),
-            { minLength: 1, maxLength: 5 },
+            { minLength: 2, maxLength: 5 },
           ).filter(items => {
             const names = items.map(i => i.partner);
             return new Set(names).size === names.length;
           }),
           (items) => {
             const totalWeight = items.reduce((sum, i) => sum + i.weight, 0);
-            const splits = items.map(i => ({ partner: i.partner, ratio: i.weight / totalWeight }));
+            const rules = items.map(i => ({ partner: i.partner, ratio: i.weight / totalWeight }));
+            const splits = [{ validFrom: '2024-01-01', rules }];
             const raw = { ...minimalValid, splits };
-            // fails if parseRawConfig rejects a splits array whose ratios were correctly rescaled to sum to 1
+            // fails if parseRawConfig rejects a splits window whose ratios were correctly rescaled to sum to 1
             const result = parseRawConfig(raw);
             return result.isSuccess;
           },
@@ -387,15 +573,15 @@ describe('parseRawConfig', () => {
               partner: fc.string({ minLength: 1, maxLength: 10 }).filter(s => /^[a-zA-Z]+$/.test(s)),
               ratio: fc.float({ min: Math.fround(0.01), max: Math.fround(0.4), noNaN: true }),
             }),
-            { minLength: 1, maxLength: 3 },
+            { minLength: 2, maxLength: 3 },
           ).filter(items => {
             const names = items.map(i => i.partner);
             const sum = items.reduce((s, i) => s + i.ratio, 0);
             return new Set(names).size === names.length && Math.abs(sum - 1.0) > 1e-9;
           }),
           (items) => {
-            const raw = { ...minimalValid, splits: items };
-            // fails if parseRawConfig accepts a splits array whose ratios do not sum to 1
+            const raw = { ...minimalValid, splits: [{ validFrom: '2024-01-01', rules: items }] };
+            // fails if parseRawConfig accepts a splits window whose ratios do not sum to 1
             const result = parseRawConfig(raw);
             return result.isFailure;
           },

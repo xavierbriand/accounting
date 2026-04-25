@@ -20,10 +20,10 @@ dbPath: ./data/ledger.db
 defaultCurrency: EUR
 timezone: Europe/Paris
 splits:
-  - partner: Alex
-    ratio: 0.5
-  - partner: Sam
-    ratio: 0.5
+  - validFrom: "2024-01-01"
+    rules:
+      - { partner: Alex, ratio: 0.5 }
+      - { partner: Sam,  ratio: 0.5 }
 buffers:
   - name: Car
     target: 1000
@@ -65,9 +65,11 @@ describe('FileConfigService', () => {
     expect(result.isSuccess).toBe(true);
     const config = result.value;
     expect(config.defaultCurrency).toBe('EUR');
-    expect(config.splits).toHaveLength(2);
-    expect(config.splits[0].partner).toBe('Alex');
-    expect(config.splits[0].ratio).toBe(0.5);
+    expect(config.splits).toHaveLength(1);
+    expect(config.splits[0].validFrom).toBe('2024-01-01');
+    expect(config.splits[0].rules).toHaveLength(2);
+    expect(config.splits[0].rules[0].partner).toBe('Alex');
+    expect(config.splits[0].rules[0].ratio).toBe(0.5);
     expect(config.buffers[0].target.amount).toBe(100000);
     expect(config.buffers[0].target.currency).toBe('EUR');
   });

@@ -201,7 +201,38 @@ So that I can undo the import if something goes wrong.
 **Goal:** Activate the "Financial Brain." The system processes the tagged data to calculate fair transfers, manage buffer levels, and handle dynamic split changes over time.
 **FRs covered:** FR8, FR10, FR11, FR12, FR18, FR22
 
-*Detailed stories to be defined during implementation.*
+### Story 3.1: Versioned Split Rules
+
+As a System,
+I want split-rule ratios to carry effective dates,
+So that historical transactions are settled with the rule that was active on their date — not today's rule.
+
+**Acceptance Criteria:**
+
+**Given** A YAML config with multiple split-rule windows (each with a `validFrom` date and a list of `partner: ratio` rules),
+**When** I ask the `SplitRulesService` for the active ratios as of a given date,
+**Then** It returns the rules from the latest window whose `validFrom` is on or before that date.
+**And** Windows are half-open `[validFrom_k, validFrom_{k+1})`; the last extends to `+∞`.
+**And** Windows are sorted strictly ascending by `validFrom`; out-of-order or duplicate `validFrom` is rejected at parse.
+**And** Each window's ratios sum exactly to 1.0 (within a `±1e-9` tolerance).
+**And** All windows declare the same partner set; loading rejects roster changes with a path-cited error (no PII echoed).
+**And** `getSplitsAsOf` is pure: it never reads the system clock — re-running with the same `date` argument yields byte-identical output regardless of `Date.now()`.
+
+### Story 3.2: Buffer State Reader
+
+*Title only. Acceptance criteria deferred to Story 3.2's planning phase.*
+
+### Story 3.3: Recurring Cost Forecast
+
+*Title only. Acceptance criteria deferred to Story 3.3's planning phase.*
+
+### Story 3.4: Safe Monthly Transfer Calculator
+
+*Title only. Acceptance criteria deferred to Story 3.4's planning phase.*
+
+### Story 3.5: Status CLI Command
+
+*Title only. Acceptance criteria deferred to Story 3.5's planning phase.*
 
 ## Epic 4: Trust, Transparency & Lifecycle
 

@@ -30,13 +30,15 @@ accounts:
     filenamePrefix: "carte_1234_"
 
 # Split rules: who pays what share of shared expenses.
-# ratios must sum exactly to 1.0.
-# Each partner name must be unique (case-sensitive).
+# Each window has a validFrom date (YYYY-MM-DD) and a list of partner/ratio rules.
+# Windows must be in strictly ascending validFrom order. The last window has no end date.
+# Each window's ratios must sum exactly to 1.0. All windows must declare the same partners.
+# At least two partners per window (couples-app constraint).
 splits:
-  - partner: Alex
-    ratio: 0.5
-  - partner: Sam
-    ratio: 0.5
+  - validFrom: "2024-01-01"
+    rules:
+      - { partner: Alex, ratio: 0.5 }
+      - { partner: Sam,  ratio: 0.5 }
 
 # Buffer buckets: target balances you want to maintain for specific goals.
 # target: the minimum balance to maintain (required, non-negative decimal).

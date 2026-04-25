@@ -147,3 +147,15 @@ Do **not**: open the PR (it already exists), mark it ready, merge anything, or c
 - Commit `.env`, credentials, real PII, or anything matching `.gitignore`.
 - Use `any`, `!` non-null assertions on untrusted data, or float math on money.
 - Write code in `src/core/` that imports Node APIs, `better-sqlite3`, `commander`, or any Infra dependency. See `docs/engineering-standards.md` §"Architecture principles".
+
+## 7. Kill-recovery contract (Story 3.1 retro action A)
+
+If the harness terminates this agent mid-implementation, the recovering process (likely Opus) follows this contract before deciding whether to re-spawn or continue inline:
+
+1. **Inspect** `git status` and `git log --oneline <plan-base>..HEAD` to identify which slices have been committed.
+2. **Diff the working tree** (`git diff` + `git diff --cached`) and cross-reference the modified file list against the plan's slice file-touch list. The slice currently in flight is identifiable by which slice's file set matches the modified files.
+3. **Run the full test suite** (`npm run lint && npm run build && npm test`). The expected red/green state for the in-flight slice is documented in the plan; verify the actual state matches. Mismatches indicate either incomplete work or unexpected regressions and require investigation before recovery.
+4. **Recovery options, in order of preference:**
+   - **(a) Re-spawn Sonnet** with `subagent_type: "sonnet-implementer"` and a brief of the form *"Resume from commit `<sha>`. Slices 1–N are committed and green; the in-flight slice is `<slice-id>` with the following files modified: `<list>`. Complete the in-flight slice (commit if work is done; finish if not), then proceed through slices `<N+2>..<end>` per the plan at `docs/plans/story-<id>.md`."* Re-spawning preserves the Sonnet vs Opus tier separation and keeps the structured Sonnet return report for Section 8 of the PR template.
+   - **(b) Inline Opus continuation** is the fallback when re-spawning fails (e.g., the harness rejects the spawn, or context limits prevent re-loading the plan into a new agent). Opus then takes over the implementer role, but **must explicitly note in the retrospective** that the Sonnet vs Opus tier separation was muddied for that story and explain why option (a) wasn't chosen.
+5. **The PR's Section 8** (Sonnet's Learnings / Implementation Report) MUST document the kill + recovery — which slice was in flight, what state it was in, which recovery option was chosen, and any deviations introduced by the recovery itself (vs the original implementation).

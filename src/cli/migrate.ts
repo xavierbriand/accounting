@@ -11,7 +11,3 @@ export function runMigrate(resolvedDbPath: string): void {
     process.exit(1);
   }
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runMigrate('accounting.db');
-}

@@ -64,7 +64,9 @@ describe('SplitRulesService.getSplitsAsOf', () => {
   });
 
   it('(d) at date === windows[k+1].validFrom - 1 day, returns window k (end-exclusive)', () => {
-    // fails if: half-open interval flipped — end-inclusive instead of exclusive.
+    // fails if: loop walks windows in descending order or breaks before reaching
+    // windows[0]. Case (b) covers the same path; this case adds a date right
+    // at validFrom_{k+1} - 1 day to pin the boundary-day shape (P1 retro #1).
     const svc = new SplitRulesService(twoWindows);
     const result = svc.getSplitsAsOf('2026-03-14');
     expect(result.isSuccess).toBe(true);

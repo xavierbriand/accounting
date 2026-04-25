@@ -1,5 +1,5 @@
-import { Result } from '../shared/result.js';
-import type { SplitRule, SplitWindow } from '../config/app-config.js';
+import { Result } from '@core/shared/result.js';
+import type { SplitRule, SplitWindow } from '@core/config/app-config.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

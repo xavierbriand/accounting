@@ -62,6 +62,23 @@ to tighten the signature and update the N callers." Otherwise Opus's Phase 4
 review discovers the shim by diff-reading (Story 2.5 caught a silent
 `legacy-placeholder:` fallback in `save()` this way), adding a round-trip.
 
+**Architectural-violation escalation (retro finding, story-maint-08).**
+The shim-for-tests rule above governs *visibility*. It does NOT sanction shipping
+a shim that violates a Core architectural invariant. If the shim breaks any of:
+(1) CLAUDE.md § 2: "Result<T, E> in Core — domain methods return `Result` values,
+    never throw" (no `throw` in `src/core/`),
+(2) CLAUDE.md § 4: "No `any`. `strict: true`. Explicit return types on exports",
+(3) CLAUDE.md § 2 dependency rule: "Core depends on nothing — no Node APIs, no
+    `better-sqlite3`, no `commander`, no `process.exit`",
+then the shim is a structural deviation and triggers § 1's "stop and ask" rule, not
+this section's "flag-in-Deviations" rule. Visibility is necessary but not sufficient.
+**Example (story-maint-08):** rewriting `Money` for dinero.js v2, the test helper
+`Money.zero(currency)` lookup needed currency validation. Sonnet added a `throw` to
+keep the return type stable for two test call sites. The throw violated § 2; the
+"shim-for-tests" framing doesn't override § 2. Right move: stop and ask, then choose
+between (a) tightening to `Result<Money>` and updating the 2 callers, (b) restoring
+v1's permissive default. Picked at Phase 4; one fixup commit.
+
 **Safeguard-removal deviations must name the guard's purpose (retro finding, story-maint-01).**
 When a slice removes a timeout, fail-fast check, validation, assertion, retry,
 backpressure guard, or other defensive construct — even when the removal is

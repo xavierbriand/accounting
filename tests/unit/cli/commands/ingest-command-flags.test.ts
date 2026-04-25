@@ -15,7 +15,7 @@ import { Money } from '@core/shared/money.js';
 //           or --json output contains idempotencyHash,
 //           or exit codes are wrong for any flag combination
 
-const EUR = Money.zero('EUR');
+const EUR = Money.zero('EUR').value;
 
 function makeAccount(id: string, prefix: string): AccountConfig {
   return { id, type: 'bank', filenamePrefix: prefix };

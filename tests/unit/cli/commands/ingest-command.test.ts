@@ -16,7 +16,7 @@ import { Money } from '@core/shared/money.js';
 //           or a per-item change is not applied to the BuildOutcome,
 //           or exit code is wrong for any case
 
-const EUR = Money.zero('EUR');
+const EUR = Money.zero('EUR').value;
 const TEST_DB_PATH = '/tmp/test-ingest.db';
 
 function makeAccount(id: string, prefix: string): AccountConfig {

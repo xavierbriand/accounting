@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { Transaction } from '@core/ledger/transaction';
-import { Money } from '@core/shared/money';
+import { Transaction } from '@core/ledger/transaction.js';
+import { Money } from '@core/shared/money.js';
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;

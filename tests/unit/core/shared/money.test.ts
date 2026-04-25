@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { Money } from '@core/shared/money';
+import { Money } from '@core/shared/money.js';
 
 describe('Money Value Object', () => {
   describe('Creation', () => {

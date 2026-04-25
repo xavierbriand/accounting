@@ -136,13 +136,18 @@ describe('SplitRulesService.getSplitsAsOf', () => {
 
 const partners = ['Alex', 'Sam'] as const;
 
-const ratioArb = fc
-  .float({ min: 0.01, max: 0.99, noNaN: true, noDefaultInfinity: true })
-  .map((r) => Math.round(r * 100) / 100);
+// Integer-derived ratios (1..99 → 0.01..0.99) sidestep fast-check's 32-bit
+// float constraint and give us deterministic 2-decimal-place values.
+const ratioArb = fc.integer({ min: 1, max: 99 }).map((n) => n / 100);
 
+// Days-since-2000-01-01 → YYYY-MM-DD. Avoids fc.date()'s rare invalid-date
+// outputs and explicitly bounds the range to [2000-01-01, 2099-12-31] so the
+// open-ended last window is genuinely covered (P2 #4).
+const MS_PER_DAY = 86_400_000;
+const EPOCH_2000 = Date.UTC(2000, 0, 1);
 const dateStringArb = fc
-  .date({ min: new Date('2000-01-01'), max: new Date('2099-12-31') })
-  .map((d) => d.toISOString().slice(0, 10)); // YYYY-MM-DD
+  .integer({ min: 0, max: 36523 }) // 36523 days ≈ 100 years from 2000-01-01
+  .map((days) => new Date(EPOCH_2000 + days * MS_PER_DAY).toISOString().slice(0, 10));
 
 function buildWindows(rawDates: readonly string[], ratios: readonly number[]): readonly SplitWindow[] {
   const sorted = [...new Set(rawDates)].sort();

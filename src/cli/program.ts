@@ -63,7 +63,8 @@ program
     const csvParser = new NodeCsvParser();
     const hashRepo = new SqliteHashRepository(db);
     const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
-    const transactionBuilder = new TransactionBuilder([], undefined, nodeUuidGen);
+    const transactionBuilder = (accounts: ConstructorParameters<typeof TransactionBuilder>[0]) =>
+      new TransactionBuilder(accounts, undefined, nodeUuidGen);
     const transactionRepository = new SqliteTransactionRepository(db);
     const snapshotService = new NodeSqliteSnapshotService(db);
 

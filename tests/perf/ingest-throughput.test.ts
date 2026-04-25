@@ -132,7 +132,6 @@ describe('ingest-throughput (perf)', () => {
       const transactionRepository = new SqliteTransactionRepository(db);
       const hashRepo = new SqliteHashRepository(db);
       const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
-      const transactionBuilder = new TransactionBuilder([mainAccount], undefined, nodeUuidGen);
       const snapshotService = new NodeSqliteSnapshotService(db);
 
       const config: AppConfig = {
@@ -152,7 +151,7 @@ describe('ingest-throughput (perf)', () => {
         configService: { load: () => Result.ok(config) },
         csvParser: new NodeCsvParser(),
         idempotencyService,
-        transactionBuilder,
+        transactionBuilder: (accounts) => new TransactionBuilder(accounts, undefined, nodeUuidGen),
         pickSourceAccount,
         readFile: readBpceCsv,
         prompt: {

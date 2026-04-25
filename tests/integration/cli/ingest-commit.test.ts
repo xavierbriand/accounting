@@ -79,7 +79,6 @@ function makeRealDeps(
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
   const mainAccount = { id: 'main-account', type: 'bank' as const, filenamePrefix: 'bpce-valid' };
-  const transactionBuilder = new TransactionBuilder([mainAccount], undefined, nodeUuidGen);
   const snapshotService = snapshotOverride ?? new NodeSqliteSnapshotService(db);
 
   const config: AppConfig = {
@@ -95,7 +94,7 @@ function makeRealDeps(
     configService: { load: () => Result.ok(config) },
     csvParser: new NodeCsvParser(),
     idempotencyService,
-    transactionBuilder,
+    transactionBuilder: (accounts) => new TransactionBuilder(accounts, undefined, nodeUuidGen),
     pickSourceAccount,
     readFile: readBpceCsv,
     prompt: {

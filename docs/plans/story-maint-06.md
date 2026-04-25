@@ -192,7 +192,12 @@ Phase 2 (P1 / P2 / P3) entries below. Phase 4 retro-check extends after the dep-
 | P3 | Story 2.5 retro action C Gherkin-to-test-mapping audit doesn't cleanly apply (same as maint-05). | adopted | § 5 explicitly substitutes verification mechanisms; Phase 4 reviewer should not file missing-test-coverage. |
 | P3 | Plan should reference the maint-05 § 8 collapse pattern explicitly so readers don't repeat the analysis. | adopted | § 7 + § 8 reference maint-05 directly. |
 | P3 | `commander`, `@types/node@25` and other dev deps not bumped — should this story bundle them? | rejected | Per § 6.7 routine bumps merge directly via Dependabot (none open right now); critical-path majors get their own stories (typescript via #11, dinero.js via #10). YAGNI to bundle. |
-| P4-retro | _populated post-implementation_ | _pending_ | _pending_ |
+| P4-retro | Diff matches plan exactly: 0 LOC in [src/](src/) or [tests/](tests/) or [eslint.config.js](eslint.config.js); package.json shows only the `^9.39.2 → ^10.2.1` pin shift; CLAUDE.md +4/-2 (sidebar + DoD #5 patch). | verified | `git diff main...HEAD --stat`: 4 files (CLAUDE.md, plan, package-lock, package.json). |
+| P4-retro | All 6 Gherkin scenarios verified by diff + probe outputs (no automated tests, per § 5 substitution). | verified | (1) pin shift via package.json diff; (2) eslint.config.js unchanged via `git diff`; (3) lint green; (4) suite green; (5) audit zero; (6) no peer warnings. |
+| P4-retro | Commit-rhythm collapse no longer a deviation — covered by [CLAUDE.md § 6.7 sidebar](CLAUDE.md) landed in commit #4. | verified | DoD § 7 item #5 patched in same commit to reference the carve-out. |
+| P4-retro | DoD § 7 item #10 (retro-derived rules land in same PR) satisfied by commit #4. | verified | The CLAUDE.md edit is the sole rule change derived from this PR's chain (maint-05 retro → maint-06 trigger). |
+| P4-retro | No mock-diversity-class regression (Story 2.4 retro action A). | N/A | No structured-output assertions in the diff. |
+| P4-retro | No safeguard-removal concerns (Story-maint-01 retro action A). | N/A | No code change. |
 
 ## Sonnet's learnings
 
@@ -200,7 +205,7 @@ _N/A — Phase 3 collapsed into the Phase 1 probe. Implementation is the `chore(
 
 ## Retrospective
 
-_Empty — awaits Phase 5. Link target: [docs/retrospectives/story-maint-06.md](docs/retrospectives/story-maint-06.md). Retrospective should explicitly mark this as the second data point for the maint-05 collapse pattern + record the CLAUDE.md edit as adopted._
+Full retrospective: [docs/retrospectives/story-maint-06.md](docs/retrospectives/story-maint-06.md). Headline: third application of the pre-planning probe pattern (maint-01 → maint-05 → maint-06); second data point for the Phase-3-collapse + rhythm-skip pattern → triggered the [CLAUDE.md § 6.7](CLAUDE.md) sidebar codification (commit #4) + DoD § 7 item #5 patch. Agent-delegated breaking-change audit (general-purpose agent) was a clean win vs manual cross-walk; flagged as one-data-point candidate for the next major-bump retro (#11 TypeScript 6).
 
 ## Merge checklist
 

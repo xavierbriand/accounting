@@ -23,7 +23,7 @@ A failure of any item at P3-retro is a **merge blocker**, not a deferred suggest
 
 - [ ] Zod schemas validate every external input: CLI args, file reads, config parsing. Validation happens before the data reaches Core.
 - [ ] Core (`src/core/`) contains no calls to Node APIs (`fs`, `path`, `os`, `crypto`), no `commander`, no `better-sqlite3`, no `process.exit`.
-- [ ] No user-controlled path strings reach `fs` without prior normalization; no path traversal (`../`) possible via ingestion.
+- [ ] No user-controlled path strings reach `fs` without prior normalization. `dbPath` is additionally validated at the CLI composition root via `validateDbPath` — symlinks at the resolved path are refused with a friendly stderr error + exit 2. `${dbPath}.bak` (Story 2.5 snapshot sibling) is transitively protected: if `dbPath` itself is rejected, snapshot creation never runs; if `dbPath` is valid, Story 2.5's atomic-rename-from-randomised-tmp pattern neutralises a pre-planted symlink at the `.bak` target. No path traversal (`../`) possible via ingestion.
 - [ ] CLI commands refuse unknown flags (commander's default).
 
 ## Secrets & PII

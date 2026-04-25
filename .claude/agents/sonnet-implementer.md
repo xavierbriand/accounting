@@ -77,6 +77,20 @@ Phase 4 review discovers the gap by reading test names / comments
 (story-maint-01 caught a 500ms timeout silently dropped this way), adding a
 round-trip.
 
+**Commit-bundle separation (retro finding, story-maint-04).**
+`chore:` baseline-tooling commits (lint excludes, test-runner excludes, formatter
+ignores, etc.) must stay separate from `test:` / `feat:` story commits, even when
+committed back-to-back. If a `feat:` commit body needs a tooling preamble — e.g.
+*"Also excludes .claude/ worktrees from vitest to prevent agent-session pollution"*
+— that preamble belongs in a sibling `chore:` commit landed first, not bundled
+into the `feat:`. Why: a `feat:` commit's role in `git log --oneline` is "this is
+the slice that turned the previously-failing tests green"; bundling tooling makes
+the commit's role ambiguous and complicates future revert / cherry-pick.
+story-maint-04's `feat(db): validateDbPath implementation — minimal green` commit
+shipped a vitest-config exclude alongside the helper code; the exclude
+should have been a sibling `chore(test):` or merged with the earlier `chore(lint):`
+baseline commit.
+
 ## Gherkin coverage checklist
 <Tick every Gherkin scenario in the plan against the test it maps to, one line each:
 `✓ <scenario name> → <test file>:<describe name>` — or `✗ <scenario name> → not covered: <rationale>`.

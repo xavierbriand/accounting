@@ -5,5 +5,6 @@ export default defineConfig({
         alias: {
             '@core': path.resolve(import.meta.dirname, './src/core'),
         },
+        exclude: ['**/node_modules/**', '**/.claude/**'],
     },
 });

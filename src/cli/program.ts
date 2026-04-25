@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import path from 'path';
 import { getDb } from '../infra/db/sqlite-client.js';
 import { FileConfigService } from '../infra/config/config-service.js';
 import { NodeCsvParser } from '../infra/csv/node-csv-parser.js';
@@ -16,6 +15,7 @@ import { inquirerPrompter } from './utils/interactive.js';
 import { runIngestCommand } from './commands/ingest-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
+import { validateDbPath } from '../infra/db/db-path-validator.js';
 
 const program = new Command();
 
@@ -29,7 +29,12 @@ program
   .description('Run database migrations')
   .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
   .action((options: { dbPath: string }) => {
-    runMigrate(options.dbPath);
+    const validation = validateDbPath(options.dbPath);
+    if (validation.isFailure) {
+      process.stderr.write(`error: ${validation.error}\n`);
+      process.exit(2);
+    }
+    runMigrate(validation.value);
   });
 
 program
@@ -40,7 +45,12 @@ program
   .option('--json', 'Output JSON instead of a table', false)
   .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
   .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPath: string }) => {
-    const resolvedDb = path.resolve(options.dbPath);
+    const validation = validateDbPath(options.dbPath);
+    if (validation.isFailure) {
+      process.stderr.write(`error: ${validation.error}\n`);
+      process.exit(2);
+    }
+    const resolvedDb = validation.value;
     const db = getDb(resolvedDb);
 
     const migrationCheck = assertMigrated(db, resolvedDb);

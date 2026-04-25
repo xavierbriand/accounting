@@ -213,25 +213,26 @@ So that historical transactions are settled with the rule that was active on the
 **When** I ask the `SplitRulesService` for the active ratios as of a given date,
 **Then** It returns the rules from the latest window whose `validFrom` is on or before that date.
 **And** Windows are half-open `[validFrom_k, validFrom_{k+1})`; the last extends to `+∞`.
-**And** Each window's ratios sum exactly to 1.0 (Largest-Remainder-safe).
+**And** Windows are sorted strictly ascending by `validFrom`; out-of-order or duplicate `validFrom` is rejected at parse.
+**And** Each window's ratios sum exactly to 1.0 (within a `±1e-9` tolerance).
 **And** All windows declare the same partner set; loading rejects roster changes with a path-cited error (no PII echoed).
 **And** `getSplitsAsOf` is pure: it never reads the system clock — re-running with the same `date` argument yields byte-identical output regardless of `Date.now()`.
 
 ### Story 3.2: Buffer State Reader
 
-*Placeholder — detailed during Story 3.1 close-out / 3.2 planning.* Adds a `category` column to `transaction_entries` so buffer balances are derivable deterministically from the ledger; introduces a `BufferStateService` that reads current balances per buffer bucket as of a given date. Read-only foundation for FR10 and inputs to Stories 3.4 + 3.5.
+*Title only. Acceptance criteria deferred to Story 3.2's planning phase.*
 
 ### Story 3.3: Recurring Cost Forecast
 
-*Placeholder — detailed during Story 3.2 close-out / 3.3 planning.* Adds a `fixedCosts` YAML section (reusing the validity-window pattern from Story 3.1) and a `FixedCostForecastService` that returns expected outflows over a date range. Foundation for FR11; consumed by Story 3.4.
+*Title only. Acceptance criteria deferred to Story 3.3's planning phase.*
 
 ### Story 3.4: Safe Monthly Transfer Calculator
 
-*Placeholder — detailed during Story 3.3 close-out / 3.4 planning.* Use case combining 3.1 (active splits) + 3.2 (current buffers) + 3.3 (predicted outflows), plus a `Clock` port for testable determinism. Returns the per-partner transfer amount allocated via Largest Remainder. Closes FR8; ties FR10/11/12 together.
+*Title only. Acceptance criteria deferred to Story 3.4's planning phase.*
 
 ### Story 3.5: Status CLI Command
 
-*Placeholder — detailed during Story 3.4 close-out / 3.5 planning.* `accounting status [--json] [--as-of <date>]` — wires 3.2 + 3.4 into a user-facing read view; adds the "Conversational CFO" copy for explanations. Closes FR18.
+*Title only. Acceptance criteria deferred to Story 3.5's planning phase.*
 
 ## Epic 4: Trust, Transparency & Lifecycle
 

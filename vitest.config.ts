@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [quickpickle()],
   test: {
     include: ['tests/**/*.test.ts', 'tests/features/**/*.feature'],
-    setupFiles: ['tests/features/steps/split-rules.steps.ts'],
+    setupFiles: ['tests/features/steps/index.ts'],
+    globalSetup: ['tests/_setup/build-dist.ts'],
     alias: {
       '@core': path.resolve(__dirname, './src/core'),
     },

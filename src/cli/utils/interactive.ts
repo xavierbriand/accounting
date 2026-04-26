@@ -2,7 +2,7 @@ import { select, confirm, input } from '@inquirer/prompts';
 import { ExitPromptError } from '@inquirer/core';
 import { Result } from '@core/shared/result.js';
 
-const RESERVED_TOKENS = ['uncategorized', 'asset', 'income', 'expense', 'liability'];
+export const RESERVED_TOKENS: readonly string[] = ['uncategorized', 'asset', 'income', 'expense', 'liability'];
 
 export function validateNewCategoryName(
   raw: string,

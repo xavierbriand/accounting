@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fc from 'fast-check';
-import { validateNewCategoryName, inquirerPrompter } from '../../../../src/cli/utils/interactive.js';
+import { validateNewCategoryName, inquirerPrompter, RESERVED_TOKENS } from '../../../../src/cli/utils/interactive.js';
 
 // Mock @inquirer/prompts at module level so we can control select/input behaviour
 vi.mock('@inquirer/prompts', async (importOriginal) => {
@@ -175,7 +175,6 @@ describe('validateNewCategoryName — happy path', () => {
 
 describe('validateNewCategoryName — property test', () => {
   it('names without forbidden chars and not reserved/duplicated always validate after trim', () => {
-    const reservedTokens = ['uncategorized', 'asset', 'income', 'expense', 'liability'];
     const existingCategories = ['Groceries', 'Transport'];
 
     fc.assert(
@@ -185,7 +184,7 @@ describe('validateNewCategoryName — property test', () => {
           if (trimmed.length === 0) return false;
           if (trimmed.length > 64) return false;
           if (/[:/\\]/.test(trimmed)) return false;
-          if (reservedTokens.includes(trimmed.toLowerCase())) return false;
+          if (RESERVED_TOKENS.includes(trimmed.toLowerCase())) return false;
           const lowerExisting = existingCategories.map((e) => e.toLowerCase());
           if (lowerExisting.includes(trimmed.toLowerCase())) return false;
           return true;
@@ -256,6 +255,10 @@ describe('inquirerPrompter.selectCategory — define-new branch', () => {
     const result = await inquirerPrompter.selectCategory('PAYPAL', 'Uncategorized', ['Groceries']);
 
     expect(mockSelect).toHaveBeenCalledTimes(2);
+    // The Gherkin scenario requires the menu to re-display with the SAME currentCategory
+    // and availableCategories. Choices are computed once outside the while loop
+    // (interactive.ts:56–63) and reused — assert the args match across invocations.
+    expect(mockSelect.mock.calls[1]).toEqual(mockSelect.mock.calls[0]);
     expect(result).toEqual({ action: 'keep' });
   });
 });

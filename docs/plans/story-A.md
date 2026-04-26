@@ -108,7 +108,8 @@ The `Scenario: user defines a new category mid-batch` end-to-end BDD scenario is
 ## Files to change
 
 - **[src/cli/utils/interactive.ts](../../src/cli/utils/interactive.ts)** —
-  - Update the existing `@inquirer/prompts` import (line 1) to add `input` and `ExitPromptError`: `import { select, confirm, input, ExitPromptError } from '@inquirer/prompts';`.
+  - Update the existing `@inquirer/prompts` import (line 1) to add `input`: `import { select, confirm, input } from '@inquirer/prompts';`.
+  - Add a second import for the cancel-signal class: `import { ExitPromptError } from '@inquirer/core';`. *(Phase-4 deviation: `@inquirer/prompts@8.4.2` does not re-export `ExitPromptError`; only `@inquirer/core` does. `@inquirer/core` is now declared as a direct runtime dependency in [package.json](../../package.json) — see Suggestion log row 5 — so the import is on a first-party contract, not a transitive accident.)*
   - Add the `'__new__'` choice between change-options and `Abort` in the choices array (interactive.ts:20). Label: `'+ Define new category…'`.
   - After `select` returns, branch on `'__new__'`: call `input({ message: 'New category name:', validate: ... })`, validate via `validateNewCategoryName(raw, availableCategories)`, return `{ action: 'change', category: trimmed }`.
   - **ESC / Ctrl-C handling:** wrap the entire `select` + `input` flow in a `while (true)` loop. Catch `ExitPromptError` from the `input()` call; on catch, `continue` so the loop re-runs `select` from the top with the same `currentCategory` and `availableCategories`. The user lands back at the menu and can pick `Keep` / `Change to:` / `+ Define new category…` / `Abort`. Only `Abort` aborts ingest. (Loop, not recursion — clearer control flow, no stack growth, easier to read.)
@@ -129,7 +130,7 @@ The `Scenario: user defines a new category mid-batch` end-to-end BDD scenario is
 ## Reuse / what already exists (no new framework)
 
 - `Result<T, E>` and combinators — `src/core/shared/result.ts` (Result.ok / Result.fail).
-- `@inquirer/prompts` already a runtime dep (`select`, `confirm` are in use; `input` and `ExitPromptError` are exports of the same package — no new import surface, **R3** N/A).
+- `@inquirer/prompts` already a runtime dep (`select`, `confirm` already in use; `input` is from the same package). `@inquirer/core` is added as a *direct* dep (`^11.1.9`) for the `ExitPromptError` class only — it was already a transitive dep of `@inquirer/prompts`, so this is a declaration of an existing runtime presence, not a new framework. **R3** still N/A.
 - `runInteractiveLoop`'s mutable local `categories` array (ingest-command.ts:188) is the natural place for in-memory persistence — no new state container needed.
 
 ## Scope guardrails
@@ -186,3 +187,22 @@ Findings from the `plan-reviewer` sub-agent run on commit `489e678`. Each row is
 Observation-only findings (no action required, recorded for transparency): R1–R4 compliance, R8 N/A (no new structured output), R10 N/A, R14 N/A, R15 N/A; SQL-injection N/A (prepared statements upstream); path-traversal compliant (rule 3 blocks `:` `/` `\`); Zod boundary N/A; function-size compliant.
 
 **DoR check.** All 12 actionable findings have a non-blank Resolution. Zero rows tagged `defer`, so no GitHub issue links required.
+
+### Phase-4 retro-check (code-reviewer findings on commit `35e6764`)
+
+| # | Phase | Finding (one-line) | Resolution | Link / reason |
+| - | ----- | ------------------ | ---------- | ------------- |
+| 1 | P1 | Propagation test asserts `stdout` proxy, not `confidence: 'high'` directly | fix-now | `tests/unit/cli/commands/ingest-command.test.ts` propagation test now spies on `saveBatch` and asserts outcome 1's `category: 'AutoInsurance', confidence: 'high'` and outcome 2's preserved `category: 'Uncategorized', confidence: 'low'`. |
+| 2 | P1 | ESC re-show test doesn't assert same args on `select` calls[1] | fix-now | Added `expect(mockSelect.mock.calls[1]).toEqual(mockSelect.mock.calls[0])`. |
+| 3 | P1 | R6 fails-if comment for propagation overstates what test asserts | fix-now | Resolved by #1 — once confidence is asserted directly, the fails-if claim becomes honest. |
+| 4 | P1 | Range notation `7694841..35e6764` excludes lower bound (handoff-prompt artefact) | acknowledge | Cosmetic; commit log on the PR is the authoritative ordering. |
+| 5 | P2 | Undeclared transitive dep on `@inquirer/core` | fix-now | `@inquirer/core ^11.1.9` added to `dependencies` in `package.json`. Already runtime-resolved as a transitive of `@inquirer/prompts`; declaring it makes the contract explicit. |
+| 6 | P2 | R2 surface drift: plan said single `@inquirer/prompts` import; code uses two | fix-now | Plan § "Files to change" updated to reflect the dual-import (Phase-4 deviation note). |
+| 7 | P2 | R8 N/A confirmed | acknowledge | No new structured output. |
+| 8 | P3 | `f8e4a31` commit subject drops `'+ Define new category…'` vs plan's slice 3 | acknowledge | Both forms are summary-verb; not an R12 violation. |
+| 9 | P3 | TDD rhythm verified — no R10 violation | acknowledge | Each `feat:` follows its `test:` sibling. |
+| 10 | P3 | R11 satisfied by refactor-commit body | acknowledge | The empty refactor commit (`35e6764`) preserved its original premise ("no improvements needed at first read"); a follow-up real refactor commit (`5ff8beb`, this set of changes) lands the Phase-4 fixes — additive history, no force-push. |
+| 11 | P3 | `as unknown as` cast in test for `mockSelect.mock.calls[0][0].choices` | acknowledge | Acceptable in test files; the cast crosses inquirer's complex generics for a single read. |
+| 12 | P3 | `RESERVED_TOKENS` was module-private; property test maintained a parallel hand-rolled copy that could drift | fix-now | Constant exported from `interactive.ts`; the property test imports and uses it. Future token additions stay in sync automatically. |
+
+**Phase-4 DoR check.** 6 fix-now items addressed in a single follow-up refactor commit (`5ff8beb`, on top of the empty `35e6764`). 6 acknowledge items recorded above. Zero defer items, so no GitHub issues filed. The Phase-4 refactor preserves behaviour (no production-code logic changes beyond the `export` keyword on `RESERVED_TOKENS` and a stronger test assertion that already passes given the existing implementation); all 330 unit tests stay green. **Slice count:** 8 commits total — within R13's 6–10 target band.

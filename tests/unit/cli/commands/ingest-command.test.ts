@@ -515,6 +515,8 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       confirmBatch: vi.fn().mockResolvedValue(true),
     };
 
+    const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: 2 }));
+
     const deps: IngestCommandDeps = {
       config: baseConfig,
       csvParser: {
@@ -534,19 +536,24 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => capturedExitCode.push(code),
-      transactionRepository: makeNoOpTransactionRepo(),
+      transactionRepository: { saveBatch: saveBatchMock },
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
 
-    // Assert: second selectCategory call received availableCategories containing 'AutoInsurance'
+    // Second selectCategory call receives the new name in availableCategories.
     const secondCallCategories = selectCategoryMock.mock.calls[1][2] as readonly string[];
     expect(secondCallCategories).toContain('AutoInsurance');
 
-    // Assert: outcome 1's resolved category is 'AutoInsurance' with confidence 'high'
-    expect(stdout.captured).toContain('AutoInsurance');
+    // saveBatch payload: outcome 1 was 'change'd to AutoInsurance with confidence promoted to 'high';
+    // outcome 2 was 'kept' so its original category and confidence are unchanged.
+    expect(saveBatchMock).toHaveBeenCalledOnce();
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[0]).toMatchObject({ category: 'AutoInsurance', confidence: 'high' });
+    expect(committed[1]).toMatchObject({ category: 'Uncategorized', confidence: 'low' });
+
     expect(capturedExitCode).toContain(0);
   });
 });

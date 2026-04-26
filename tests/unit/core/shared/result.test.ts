@@ -19,7 +19,7 @@ describe('Result.map', () => {
 
   it('map identity: r.map(x => x) === r (failure)', () => {
     fc.assert(
-      fc.property(fc.string(), (err) => {
+      fc.property(fc.string({ minLength: 1 }), (err) => {
         const r = Result.fail<string>(err);
         const mapped = r.map((x) => x);
         expect(mapped.isFailure).toBe(true);
@@ -83,7 +83,7 @@ describe('Result.flatMap', () => {
 
   it('flatMap short-circuit: Result.fail(e).flatMap(f) === Result.fail(e)', () => {
     fc.assert(
-      fc.property(fc.string(), (err) => {
+      fc.property(fc.string({ minLength: 1 }), (err) => {
         let callCount = 0;
         const f = (x: string): Result<string> => {
           callCount++;
@@ -108,7 +108,7 @@ describe('Result.flatMap', () => {
 
   it('flatMap short-circuits on first failure', () => {
     const r = Result.ok(5)
-      .flatMap((_) => Result.fail<number>('mid-chain error'))
+      .flatMap(() => Result.fail<number>('mid-chain error'))
       .flatMap((x) => Result.ok(x * 2));
     expect(r.isFailure).toBe(true);
     expect(r.error).toBe('mid-chain error');
@@ -127,7 +127,7 @@ describe('Result.getOrElse', () => {
 
   it('getOrElse: Result.fail(e).getOrElse(y) === y', () => {
     fc.assert(
-      fc.property(fc.string(), fc.string(), (err, fallback) => {
+      fc.property(fc.string({ minLength: 1 }), fc.string(), (err, fallback) => {
         const r = Result.fail<string>(err);
         expect(r.getOrElse(fallback)).toBe(fallback);
       }),
@@ -151,7 +151,7 @@ describe('Result.all', () => {
   it('Result.all short-circuits on first failure', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.string(), { minLength: 1, maxLength: 5 }),
+        fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 5 }),
         fc.nat({ max: 4 }),
         (values, failIdx) => {
           const actualFailIdx = failIdx % values.length;

@@ -3,6 +3,8 @@ import {
   add,
   subtract,
   equal,
+  lessThan as dineroLessThan,
+  lessThanOrEqual as dineroLessThanOrEqual,
   allocate,
   toSnapshot,
   type Dinero,
@@ -104,6 +106,24 @@ export class Money {
 
   public equals(other: Money): boolean {
     return equal(this._dinero, other._dinero);
+  }
+
+  public lessThan(other: Money): Result<boolean> {
+    if (this.currency !== other.currency) {
+      return Result.fail<boolean>(
+        `Cannot compare money with different currencies: ${this.currency} vs ${other.currency}`
+      );
+    }
+    return Result.ok(dineroLessThan(this._dinero, other._dinero));
+  }
+
+  public lessThanOrEqual(other: Money): Result<boolean> {
+    if (this.currency !== other.currency) {
+      return Result.fail<boolean>(
+        `Cannot compare money with different currencies: ${this.currency} vs ${other.currency}`
+      );
+    }
+    return Result.ok(dineroLessThanOrEqual(this._dinero, other._dinero));
   }
 
   /**

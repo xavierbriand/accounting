@@ -220,7 +220,21 @@ So that historical transactions are settled with the rule that was active on the
 
 ### Story 3.2: Buffer State Reader
 
-*Title only. Acceptance criteria deferred to Story 3.2's planning phase.*
+As a System,
+I want to read the current balance and health status of every configured buffer bucket as of a given date,
+So that the settlement engine and CLI can answer "how much sits in my Car / House / Vacation buffer right now, and is it below target, on target, or above cap?"
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` config with one or more buffer buckets, each declaring a unique `account` string,
+**When** I ask the `BufferStateService` for the state as of a given date,
+**Then** it returns one `BufferState` per configured bucket, in config order, with `{ name, balance, target, cap?, status }`.
+**And** `balance` is `sum(debit cents) − sum(credit cents)` over `transaction_entries` rows where `account` matches the bucket and `substr(transactions.occurred_at, 1, 10) <= asOfDate` (asset-balance sign convention; same-day rows included).
+**And** `status` is derived deterministically: `balance < target` → `'below'`; `balance >= target` and (no `cap` OR `balance <= cap`) → `'on-target'`; `balance > cap` → `'above-cap'`.
+**And** if any ledger entry on a bucket account has a currency different from `defaultCurrency`, the read returns `Result.fail` citing the offending account and currency (single-currency MVP; forex deferred).
+**And** if `date` does not match `/^\d{4}-\d{2}-\d{2}$/`, the read returns `Result.fail` with a clear message.
+**And** if two buckets share the same `account` string, **config parse** fails with a path-cited Zod error; the service is never constructed.
+**And** `getStateAsOf` is pure: it never reads the system clock — re-running with the same `date` yields byte-identical output regardless of `Date.now()`.
 
 ### Story 3.3: Recurring Cost Forecast
 

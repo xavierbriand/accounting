@@ -12,6 +12,7 @@ export interface SplitWindow {
 
 export interface BufferBucket {
   readonly name: string;
+  readonly account: string;
   readonly target: Money;
   readonly cap?: Money;
 }

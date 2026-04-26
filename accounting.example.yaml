@@ -41,13 +41,16 @@ splits:
       - { partner: Sam,  ratio: 0.5 }
 
 # Buffer buckets: target balances you want to maintain for specific goals.
-# target: the minimum balance to maintain (required, non-negative decimal).
-# cap:    the maximum to accumulate (optional; must be >= target if provided).
+# account: ledger account string for this bucket (must be unique across all buffers).
+# target:  the minimum balance to maintain (required, non-negative decimal).
+# cap:     the maximum to accumulate (optional; must be >= target if provided).
 # Amounts are in the defaultCurrency above.
 # An empty list is valid if you have no buffer targets yet.
 buffers:
   - name: Car
+    account: assets:buffer:car
     target: 1000
   - name: House
+    account: assets:buffer:house
     target: 5000
     cap: 10000

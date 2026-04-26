@@ -662,4 +662,64 @@ describe('parseRawConfig', () => {
       expect(result.error).toContain('buffers.3.name');
     });
   });
+
+  describe('buffer account field (Story 3.2)', () => {
+    it('rejects a buffer entry missing the account field', () => {
+      // fails if parseRawConfig accepts a buffer without an account field
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('account');
+    });
+
+    it('rejects a buffer entry with an empty account string', () => {
+      // fails if parseRawConfig accepts a buffer with an empty account string
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: '', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('account');
+    });
+
+    it('accepts a buffer with a valid account string', () => {
+      // fails if parseRawConfig rejects a buffer with a valid account string
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000 }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].account).toBe('assets:buffer:car');
+    });
+
+    it('rejects duplicate buffer accounts — path-cited at the duplicate index', () => {
+      // fails if parseRawConfig does not detect duplicate buffer account strings
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'Car', account: 'assets:buffer:shared', target: 1000 },
+          { name: 'House', account: 'assets:buffer:shared', target: 5000 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate account');
+      expect(result.error).toContain('buffers.1.account');
+    });
+
+    it('rejects non-adjacent duplicate accounts — path-cited at the later index', () => {
+      // fails if duplicate-account detection is position-sensitive
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'Car', account: 'assets:buffer:car', target: 1000 },
+          { name: 'House', account: 'assets:buffer:house', target: 5000 },
+          { name: 'Vac', account: 'assets:buffer:car', target: 500 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('buffers.2.account');
+    });
+  });
 });

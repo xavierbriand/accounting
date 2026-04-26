@@ -52,6 +52,7 @@ const SplitWindowSchema = z
 
 const BufferBucketRawSchema = z.object({
   name: z.string().min(1),
+  account: z.string().min(1),
   target: z.number().nonnegative(),
   cap: z.number().nonnegative().optional(),
 });
@@ -157,6 +158,15 @@ const RawConfigSchema = z
             message: 'duplicate name',
           });
         }
+      })
+      .superRefine((buffers, ctx) => {
+        for (const i of findDuplicateIndices(buffers, b => b.account)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'account'],
+            message: 'duplicate account',
+          });
+        }
       }),
   })
   .strict();
@@ -178,7 +188,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
   const data = parsed.data;
   const currency = data.defaultCurrency;
 
-  const buffers: Array<{ name: string; target: Money; cap?: Money }> = [];
+  const buffers: Array<{ name: string; account: string; target: Money; cap?: Money }> = [];
   for (let i = 0; i < data.buffers.length; i++) {
     const b = data.buffers[i];
     const targetResult = Money.fromDecimal(b.target, currency);
@@ -193,7 +203,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
       }
       cap = capResult.value;
     }
-    buffers.push({ name: b.name, target: targetResult.value, cap });
+    buffers.push({ name: b.name, account: b.account, target: targetResult.value, cap });
   }
 
   return Result.ok({

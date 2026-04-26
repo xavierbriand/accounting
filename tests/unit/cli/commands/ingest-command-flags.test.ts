@@ -144,7 +144,7 @@ describe('--json mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const dupItem = { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR };
+    const dupItem = { item: { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR }, idempotencyHash: 'hash-DUP' };
     const parseErrorRow = { line: 1, reason: 'bad date', raw: 'x' };
 
     const deps: IngestCommandDeps = {
@@ -184,11 +184,11 @@ describe('--json mode', () => {
     expect(exitCodes).toContain(0);
   });
 
-  it('exits 2 with needsReview list when low-confidence items present', async () => {
+  it('exits 2 with lowConfidence list when low-confidence items present', async () => {
     const outcomes = [makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const dupItem = { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR };
+    const dupItem = { item: { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR }, idempotencyHash: 'hash-DUP' };
     const parseErrorRow = { line: 2, reason: 'missing amount', raw: 'y' };
 
     const deps: IngestCommandDeps = {
@@ -213,13 +213,13 @@ describe('--json mode', () => {
     const parsed = JSON.parse(captured.trim()) as {
       source_account: string;
       summary: { duplicates: number; parseErrors: number };
-      needsReview: string[];
+      lowConfidence: string[];
       items: unknown[];
     };
 
     expect(exitCodes).toContain(2);
-    expect(parsed.needsReview).toHaveLength(1);
-    expect(parsed.needsReview[0]).toBe('tx-UBER TRIP');
+    expect(parsed.lowConfidence).toHaveLength(1);
+    expect(parsed.lowConfidence[0]).toBe('tx-UBER TRIP');
     expect(parsed.items).toHaveLength(0);
     expect(parsed.source_account).toBe('acct-77');
     expect(parsed.summary.duplicates).toBe(2);

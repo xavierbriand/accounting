@@ -1,6 +1,3 @@
-// NOTE: This test spawns the CLI via tsx (handles @core path alias). No separate build step needed.
-// The plan specified 'node dist/cli/program.js' but dist/ does not rewrite @core imports;
-// tsx resolves them via tsconfig.json paths at runtime. Deviation documented in return report.
 /**
  * Integration test: CLI ingest against an uninitialised DB emits a friendly error.
  *
@@ -13,17 +10,14 @@
  *   in stderr), or the exit code is wrong (not 2), or the friendly message strings are absent.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawnCli } from '../../_helpers/spawn-cli.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const TSX_BIN = path.join(__dirname, '../../../node_modules/.bin/tsx');
-const CLI_SRC = path.join(__dirname, '../../../src/cli/program.ts');
 
 const FIXTURE_CSV = path.join(__dirname, '../../fixtures/csv/bpce-valid.csv');
 
@@ -51,24 +45,12 @@ describe('ingest against uninitialised DB', () => {
     const csvPath = path.join(tmpDir, 'bpce-valid.csv');
     fs.copyFileSync(FIXTURE_CSV, csvPath);
 
-    let error: { status: number | null; stderr: Buffer | string; stdout: Buffer | string } | null = null;
+    const result = spawnCli(['ingest', '--file', csvPath, '--db-path', dbPath]);
 
-    try {
-      execFileSync(TSX_BIN, [CLI_SRC, 'ingest', '--file', csvPath, '--db-path', dbPath], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    } catch (e) {
-      error = e as { status: number | null; stderr: Buffer | string; stdout: Buffer | string };
-    }
-
-    expect(error).not.toBeNull();
-
-    const stderr = error!.stderr.toString();
-    expect(error!.status).toBe(2);
-    expect(stderr).toContain('database not initialised');
-    expect(stderr).toContain("hint: run 'accounting migrate");
-    expect(stderr).not.toContain('SqliteError');
-    expect(stderr).not.toContain('at new ');
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('database not initialised');
+    expect(result.stderr).toContain("hint: run 'accounting migrate");
+    expect(result.stderr).not.toContain('SqliteError');
+    expect(result.stderr).not.toContain('at new ');
   });
 });

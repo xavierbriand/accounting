@@ -62,7 +62,7 @@ function makeOutcome(
   confidence: Confidence,
   idempotencyHash: string,
 ): Result<BuildOutcome> {
-  const txResult = Transaction.create({
+  return Transaction.create({
     id,
     occurredAt: item.occurredAt,
     description: item.description,
@@ -70,9 +70,7 @@ function makeOutcome(
       { account: debitAccount, side: 'debit', amount: item.amount },
       { account: creditAccount, side: 'credit', amount: item.amount },
     ],
-  });
-  if (txResult.isFailure) return Result.fail(txResult.error);
-  return Result.ok({ transaction: txResult.value, category, classification, confidence, idempotencyHash });
+  }).map((transaction) => ({ transaction, category, classification, confidence, idempotencyHash }));
 }
 
 export class TransactionBuilder {

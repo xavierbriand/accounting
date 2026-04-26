@@ -6,7 +6,7 @@ export function assertMigrated(db: Database.Database, dbPath: string): Result<vo
   if (userVersion === 0) {
     return Result.fail(
       `database not initialised at ${dbPath}\n` +
-      `hint: run 'accounting migrate --db-path ${dbPath}' first`,
+      `hint: run 'accounting migrate' first (or set dbPath in accounting.yaml)`,
     );
   }
   return Result.ok(undefined);

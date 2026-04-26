@@ -39,7 +39,6 @@ import { nodeHashFn } from '../../src/infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../../src/infra/crypto/node-uuid-gen.js';
 import { pickSourceAccount } from '../../src/infra/fs/pick-source-account.js';
 import { readBpceCsv } from '../../src/infra/fs/read-bpce-csv.js';
-import { Result } from '@core/shared/result.js';
 import type { AppConfig } from '@core/config/app-config.js';
 
 // Perf test threshold: 3000 ms (2000 ms local target + 1.5× CI headroom)
@@ -148,7 +147,7 @@ describe('ingest-throughput (perf)', () => {
       const exitCodes: number[] = [];
 
       const deps: IngestCommandDeps = {
-        configService: { load: () => Result.ok(config) },
+        config,
         csvParser: new NodeCsvParser(),
         idempotencyService,
         transactionBuilder: (accounts) => new TransactionBuilder(accounts, undefined, nodeUuidGen),

@@ -590,4 +590,76 @@ describe('parseRawConfig', () => {
       );
     });
   });
+
+  // Helper unit tests for findDuplicateIndices semantics (story-maint-11 / #56)
+  // The helper is private to config-schema; tested via schema duplicate-detection paths.
+  describe('findDuplicateIndices semantics (via schema duplicate paths)', () => {
+    it('empty input: no duplicates reported (accounts list of one)', () => {
+      // Empty dedup domain: single-account config has no duplicates to find.
+      const result = parseRawConfig({
+        ...minimalValid,
+        accounts: [{ id: 'sole', type: 'bank', filenamePrefix: 'sole_' }],
+      });
+      expect(result.isSuccess).toBe(true);
+    });
+
+    it('all-unique: no duplicate error', () => {
+      // All keys distinct: findDuplicateIndices returns [].
+      const result = parseRawConfig({
+        ...minimalValid,
+        accounts: [
+          { id: 'a', type: 'bank', filenamePrefix: 'a_' },
+          { id: 'b', type: 'bank', filenamePrefix: 'b_' },
+          { id: 'c', type: 'bank', filenamePrefix: 'c_' },
+        ],
+      });
+      expect(result.isSuccess).toBe(true);
+    });
+
+    it('all-duplicate: every element after the first is flagged', () => {
+      // All same key: indices 1 and 2 are duplicates; index 0 is canonical.
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'X', target: 100 },
+          { name: 'X', target: 200 },
+          { name: 'X', target: 300 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate');
+    });
+
+    it('mixed: only later-occurring duplicates are flagged, not the first', () => {
+      // [A, B, A]: index 2 is duplicate; index 0 is canonical. B is not a duplicate.
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'Alpha', target: 100 },
+          { name: 'Beta', target: 200 },
+          { name: 'Alpha', target: 300 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate');
+      // Error path must cite index 2 (0-indexed), not index 0
+      expect(result.error).toContain('buffers.2.name');
+    });
+
+    it('non-adjacent duplicate: third element duplicates first', () => {
+      // [A, B, C, A]: index 3 is duplicate of index 0. B and C are unique.
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'First', target: 100 },
+          { name: 'Second', target: 200 },
+          { name: 'Third', target: 300 },
+          { name: 'First', target: 400 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate');
+      expect(result.error).toContain('buffers.3.name');
+    });
+  });
 });

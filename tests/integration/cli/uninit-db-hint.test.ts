@@ -15,6 +15,7 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { writeStubYaml } from '../../_helpers/inline-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,11 +42,13 @@ describe('ingest against uninitialised DB', () => {
     //   without the check, SqliteTransactionRepository constructor throws a raw SqliteError
     //   with a stack trace that would reach the user. This test proves the user-visible fix.
     const tmpDir = makeTmpDir();
-    const dbPath = path.join(tmpDir, 'uninit.db');
-    const csvPath = path.join(tmpDir, 'bpce-valid.csv');
+    const csvPath = path.join(tmpDir, 'bpce-valid_real.csv');
     fs.copyFileSync(FIXTURE_CSV, csvPath);
+    // YAML carries dbPath — no --db-path flag needed after #65 (story-maint-11)
+    writeStubYaml(tmpDir);
+    // No migrate — DB is intentionally uninitialised
 
-    const result = spawnCli(['ingest', '--file', csvPath, '--db-path', dbPath]);
+    const result = spawnCli(['ingest', '--file', csvPath], { cwd: tmpDir });
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('database not initialised');

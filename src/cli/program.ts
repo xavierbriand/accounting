@@ -16,6 +16,43 @@ import { runIngestCommand } from './commands/ingest-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
+import type { AppConfig } from '../core/config/app-config.js';
+import { Result } from '../core/shared/result.js';
+
+interface DbPathError {
+  code: number;
+  message: string;
+}
+
+interface ResolvedDb {
+  config: AppConfig;
+  resolvedDbPath: string;
+}
+
+function resolveDbPathForCommand(
+  options: { dbPathOverride?: string },
+  projectDir: string,
+  stderr: NodeJS.WritableStream,
+): Result<ResolvedDb, DbPathError> {
+  const configService = new FileConfigService({ projectDir });
+  const configResult = configService.load();
+  if (configResult.isFailure) {
+    return Result.fail({ code: 1, message: configResult.error });
+  }
+  const config = configResult.value;
+
+  if (options.dbPathOverride !== undefined) {
+    stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
+  }
+  const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
+
+  const validation = validateDbPath(effectiveDbPath);
+  if (validation.isFailure) {
+    return Result.fail({ code: 2, message: validation.error });
+  }
+
+  return Result.ok({ config, resolvedDbPath: validation.value });
+}
 
 const program = new Command();
 
@@ -27,14 +64,15 @@ program
 program
   .command('migrate')
   .description('Run database migrations')
-  .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
-  .action((options: { dbPath: string }) => {
-    const validation = validateDbPath(options.dbPath);
-    if (validation.isFailure) {
-      process.stderr.write(`error: ${validation.error}\n`);
-      process.exit(2);
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action((options: { dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
     }
-    runMigrate(validation.value);
+    const { resolvedDbPath } = result.value;
+    runMigrate(resolvedDbPath);
   });
 
 program
@@ -43,14 +81,14 @@ program
   .requiredOption('-f, --file <path>', 'Path to the bank CSV file')
   .option('--non-interactive', 'Fail if any item needs review (CI mode)', false)
   .option('--json', 'Output JSON instead of a table', false)
-  .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
-  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPath: string }) => {
-    const validation = validateDbPath(options.dbPath);
-    if (validation.isFailure) {
-      process.stderr.write(`error: ${validation.error}\n`);
-      process.exit(2);
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
     }
-    const resolvedDb = validation.value;
+    const { config, resolvedDbPath: resolvedDb } = result.value;
     const db = getDb(resolvedDb);
 
     const migrationCheck = assertMigrated(db, resolvedDb);
@@ -59,7 +97,6 @@ program
       process.exit(2);
     }
 
-    const configService = new FileConfigService({ projectDir: process.cwd() });
     const csvParser = new NodeCsvParser();
     const hashRepo = new SqliteHashRepository(db);
     const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
@@ -71,7 +108,7 @@ program
     await runIngestCommand(
       { file: options.file, nonInteractive: options.nonInteractive, json: options.json },
       {
-        configService,
+        config,
         csvParser,
         idempotencyService,
         transactionBuilder,

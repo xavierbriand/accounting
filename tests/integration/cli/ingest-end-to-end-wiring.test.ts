@@ -46,16 +46,15 @@ describe('ingest end-to-end wiring against real BPCE CSV', () => {
     //   would exit 0 (zero low-confidence rows) instead of 2 (3 low-confidence rows).
     const tmpDir = makeTmpDir();
     const csvPath = path.join(tmpDir, 'bpce-valid_real.csv');
-    const dbPath = path.join(tmpDir, 'test.db');
 
     fs.copyFileSync(FIXTURE_CSV, csvPath);
     writeStubYaml(tmpDir);
 
-    // Seed the DB schema
-    spawnCli(['migrate', '--db-path', dbPath], { cwd: tmpDir });
+    // Seed the DB schema via YAML-authoritative dbPath (no flag needed after #65)
+    spawnCli(['migrate'], { cwd: tmpDir });
 
     const result = spawnCli(
-      ['ingest', '--file', csvPath, '--non-interactive', '--json', '--db-path', dbPath],
+      ['ingest', '--file', csvPath, '--non-interactive', '--json'],
       { cwd: tmpDir },
     );
 

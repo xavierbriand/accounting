@@ -18,7 +18,6 @@ import { nodeUuidGen } from '../../../src/infra/crypto/node-uuid-gen.js';
 import { pickSourceAccount } from '../../../src/infra/fs/pick-source-account.js';
 import { readBpceCsv } from '../../../src/infra/fs/read-bpce-csv.js';
 import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
-import { Result } from '../../../src/core/shared/result.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 

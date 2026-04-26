@@ -1,4 +1,5 @@
-import { select, confirm } from '@inquirer/prompts';
+import { select, confirm, input } from '@inquirer/prompts';
+import { ExitPromptError } from '@inquirer/core';
 import { Result } from '@core/shared/result.js';
 
 const RESERVED_TOKENS = ['uncategorized', 'asset', 'income', 'expense', 'liability'];
@@ -57,17 +58,39 @@ export const inquirerPrompter: InteractivePrompter = {
       ...availableCategories
         .filter((c) => c !== currentCategory)
         .map((c) => ({ name: `Change to: ${c}`, value: c })),
+      { name: '+ Define new category…', value: '__new__' },
       { name: 'Abort', value: '__abort__' },
     ];
 
-    const answer = await select({
-      message: `${description} → ${currentCategory} (auto). Confirm or change?`,
-      choices,
-    });
+    while (true) {
+      const answer = await select({
+        message: `${description} → ${currentCategory} (auto). Confirm or change?`,
+        choices,
+      });
 
-    if (answer === '__abort__') return { action: 'abort' };
-    if (answer === keepLabel) return { action: 'keep' };
-    return { action: 'change', category: answer };
+      if (answer === '__abort__') return { action: 'abort' };
+      if (answer === keepLabel) return { action: 'keep' };
+
+      if (answer === '__new__') {
+        try {
+          const newName = await input({
+            message: 'New category name:',
+            validate: (raw: string) => {
+              const result = validateNewCategoryName(raw, availableCategories);
+              return result.isSuccess ? true : result.error;
+            },
+          });
+          return { action: 'change', category: newName.trim() };
+        } catch (err) {
+          if (err instanceof ExitPromptError) {
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      return { action: 'change', category: answer };
+    }
   },
 
   async confirmBatch(count) {

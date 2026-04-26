@@ -24,22 +24,17 @@ export class IdempotencyService {
       hashes.push(this.hash(canonResult.value));
     }
 
-    const knownResult = this.repo.listKnownHashes(hashes);
-    if (knownResult.isFailure) {
-      return Result.fail(knownResult.error);
-    }
-    const known = knownResult.value;
-
-    const fresh: FreshIngestItem[] = [];
-    const duplicates: DuplicateIngestItem[] = [];
-    for (let i = 0; i < items.length; i++) {
-      if (known.has(hashes[i])) {
-        duplicates.push({ item: items[i], idempotencyHash: hashes[i] });
-      } else {
-        fresh.push({ item: items[i], idempotencyHash: hashes[i] });
+    return this.repo.listKnownHashes(hashes).flatMap((known) => {
+      const fresh: FreshIngestItem[] = [];
+      const duplicates: DuplicateIngestItem[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (known.has(hashes[i])) {
+          duplicates.push({ item: items[i], idempotencyHash: hashes[i] });
+        } else {
+          fresh.push({ item: items[i], idempotencyHash: hashes[i] });
+        }
       }
-    }
-
-    return Result.ok({ fresh, duplicates });
+      return Result.ok({ fresh, duplicates });
+    });
   }
 }

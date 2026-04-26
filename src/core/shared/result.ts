@@ -64,11 +64,4 @@ export class Result<T, E = string> {
     return Result.ok(values);
   }
 
-  /** @deprecated Use Result.all(...).map(() => undefined) for the discard case. */
-  public static combine(results: Result<unknown>[]): Result<unknown> {
-    for (const result of results) {
-      if (result.isFailure) return result;
-    }
-    return Result.ok();
-  }
 }

@@ -24,6 +24,23 @@ export interface AccountConfig {
   readonly cardSuffix?: string;
 }
 
+export type RecurringCadence = 'monthly' | 'quarterly' | 'annual';
+
+export interface RecurringAmendment {
+  readonly validFrom: string;
+  readonly amount: Money;
+}
+
+export interface RecurringRule {
+  readonly name: string;
+  readonly category: string;
+  readonly cadence: RecurringCadence;
+  readonly amount: Money;
+  readonly validFrom: string;
+  readonly validTo?: string;
+  readonly amendments: readonly RecurringAmendment[];
+}
+
 export interface AppConfig {
   readonly dbPath: string;
   readonly defaultCurrency: string;
@@ -31,4 +48,5 @@ export interface AppConfig {
   readonly splits: readonly SplitWindow[];
   readonly buffers: readonly BufferBucket[];
   readonly accounts: readonly AccountConfig[];
+  readonly recurring: readonly RecurringRule[];
 }

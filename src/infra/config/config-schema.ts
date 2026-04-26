@@ -168,6 +168,7 @@ const RawConfigSchema = z
           });
         }
       }),
+    recurring: z.array(z.unknown()).optional().default([]),
   })
   .strict();
 
@@ -213,5 +214,6 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     splits: data.splits,
     buffers,
     accounts: data.accounts,
+    recurring: [],
   });
 }

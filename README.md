@@ -6,7 +6,14 @@ Full problem framing and vision: [docs/product-brief.md](docs/product-brief.md).
 
 ## Status
 
-Early development. Epic 1 (Foundation) in progress — the money value object and migration runner are in place; next up is the double-entry ledger schema and repository. See [docs/epics.md](docs/epics.md) for the roadmap.
+Active development.
+
+- **Epic 1 (Foundation)** — complete. Money value object, append-only ledger, migration runner, YAML config.
+- **Epic 2 (Transaction Ingestion & Tagging)** — complete. BPCE CSV parsing, idempotent ingest, auto-tagger + card-settlement classifier, interactive review, atomic commit with snapshot + rollback.
+- **Epic 3 (Predictive Engine)** — in progress. Story 3.1 (Versioned Split Rules) shipped; Story 3.2 (Predictive Transfer Engine) is up next.
+- **Refactor epic (Epic M-A)** — running in parallel; 15 maintenance stories shipped, including a full BDD harness, dist-compile subprocess test infrastructure, `Result` combinators, YAML-authoritative `dbPath`, and dedicated `plan-reviewer` / `code-reviewer` sub-agents for the development loop.
+
+See [docs/epics.md](docs/epics.md) for the roadmap and [docs/status.md](docs/status.md) for the per-story log.
 
 ## Stack
 
@@ -45,9 +52,11 @@ See `accounting.example.yaml` for the full schema with inline documentation.
 | `npm run lint` | ESLint across the repo |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run migrate` | Apply pending SQL migrations to the local SQLite DB |
+| `npm run ingest -- --file <path>` | Parse a bank CSV, auto-tag, interactively review, and commit transactions (use `--non-interactive` for CI; `--json` for machine-readable output) |
 
 ## Documentation
 
+- [docs/status.md](docs/status.md) — Current position and per-story merge log
 - [docs/prd.md](docs/prd.md) — Product requirements & non-functional requirements
 - [docs/architecture.md](docs/architecture.md) — Architectural decisions (layering, money storage, versioning)
 - [docs/epics.md](docs/epics.md) — Epics and stories roadmap

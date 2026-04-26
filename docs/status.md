@@ -7,7 +7,7 @@ Authoritative source for "where we are." [CLAUDE.md § 1](../CLAUDE.md) points h
 - **Epic 1** — complete. Stories 1.1–1.4 (project scaffold, Money, Ledger, Config) shipped.
 - **Epic 2** — complete. Stories 2.1–2.5 (Ingest + Tagging + Commit) shipped.
 - **Epic 3** — in progress. Story 3.1 (Versioned Split Rules) shipped.
-- **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-12 shipped (or shipping with this PR).
+- **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-14 shipped; story-maint-15 (this) shipping.
 - **Next:** Story 3.2 planning (Predictive Transfer Engine — see [epics.md](epics.md)).
 
 ## Refresh trigger
@@ -24,7 +24,10 @@ Routine maint-story merges only need a status-log entry (newest first).
 
 Append-only one-line summary per merged story. Newest first.
 
-- **2026-04-26** — story-maint-12 shipping. Process refresh: CLAUDE.md compressed (168 → 140 lines), `docs/status.md` introduced as authoritative current-position source, maintenance-sub-loop checklist extracted to template, drift-detection retro item added, story-maint-09 Try-1 disposition recorded.
+- **2026-04-26** — story-maint-15 shipping. README.md status section + Scripts table refresh (`npm run ingest` added, Documentation list points to status.md); status log catches up with maint-13 / maint-14.
+- **2026-04-26** — story-maint-14 merged (#70). `code-reviewer` sub-agent for Phase 4 retro-check + CLAUDE.md § 6.1 phase 4 wiring. Symmetric to plan-reviewer; tier-separated scan vs tag.
+- **2026-04-26** — story-maint-13 merged (#69). `plan-reviewer` sub-agent for Phase 2 critical review + CLAUDE.md § 6.1 phase 2 wiring + § 6.3 session-restart note for new custom agents. Dogfood test caught and fixed `docs/architecture.md` validity-window drift inherited from maint-12.
+- **2026-04-26** — story-maint-12 merged (#68). Process refresh: CLAUDE.md compressed (168 → 140 lines), `docs/status.md` introduced as authoritative current-position source, maintenance-sub-loop checklist extracted to template, drift-detection retro item added, story-maint-09 Try-1 disposition recorded.
 - **2026-04-26** — story-maint-11 merged (#67). `Result` combinators (`map`, `flatMap`, `getOrElse`, `Result.all`) + SQLite `busy_timeout=5000` pragma + YAML-authoritative `dbPath` (closes #65) + `findDuplicateIndices` extracted (closes #56).
 - **2026-04-26** — story-maint-10 merged (#66). Epic-2 BDD backfill (`tests/features/ingest.feature`, `commit.feature`); dist-compile subprocess harness via `tests/_setup/build-dist.ts`.
 - **2026-04-25** — story-maint-09 merged (#64). Ingest CLI factory wiring fix (closes #60) + retire stale Story-2.5 prompt (closes #61). Codified composition-root subprocess test rule (R4).

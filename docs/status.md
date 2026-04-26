@@ -6,9 +6,9 @@ Authoritative source for "where we are." [CLAUDE.md § 1](../CLAUDE.md) points h
 
 - **Epic 1** — complete. Stories 1.1–1.4 (project scaffold, Money, Ledger, Config) shipped.
 - **Epic 2** — complete. Stories 2.1–2.5 (Ingest + Tagging + Commit) shipped.
-- **Epic 3** — in progress. Story 3.1 (Versioned Split Rules) shipped.
-- **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-14 shipped; story-maint-15 (this) shipping.
-- **Next:** Story 3.2 planning (Predictive Transfer Engine — see [epics.md](epics.md)).
+- **Epic 3** — in progress. Stories 3.1 (Versioned Split Rules) + 3.2 (Buffer State Reader) shipped.
+- **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-15 shipped.
+- **Next:** Story 3.3 planning (Recurring Cost Forecast — see [epics.md](epics.md)).
 
 ## Refresh trigger
 
@@ -24,7 +24,8 @@ Routine maint-story merges only need a status-log entry (newest first).
 
 Append-only one-line summary per merged story. Newest first.
 
-- **2026-04-26** — story-maint-15 shipping. README.md status section + Scripts table refresh (`npm run ingest` added, Documentation list points to status.md); status log catches up with maint-13 / maint-14.
+- **2026-04-26** — Story 3.2 shipping. Buffer State Reader: `BufferStateService` (pure Core, mirrors `SplitRulesService`) + `BufferLedgerQuery` port returning `Result<Money>` + `SqliteBufferLedgerQuery` adapter using `substr(occurred_at, 1, 10) <= ?` for receipt-truth same-day inclusivity. Establishes bucket→ledger-account convention via explicit `account` field on `BufferBucket`. First epic-3 story to round-trip both `plan-reviewer` and `code-reviewer` sub-agents end-to-end.
+- **2026-04-26** — story-maint-15 merged (#71). README.md status section + Scripts table refresh (`npm run ingest` added, Documentation list points to status.md); status log catches up with maint-13 / maint-14.
 - **2026-04-26** — story-maint-14 merged (#70). `code-reviewer` sub-agent for Phase 4 retro-check + CLAUDE.md § 6.1 phase 4 wiring. Symmetric to plan-reviewer; tier-separated scan vs tag.
 - **2026-04-26** — story-maint-13 merged (#69). `plan-reviewer` sub-agent for Phase 2 critical review + CLAUDE.md § 6.1 phase 2 wiring + § 6.3 session-restart note for new custom agents. Dogfood test caught and fixed `docs/architecture.md` validity-window drift inherited from maint-12.
 - **2026-04-26** — story-maint-12 merged (#68). Process refresh: CLAUDE.md compressed (168 → 140 lines), `docs/status.md` introduced as authoritative current-position source, maintenance-sub-loop checklist extracted to template, drift-detection retro item added, story-maint-09 Try-1 disposition recorded.

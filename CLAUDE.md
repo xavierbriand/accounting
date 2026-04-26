@@ -84,7 +84,7 @@ Two formal gates: **DoR** (phases 1–2 complete) · **DoD** (phases 3–5 compl
 
 ### 6.3 Sonnet return format
 
-Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model.
+Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model. **New custom agents** added to `.claude/agents/*.md` require a session restart to register with the harness Agent tool. For same-session verification, invoke `general-purpose` with the spec file's contents inline as the prompt.
 
 ### 6.4 Commit convention
 

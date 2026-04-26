@@ -13,10 +13,9 @@ export class SqliteBufferLedgerQuery implements BufferLedgerQuery {
   private readonly stmt: Database.Statement;
 
   constructor(private readonly db: Database.Database) {
-    // Sum amount_cents grouped by side and currency for a given account + asOf date.
-    // substr(occurred_at, 1, 10) extracts the YYYY-MM-DD prefix (receipt-truth local date),
-    // enabling same-day entry inclusion regardless of timezone offset.
-    // All bindings are parameterised — no string concatenation (security-checklist §SQL).
+    // substr(occurred_at, 1, 10) compares receipt-truth local dates: it includes
+    // same-day rows regardless of timezone offset, where a raw `<= 'YYYY-MM-DD'`
+    // would lex-exclude any row with a `T...` suffix.
     this.stmt = db.prepare(`
       SELECT side, currency, SUM(amount_cents) AS total_cents
       FROM transaction_entries te

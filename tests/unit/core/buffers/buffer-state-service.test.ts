@@ -247,8 +247,10 @@ describe('BufferStateService', () => {
       );
     });
 
-    it('Property: order-independence — shuffled fake-ledger entries yield identical BufferState[]', () => {
-      // fails if service result depends on entry insertion order
+    it('Property: per-bucket balance is independent of bucket order in config', () => {
+      // fails if BufferStateService.getStateAsOf produces different per-bucket balances
+      // when the same buckets are reordered in the input config (e.g., if the service
+      // accidentally cross-wires bucket→account by index instead of by account string).
       fc.assert(
         fc.property(
           fc.array(
@@ -256,30 +258,29 @@ describe('BufferStateService', () => {
               name: fc.string({ minLength: 1, maxLength: 5 }),
               cents: fc.integer({ min: 0, max: 10_000_00 }),
             }),
-            { minLength: 1, maxLength: 5 },
+            { minLength: 2, maxLength: 5 },
           ),
           (items) => {
-            // Deduplicate names
             const deduped = items.filter(
-              (item, i, arr) => arr.findIndex(x => x.name === item.name) === i
+              (item, i, arr) => arr.findIndex(x => x.name === item.name) === i,
             );
+            if (deduped.length < 2) return true;
             const buckets = deduped.map((item, i) =>
-              makeBucket(item.name, `assets:buffer:${i}`, 100_00)
+              makeBucket(item.name, `assets:buffer:${i}`, 100_00),
             );
             const balances = Object.fromEntries(
-              deduped.map((item, i) => [`assets:buffer:${i}`, makeEur(item.cents)])
+              deduped.map((item, i) => [`assets:buffer:${i}`, makeEur(item.cents)]),
             );
             const ledger = fakeLedger(balances);
-            const service = new BufferStateService(buckets, 'EUR', ledger);
-            const r1 = service.getStateAsOf('2026-04-26');
-            const r2 = service.getStateAsOf('2026-04-26');
+            const reversed = [...buckets].reverse();
+            const r1 = new BufferStateService(buckets, 'EUR', ledger).getStateAsOf('2026-04-26');
+            const r2 = new BufferStateService(reversed, 'EUR', ledger).getStateAsOf('2026-04-26');
             if (r1.isFailure || r2.isFailure) return false;
-            return r1.value.every(
-              (s, i) => s.balance.amount === r2.value[i].balance.amount &&
-                        s.status === r2.value[i].status
-            );
-          }
-        )
+            const byName1 = new Map(r1.value.map(s => [s.name, s.balance.amount]));
+            const byName2 = new Map(r2.value.map(s => [s.name, s.balance.amount]));
+            return [...byName1].every(([name, bal]) => byName2.get(name) === bal);
+          },
+        ),
       );
     });
 
@@ -371,47 +372,37 @@ describe('BufferStateService', () => {
       expect(result.isSuccess).toBe(true);
     });
 
-    it('Property: monotonicity — debit-only ledger: earlier asOf <= later asOf balance', () => {
-      // fails if asOf filtering is not monotonic (e.g. query ignores the date parameter)
-      // Use two explicit asOf dates and two cumulative sums simulated by fake ledger.
+    it('Property: getStateAsOf forwards the asOf date verbatim to the ledger port', () => {
+      // fails if BufferStateService stops passing the `date` argument through to
+      // sumEntriesByAccount (e.g., hardcoded date, dropped argument, swapped order).
+      // SQL-level monotonicity over receipt-truth dates is verified by the integration
+      // tests in tests/integration/infra/db/sqlite-buffer-ledger-query.test.ts; this
+      // service-tier property only asserts the wiring contract.
       const isoDateArb = fc
         .integer({ min: 2020, max: 2030 })
         .chain(year =>
-          fc
-            .integer({ min: 1, max: 12 })
-            .chain(month =>
-              fc
-                .integer({ min: 1, max: 28 })
-                .map(day => {
-                  const mm = String(month).padStart(2, '0');
-                  const dd = String(day).padStart(2, '0');
-                  return `${year}-${mm}-${dd}`;
-                })
-            )
+          fc.integer({ min: 1, max: 12 }).chain(month =>
+            fc.integer({ min: 1, max: 28 }).map(day => {
+              const mm = String(month).padStart(2, '0');
+              const dd = String(day).padStart(2, '0');
+              return `${year}-${mm}-${dd}`;
+            }),
+          ),
         );
 
       fc.assert(
-        fc.property(
-          isoDateArb,
-          isoDateArb,
-          fc.integer({ min: 0, max: 10_000_00 }),
-          fc.integer({ min: 0, max: 10_000_00 }),
-          (date1, date2, cents1, cents2) => {
-            const [asOf1, asOf2] = [date1, date2].sort();
-            // Debit-only: balance at asOf1 <= balance at asOf2
-            // (asOf2 may include more entries)
-            const bal1 = cents1;
-            const bal2 = cents1 + cents2;
-
-            const bucket = makeBucket('Car', 'assets:buffer:car', 0);
-            const ledger1 = fakeLedger({ 'assets:buffer:car': makeEur(bal1) });
-            const ledger2 = fakeLedger({ 'assets:buffer:car': makeEur(bal2) });
-            const r1 = new BufferStateService([bucket], 'EUR', ledger1).getStateAsOf(asOf1);
-            const r2 = new BufferStateService([bucket], 'EUR', ledger2).getStateAsOf(asOf2);
-            if (r1.isFailure || r2.isFailure) return false;
-            return r1.value[0].balance.amount <= r2.value[0].balance.amount;
-          }
-        )
+        fc.property(isoDateArb, (asOf) => {
+          let observedDate: string | undefined;
+          const recordingLedger: BufferLedgerQuery = {
+            sumEntriesByAccount(_account, expectedCurrency, asOfDate) {
+              observedDate = asOfDate;
+              return Money.fromCents(0, expectedCurrency);
+            },
+          };
+          const bucket = makeBucket('Car', 'assets:buffer:car', 0);
+          const result = new BufferStateService([bucket], 'EUR', recordingLedger).getStateAsOf(asOf);
+          return result.isSuccess && observedDate === asOf;
+        }),
       );
     });
   });

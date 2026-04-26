@@ -41,7 +41,7 @@ The `recurring:` schema admits per-rule `validFrom` + optional `validTo` + optio
 - `validTo < validFrom` for a rule,
 - amendments are not strictly ascending by `validFrom`,
 - the first amendment's `validFrom` is not strictly after the rule's `validFrom`,
-- `validTo` is set and the last amendment's `validFrom` is `>= validTo` (an amendment that never applies),
+- `validTo` is set and the last amendment's `validFrom` is **strictly greater than** `validTo` (an amendment that never applies); `amendment.validFrom == validTo` is **allowed** because the closed-interval `validTo` includes that day's occurrence,
 - any date string is not ISO 8601 `YYYY-MM-DD`.
 
 **And** an empty `recurring: []` config is valid — the forecast over any window returns `Result.ok([])`.
@@ -56,7 +56,7 @@ The `recurring:` schema admits per-rule `validFrom` + optional `validTo` + optio
 - `AppConfig` (modified): adds `readonly recurring: readonly RecurringRule[]`.
 - `ForecastOccurrence` (new) at `src/core/recurring/forecast-occurrence.ts`: `{ readonly name: string; readonly category: string; readonly expectedDate: string; readonly amount: Money }`.
 - `RecurringForecastService` (new) at `src/core/recurring/recurring-forecast-service.ts`: `forecastBetween(from: string, to: string): Result<readonly ForecastOccurrence[]>`. Constructor: `(rules: readonly RecurringRule[])`.
-- `cadence` helpers (new) at `src/core/recurring/cadence.ts` (~40 LOC): `nextOccurrence(date: string, cadence: RecurringCadence): string` (with day-of-month clamp) and `enumerateOccurrences(validFrom: string, validTo: string | undefined, cadence: RecurringCadence, windowFrom: string, windowTo: string): readonly string[]`. Pure; no system clock.
+- `cadence` helpers (new) at `src/core/recurring/cadence.ts` (~50 LOC): single public export `enumerateOccurrences(validFrom: string, validTo: string | undefined, cadence: RecurringCadence, windowFrom: string, windowTo: string): readonly string[]`. Internally ratchets from the original `validFrom` anchor (not from each previous occurrence) so day-of-month clamp recovers correctly: `validFrom: 2024-01-31` monthly → `2024-01-31, 2024-02-29, 2024-03-31, 2024-04-30, …` (anchor day = 31, clamped per target month). Internal helper `daysInMonth(year, month)` may be private; **`nextOccurrence` is NOT exported** (a two-arg `(date, cadence)` form cannot preserve the anchor day across overflow steps — confirmed by Phase 2 plan-reviewer). Pure; no system clock.
 
 YAML format change: `recurring:` becomes a recognised top-level section. Empty array allowed; section missing entirely also allowed (defaults to `[]`).
 
@@ -97,18 +97,18 @@ Six scenarios, all in-process (no port, no adapter — pure config service). The
 ```gherkin
 Feature: Recurring cost forecast (Story 3.3)
 
-  Scenario: monthly forecast over a window with no amendments and no validTo
+  Scenario: monthly forecast — window upper bound exactly matches an occurrence
     Given a config with one recurring rule:
       | name    | category      | cadence | amount | validFrom  |
       | Netflix | Subscriptions | monthly | 12.99  | 2026-01-15 |
-    When I forecast between "2026-03-01" and "2026-05-31"
+    When I forecast between "2026-03-01" and "2026-05-15"
     Then the result is success
     And the forecast lists exactly:
       | name    | expectedDate | amount     |
       | Netflix | 2026-03-15   | 12.99 EUR  |
       | Netflix | 2026-04-15   | 12.99 EUR  |
       | Netflix | 2026-05-15   | 12.99 EUR  |
-    # fails if cadence stepping is wrong, window bounds aren't inclusive, or sort order drifts.
+    # fails if cadence stepping is wrong, the closed-interval `to` boundary is exclusive (May 15 row missing), or sort order drifts.
 
   Scenario: amendments shift amount mid-window
     Given a config with one recurring rule:
@@ -157,19 +157,21 @@ Feature: Recurring cost forecast (Story 3.3)
 
   Scenario: invalid YAML rejected at parse with a path-cited error
     Given a config where the second recurring rule has cadence "fortnightly"
-    When the configuration is loaded
+    When the recurring config is parsed
     Then loading fails with an error containing "recurring.1.cadence"
     # fails if the cadence enum is missing, or the path-citation drops the index.
+    # NB: step renamed from `When the configuration is loaded` to avoid quickpickle ambiguity collision with split-rules.steps.ts (mirrors Story 3.2 buffer-status step rename).
 ```
 
 ## Property tests (fast-check, DoD #3)
 
 Co-located with unit tests in `tests/unit/core/recurring/recurring-forecast-service.test.ts` and `tests/unit/core/recurring/cadence.test.ts`:
 
-1. **Occurrence-count totality** — for any `(validFrom, validTo?, cadence, [from, to])` with `from ≤ to`, the number of occurrences equals `floor((min(validTo, to) − max(validFrom, from)) / cadenceStep) + 1` when the intersection is non-empty, else `0`.
-2. **Boundary inclusivity on the window** — `expectedDate == from` is included; `expectedDate == to` is included.
+1. **Per-occurrence well-formedness** — for any `(validFrom, validTo?, cadence, [from, to])` with `from ≤ to`, every output `expectedDate d` satisfies `validFrom ≤ d`, (`validTo === undefined OR d ≤ validTo`), and `from ≤ d ≤ to`. Cleaner than a closed-form count formula (rejected during plan review for ambiguity over month vs day arithmetic with DoM clamp).
+1b. **Cadence-step regularity** — successive occurrences differ by exactly the cadence step in calendar months (1 / 3 / 12), modulo the DoM clamp ratchet from the original anchor. Specifically, if occurrences are `[d_0, d_1, ..., d_n]`, then `monthsBetween(validFrom, d_i)` equals `i × cadenceStep` for every i. This isolates the anchor-ratchet correctness from the per-element invariant in #1.
+2. **Boundary inclusivity on the window** — `expectedDate == from` is included; `expectedDate == to` is included (also exercised by Gherkin scenario 1).
 3. **Amendment-amount selection** — for any `(rule, amendment_list, occurrence_date d)`, the chosen amount equals the amount of the latest entry in `[{validFrom: rule.validFrom, amount: rule.amount}, ...rule.amendments]` with `validFrom ≤ d`. Amendments inclusive on their `validFrom`.
-4. **DoM clamp determinism** — `nextOccurrence` applied N times to a `validFrom` ending on day 29/30/31 produces a deterministic sequence; in particular, leap-year recovery on annual cadence (`2024-02-29 → 2025-02-28 → 2026-02-28 → 2027-02-28 → 2028-02-29`).
+4. **DoM clamp determinism via the public surface** — `enumerateOccurrences(validFrom='2024-01-31', validTo=undefined, 'monthly', ...)` yields `[2024-01-31, 2024-02-29, 2024-03-31, 2024-04-30, 2024-05-31, ...]` — the anchor day = 31, clamped per target month. `enumerateOccurrences(validFrom='2024-02-29', validTo=undefined, 'annual', ...)` yields `[2024-02-29, 2025-02-28, 2026-02-28, 2027-02-28, 2028-02-29, ...]`. **Tested through `enumerateOccurrences` (the public surface), not against a private `nextOccurrence`** — Phase 2 plan-review found that a `(date, cadence)` two-arg form cannot deliver this behaviour because the anchor day is lost across overflow steps.
 5. **Sort stability** — the `forecastBetween` output is sorted ascending by `expectedDate`; ties resolved by config index (verified by interleaving two rules whose occurrences land on the same date).
 6. **Out-of-range window → empty forecast** — when the window is entirely after `validTo` or entirely before `validFrom`, output is `[]`.
 7. **Purity / no system clock** — source of `src/core/recurring/recurring-forecast-service.ts` and `src/core/recurring/cadence.ts` MUST NOT contain `Date\.now`, `new Date\(\s*\)` (the parameterless form — `new Date(string)` for ISO parsing IS allowed), or `performance\.now`. Asserted via regex on the file contents.
@@ -222,6 +224,8 @@ No CLI / `program.ts` change → R4 (composition-root subprocess test) does not 
 - **No ledger reads.** `RecurringForecastService` is config-only. Variance vs actual transactions, "did Netflix actually charge in April?" detection, and "extra unexpected subscription found" alerts are Story 3.4's responsibility (or a later, dedicated story).
 - **No occurrence dedup against the ledger.** A user who paid May rent early will see both the actual transaction (Story 3.2's data) and the forecasted May 1 occurrence in 3.3's output. Deduping is again 3.4's responsibility — 3.3 reports what *should* happen, not what *has* happened.
 - **`new Date(string)` parsing edge.** `new Date('2026-13-01')` returns `Invalid Date` rather than throwing. The cadence helpers explicitly check `isNaN(date.getTime())` after parse and fail with a path-cited error rather than silently producing `'NaN-NaN-NaN'`. Property test covers a fast-check generator that includes invalid dates.
+- **Validity-window divergence from Story 3.1.** Story 3.1's splits use *implicit* `validTo` (the next window's `validFrom` defines the end), eliminating the overlap/gap bug class by construction. Story 3.3 uses *explicit* per-rule `validTo` because subscription/rent contracts have independent lifecycles, and the gap-or-overlap class is mitigated by the per-rule schema validation (`validTo >= validFrom`, amendments strictly ascending, `last_amendment.validFrom <= validTo`). The tradeoff: 3.3 cannot have *cross-rule* overlap or gap problems (each rule is independent), so the implicit-end discipline isn't applicable here. Documented for posterity.
+- **Service-method LOC growth risk.** `RecurringForecastService.forecastBetween` does ISO-validate × 2 + range-check + rule-loop + amendment-select + sort. Estimated 35–50 LOC; if it crosses the 50-LOC § 4 guideline, extract `selectAmount(rule, occurrenceDate)` and `enumerateRule(rule, from, to)` helpers in slice 7 or slice 10.
 
 ## Out of scope
 

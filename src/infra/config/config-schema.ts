@@ -4,6 +4,20 @@ import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { AppConfig } from '@core/config/app-config.js';
 
+function findDuplicateIndices<T>(items: readonly T[], keyFn: (t: T) => string): number[] {
+  const seen = new Map<string, number>();
+  const dupes: number[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const key = keyFn(items[i]);
+    if (seen.has(key)) {
+      dupes.push(i);
+    } else {
+      seen.set(key, i);
+    }
+  }
+  return dupes;
+}
+
 const SplitRuleSchema = z.object({
   partner: z.string().min(1),
   ratio: z.number().min(0).max(1),
@@ -27,16 +41,13 @@ const SplitWindowSchema = z
         message: `ratios must sum to 1.0 (got ${sum.toFixed(4)})`,
       });
     }
-    const names = win.rules.map(r => r.partner);
-    names.forEach((n, i) => {
-      if (names.indexOf(n) !== i) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['rules', i, 'partner'],
-          message: 'duplicate partner',
-        });
-      }
-    });
+    for (const i of findDuplicateIndices(win.rules, r => r.partner)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['rules', i, 'partner'],
+        message: 'duplicate partner',
+      });
+    }
   });
 
 const BufferBucketRawSchema = z.object({
@@ -91,18 +102,12 @@ const RawConfigSchema = z
       .array(AccountConfigSchema)
       .min(1)
       .superRefine((accts, ctx) => {
-        const ids = accts.map(a => a.id);
-        const prefixes = accts.map(a => a.filenamePrefix);
-        ids.forEach((id, i) => {
-          if (ids.indexOf(id) !== i) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'id'], message: 'duplicate id' });
-          }
-        });
-        prefixes.forEach((p, i) => {
-          if (prefixes.indexOf(p) !== i) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'filenamePrefix'], message: 'duplicate prefix' });
-          }
-        });
+        for (const i of findDuplicateIndices(accts, a => a.id)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'id'], message: 'duplicate id' });
+        }
+        for (const i of findDuplicateIndices(accts, a => a.filenamePrefix)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'filenamePrefix'], message: 'duplicate prefix' });
+        }
       }),
     splits: z
       .array(SplitWindowSchema)
@@ -145,16 +150,13 @@ const RawConfigSchema = z
         });
       })
       .superRefine((buffers, ctx) => {
-        const names = buffers.map(b => b.name);
-        names.forEach((name, i) => {
-          if (names.indexOf(name) !== i) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: [i, 'name'],
-              message: 'duplicate name',
-            });
-          }
-        });
+        for (const i of findDuplicateIndices(buffers, b => b.name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'name'],
+            message: 'duplicate name',
+          });
+        }
       }),
   })
   .strict();

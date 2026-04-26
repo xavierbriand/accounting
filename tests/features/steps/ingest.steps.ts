@@ -63,11 +63,9 @@ Given('a BPCE CSV copied to that temp dir as {string}', function (state: IngestW
 
 Given('the CSV has been committed interactively', async function (state: IngestWorld) {
   // Seed the DB by running runIngestCommand directly with an auto-confirm prompter.
-  // Inquirer's `select` requires a TTY for interactive navigation; using the internal
-  // API with an auto-confirm prompter is the reliable cross-platform equivalent of
-  // "the user accepted all classifications and confirmed the batch."
-  // (plan deviation: spawnCliInteractive not used here because Inquirer select requires
-  // a TTY for keypress events; documented in Deviations section.)
+  // Inquirer's `select` requires a TTY; piped stdin can't drive it. The
+  // in-process approach is the deterministic equivalent of "the user accepted
+  // all classifications and confirmed the batch."
   const db = new Database(state.dbPath!);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');

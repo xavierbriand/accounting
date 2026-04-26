@@ -42,10 +42,8 @@ async function runIngestInProcess(
   saveBatchOverride?: { saveBatch: (outcomes: Parameters<SqliteTransactionRepository['saveBatch']>[0]) => ReturnType<SqliteTransactionRepository['saveBatch']> },
 ): Promise<void> {
   // Uses runIngestCommand in-process with an auto-confirm prompter.
-  // Inquirer's `select` requires a TTY for keypress events; piped stdin cannot drive it.
-  // This in-process approach is the reliable cross-platform equivalent of
-  // "the user accepted all classifications and confirmed the batch."
-  // (plan deviation: spawnCliInteractive not used because Inquirer select requires TTY)
+  // Inquirer's `select` requires a TTY; piped stdin can't drive it. In-process
+  // invocation with a mocked prompter is the deterministic equivalent.
   const db = new Database(state.dbPath!);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -104,7 +102,7 @@ When('I run ingest interactively with auto-confirm', async function (state: Comm
   await runIngestInProcess(state);
 });
 
-When('I run ingest interactively with auto-confirm and a failing repo', async function (state: CommitWorld) {
+When('I run ingest interactively and the database commit fails', async function (state: CommitWorld) {
   // Simulates a UNIQUE constraint on idempotency_hash — the real DB-level error
   // the production path produces — without requiring a DB-level collision setup.
   // (A DB-level collision would be filtered by the idempotency check before reaching

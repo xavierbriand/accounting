@@ -16,10 +16,6 @@ function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;
 }
 
-function makeUsd(cents: number): Money {
-  return Money.fromCents(cents, 'USD').value;
-}
-
 function makeBucket(
   name: string,
   account: string,
@@ -36,9 +32,9 @@ function makeBucket(
 
 function fakeLedger(balances: Record<string, Money>): BufferLedgerQuery {
   return {
-    sumEntriesByAccount(account: string, _expectedCurrency: string, _asOfDate: string): Result<Money> {
+    sumEntriesByAccount(account: string, expectedCurrency: string): Result<Money> {
       const bal = balances[account];
-      if (bal === undefined) return Money.fromCents(0, _expectedCurrency);
+      if (bal === undefined) return Money.fromCents(0, expectedCurrency);
       return Result.ok(bal);
     },
   };

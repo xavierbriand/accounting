@@ -13,9 +13,9 @@ Feature: Buffer state reader (Story 3.2)
       | assets:buffer:vac  | debit  | 2000   |
     When I read buffer state as of "2026-04-26"
     Then the result is success
-    And "Car"   has balance 800.00 EUR  and status "below"
+    And "Car" has balance 800.00 EUR and status "below"
     And "House" has balance 6000.00 EUR and status "on-target"
-    And "Vac"   has balance 2000.00 EUR and status "above-cap"
+    And "Vac" has balance 2000.00 EUR and status "above-cap"
     # fails if status thresholds are inverted or formatting drifts.
     # Note: balance == target / balance == cap boundary inclusivity is covered by property test #2 (fast-check), not this scenario.
 

@@ -123,17 +123,6 @@ Then('the result is failure', function (state: World) {
 });
 
 Then(
-  '{string} has balance {float} EUR  and status {string}',
-  function (state: World, name: string, balance: number, status: string) {
-    const states = state.stateResult!.value;
-    const entry = states.find(s => s.name === name.trim());
-    expect(entry).toBeDefined();
-    expect(entry!.balance.amount).toBe(Math.round(balance * 100));
-    expect(entry!.status).toBe(status);
-  },
-);
-
-Then(
   '{string} has balance {float} EUR and status {string}',
   function (state: World, name: string, balance: number, status: string) {
     const states = state.stateResult!.value;

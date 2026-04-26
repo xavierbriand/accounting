@@ -49,7 +49,7 @@
 
 ### Versioning for rules — validity window pattern
 
-- **Decision:** rules with a start + end date (`valid_from`, `valid_to`); queries resolve the active rule for any given transaction date.
+- **Decision:** rules with a start date (`validFrom`); each window's end is implicit — defined by the next window's `validFrom`, last window is open-ended. Queries resolve the active rule for any given transaction date by selecting the window whose `validFrom <= date` with the latest `validFrom`. (Story 3.1 chose the implicit-`validTo` shape; the original design considered an explicit `valid_from`/`valid_to` pair but the implicit-end form has no overlap-or-gap class of bug by construction.)
 - **Rationale:** allows historical recalculation ("time travel") without the complexity of full event sourcing. Simple SQL resolves the active rule for any transaction date.
 
 ### Command execution — use case pattern

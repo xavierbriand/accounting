@@ -46,3 +46,23 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # fails if: --json output hardcodes duplicates: [] or omits the array entirely.
     # Story 2.4 retro action A: mock-diversity check — assertions run against a
     # non-default fixture (5 duplicates, not 0).
+
+  Scenario: dbPath in accounting.yaml is honoured (closes #65) (story-maint-11)
+    Given a fresh tmp dir
+    And an accounting.yaml at tmp dir with dbPath: "./ledger.db"
+    When I run migrate with no --db-path-override
+    Then the migration creates the file at "ledger.db"
+    And no file exists at "accounting.db"
+    # fails if: program.ts uses the hardcoded 'accounting.db' default instead of
+    # config.dbPath, leaving ledger.db non-existent and accounting.db populated.
+
+  Scenario: --db-path-override warns and overrides YAML dbPath (story-maint-11)
+    Given a fresh tmp dir
+    And an accounting.yaml at tmp dir with dbPath: "./ledger.db"
+    When I run migrate with --db-path-override "recovery.db"
+    Then the migration creates the file at "recovery.db"
+    And no file exists at "ledger.db"
+    And stderr contains "[warning]"
+    And stderr contains "--db-path-override is set"
+    # fails if: --db-path-override is silently honoured (no warn), or the rename
+    # didn't propagate (CLI parses old --db-path), or YAML dbPath wins over the override.

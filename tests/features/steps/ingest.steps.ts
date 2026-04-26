@@ -188,3 +188,33 @@ Then('the JSON payload contains no partner names verbatim', function (state: Ing
   expect(raw).not.toContain('Alice');
   expect(raw).not.toContain('Bob');
 });
+
+// Step definitions for YAML-authoritative dbPath scenarios (story-maint-11)
+
+Given('a fresh tmp dir', function (state: IngestWorld) {
+  const tmpDir = makeTmpDir();
+  state.tmpDir = tmpDir;
+});
+
+Given('an accounting.yaml at tmp dir with dbPath: {string}', function (state: IngestWorld, dbPathValue: string) {
+  writeStubYaml(state.tmpDir!, { dbPath: dbPathValue });
+});
+
+When('I run migrate with no --db-path-override', function (state: IngestWorld) {
+  state.lastResult = spawnCli(['migrate'], { cwd: state.tmpDir });
+});
+
+When('I run migrate with --db-path-override {string}', function (state: IngestWorld, overridePath: string) {
+  const resolvedOverride = path.join(state.tmpDir!, overridePath);
+  state.lastResult = spawnCli(['migrate', '--db-path-override', resolvedOverride], { cwd: state.tmpDir });
+});
+
+Then('the migration creates the file at {string}', function (state: IngestWorld, relativePath: string) {
+  const fullPath = path.join(state.tmpDir!, relativePath);
+  expect(fs.existsSync(fullPath)).toBe(true);
+});
+
+Then('no file exists at {string}', function (state: IngestWorld, relativePath: string) {
+  const fullPath = path.join(state.tmpDir!, relativePath);
+  expect(fs.existsSync(fullPath)).toBe(false);
+});

@@ -17,7 +17,7 @@ On conflict between this file and a `docs/` file, `docs/` wins. The retrospectiv
 
 **Couples Expense Sharing App** — a local-first, CLI-based "predictive asset-based financial engine" for couples managing joint finances. Replaces reactive joint-account top-ups with a deterministic engine that predicts fair transfers, buffers volatility, and keeps an immutable ledger.
 
-**Current position:** Epic 2 complete (Stories 1.1–1.4 + 2.1–2.5 shipped). Epic 3 in progress — Story 3.1 (Versioned Split Rules) shipped. story-maint-09 (ingest-CLI factory wiring + stale-prompt cleanup) shipped immediately before Story 3.2. **Next: Story 3.2 planning** (Predictive Transfer Engine — see [docs/epics.md](docs/epics.md)). *This line is refreshed by the retrospective phase of each story.*
+Current position: see [docs/status.md](docs/status.md). Refreshed by the retro of any story that ships an epic milestone or changes the "Next" line.
 
 **Stack:** Node.js 20, TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
 
@@ -40,7 +40,7 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 - **Currency mismatch is a failure, not a warning** — `Money` ops across currencies return `Result.fail`.
 - **Allocations** use Largest Remainder so `sum(parts) == total` to the cent. Property-test with `fast-check`.
 - **Dates:** system events UTC; **transactions ISO 8601 with offset** (`2026-04-21T14:30:00+02:00`) to preserve "receipt truth".
-- **Versioned rules** (splits, buffer targets) use the Validity Window pattern (`valid_from`, `valid_to`).
+- **Versioned rules** (splits, buffer targets) use the Validity Window pattern (`validFrom`; `validTo` is implicit — defined by the next window's `validFrom`, last window is open-ended).
 - **PII** (IBANs, names, bank identifiers): redact in logs by default; never in test fixtures.
 
 ## 4. Style (cheat sheet → [engineering-standards.md](docs/engineering-standards.md))
@@ -55,114 +55,86 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 
 | Tier | Location | Purpose |
 | --- | --- | --- |
-| Acceptance | `tests/features/*.feature` + `steps/*.ts` | Outside-in BDD via `quickpickle` (installed when first `.feature` lands) |
+| Acceptance | `tests/features/*.feature` + `steps/*.ts` | Outside-in BDD via `quickpickle` |
 | Unit | `tests/unit/<mirror-of-src>/**/*.test.ts` | AAA, mock all Ports for Core |
 | Property | colocated with unit | `fast-check` for financial invariants |
-| Integration | `tests/integration/` (created when first needed) | Real SQLite/FS |
+| Integration | `tests/integration/` | Real SQLite/FS |
 
 - **100% branch coverage** on `src/core/`. Infra/CLI lower.
-- **TDD rhythm (outside-in):** failing acceptance scenario → failing unit test(s) → minimal green → unit pass → acceptance pass → refactor. See § 6.4 for commits.
-- **Batch ingestion — two stages.** *Parse:* malformed rows are skipped and reported individually; valid siblings proceed. *Commit:* the set of valid rows is written inside a single SQL transaction — all-or-nothing, rolled back on any DB-level failure. Authoritative policy in [docs/prd.md](docs/prd.md) and [docs/quality-assurance.md](docs/quality-assurance.md).
+- **TDD rhythm (outside-in):** failing acceptance → failing unit → minimal green → acceptance green → refactor. See § 6.4 for commits.
+- **Batch ingestion — two stages.** *Parse:* malformed rows skipped, reported individually; valid siblings proceed. *Commit:* valid rows in one SQL transaction — all-or-nothing. Authoritative policy in [docs/prd.md](docs/prd.md) and [docs/quality-assurance.md](docs/quality-assurance.md).
 
 ## 6. Development workflow
 
-The loop has two formal gates:
-- **Definition of Ready (DoR)** — met when phases 1 and 2 below are complete.
-- **Definition of Done (DoD)** — met when phases 3, 4, 5, and the merge checklist are all complete (see § 7).
+Two formal gates: **DoR** (phases 1–2 complete) · **DoD** (phases 3–5 complete, merge checklist — see § 7).
 
 ### 6.1 Phases
 
-Phases 1 and 2 compose DoR. Phases 3 and 4 drive to DoD. Phase 5 must complete before merge.
-
-1. **Plan** (Opus): collect intent → diverge on solutions → converge on one → capture Gherkin behaviour → open draft PR → hand-off plan for Sonnet. Plan file lives at `docs/plans/story-<id>.md` (committed alongside the code it plans — Story 2.2 retro finding, action A). **Production-code surface section (story-maint-10 retro):** when scenarios depend on changes to types, function signatures, output formats (JSON shapes, table schemas), or other production-code contracts, the plan must list those changes explicitly in a "Production-code surface" subsection. Mid-implementation discovery (Sonnet adding new types or renaming JSON fields to satisfy a scenario) is a planning gap — pre-authorise at plan time. story-maint-10 hit this with the `DuplicateIngestItem` type and the `--json` `needsReview` → `lowConfidence` rename. **Tool-bundle import audit (Story 3.1 retro action B):** when the plan introduces a new test framework, runtime tool, or CLI library, the Plan-agent stress-test step must list every `import` at the top of the tool's main bundle and cross-reference against the tool's `package.json` `dependencies`. Any undeclared transitive import (peer-dep-style or accidental) gets pre-authorised in the plan as an explicit dev-dep entry. Story 3.1 hit this with `quickpickle` 1.11.1's undeclared `pixelmatch` import — Sonnet papered over it with a local stub before properly declaring it the next slice; pre-authorising avoids the round-trip. **Composition-root subprocess test (story-maint-09 retro):** when the plan touches `src/cli/program.ts` (or any future composition root that wires Infra to Core), the test surface MUST include a subprocess-level integration test exercising the actual entry point — not just mocked unit tests against `runIngestCommand` or its peers. Mock-based tests structurally cannot catch wiring bugs (empty-collection constructor args, factories not threaded through, swapped Infra adapters, etc.). story-maint-09 hit this exactly: `new TransactionBuilder([], ...)` shipped through CI because every existing unit/integration test injected a mock `transactionBuilder`. Pattern reference: [tests/integration/cli/uninit-db-hint.test.ts](tests/integration/cli/uninit-db-hint.test.ts) (story-maint-03) or [tests/integration/cli/ingest-end-to-end-wiring.test.ts](tests/integration/cli/ingest-end-to-end-wiring.test.ts) (story-maint-09). **Plumbing detail:** subprocess tests that override `cwd` (e.g., for a tmpdir-scoped `accounting.yaml` stub) must pass `--tsconfig <absolute-project-root>/tsconfig.json` to `tsx`, otherwise tsx searches relative to the new `cwd` and `@core/*` path aliases fail with `ERR_MODULE_NOT_FOUND`. *Exit:* draft PR exists with template sections 1–6 filled.
-2. **Critical review on the plan** (Opus, 3 passes before implementation):
-   - **P1 — Functional.** Plan satisfies target FR/NFRs in [docs/prd.md](docs/prd.md) and story in [docs/epics.md](docs/epics.md); Gherkin complete and unambiguous.
-   - **P2 — Product Quality / QA.** Walk [docs/quality-assurance.md](docs/quality-assurance.md): accounting correctness, privacy compliance, coherence.
-   - **P3 — Engineering.** Walk [docs/engineering-standards.md](docs/engineering-standards.md), [docs/architecture.md](docs/architecture.md), [docs/security-checklist.md](docs/security-checklist.md).
-
-   Each suggestion tagged **adopted / deferred / rejected** in the Suggestion Log (template § 7). **Deferred items must link a GitHub issue** from the `deferred-suggestion` template. Rejected items carry a one-line reason. *Exit (DoR gate):* no un-tagged suggestions; plan rewritten; every `deferred` has an issue link.
-3. **Implement** (Sonnet via `Task` with the `sonnet-implementer` agent): writes failing acceptance scenario first, drives down to failing unit tests, makes green, commits per state. Returns the structured report (see 6.3). *Exit:* all tests green, report delivered, branch pushed. PR not yet marked ready.
-4. **Code review on the implementation + refactor plan** (Opus) — re-run P1/P2/P3 **against the actual code**:
-   - P1 retro-check: acceptance scenarios + unit tests actually deliver the intent. Audit that each `this test fails if …` note identifies the production path it guards, not just any path (Story 1.3 retro action E validated on Story 2.2; codified here per Story 2.2 retro action B). **Gherkin-to-test mapping audit (Story 2.5 retro action C):** walk every Gherkin scenario in the plan against the integration/unit test suite and confirm each scenario has at least one corresponding test whose `fails if …` clause regresses when the scenario's production path breaks. Missing scenarios are P1 blockers — file them as in-PR fixes, not follow-up issues. Example: Story 2.5's "round-trip idempotency" scenario shipped without a test; P1 caught it only via this audit. **Test-mechanism / `fails if` honesty audit (story-maint-10 retro):** for each Gherkin scenario, classify the backing test as in-process (mocked deps, direct service call) or subprocess (spawned binary). The scenario's `fails if` clause must not claim coverage that the chosen mechanism cannot deliver — e.g. an in-process test with a mocked prompter cannot regress on "the wiring through `program.ts` does not reach commitBatch", because the wiring isn't exercised. story-maint-10 caught this in 2.5a/b: Phase 4 rewrote the clauses and pointed wiring coverage to the subprocess scenario (2.1) and maint-09's regression test.
-   - P2 retro-check: walk QA doc against the diff. **Mock diversity check (Story 2.4 retro action A):** when the diff includes structured output (JSON payloads, tables, machine-readable formats), spot-check that at least one test assertion runs against a non-default mock fixture — e.g. a `--json` test must cover `duplicates: [item]`, not only `duplicates: []`, to catch hardcoded-default regressions that pass a zero-mock test suite.
-   - P3 retro-check: walk engineering-standards + security-checklist against the diff.
-
-   Produce a refactor plan; blockers are fixed before merge, not deferred. Delegate execution to Sonnet, with one exception: **trivial inline fixes** (retro finding, story-maint-01) — Opus may execute the refactor directly when **all** of: diff is under 5 LOC, a single file, the fix coordinates are pre-specified in the retro-check finding, and no design question remains (no helper naming, no cross-module placement, no type-surface judgment). Anything larger delegates to Sonnet. *Exit:* refactor merged back into the branch, CI green.
-5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. Action items either land in the same PR or become follow-up issues. *Exit:* file committed. Merge is user-gated.
+1. **Plan** (Opus): collect intent → converge → Gherkin → draft PR → hand off to Sonnet. Plan file at `docs/plans/story-<id>.md`. *Exit:* draft PR, sections 1–6 filled. Sub-rules (see § 8): **R1** plan file alongside code · **R2** production-code surface section · **R3** tool-bundle import audit · **R4** composition-root subprocess test when `program.ts` touched.
+2. **Critical review** (Opus, P1/P2/P3): tag every suggestion adopted/deferred/rejected. Deferred → GitHub issue. *Exit (DoR):* no un-tagged suggestions, every deferred has an issue link.
+3. **Implement** (Sonnet): failing acceptance → failing unit → green → structured report. *Exit:* tests green, branch pushed, PR in draft.
+4. **Code review + refactor** (Opus): re-run P1/P2/P3 against the code. Sub-rules (see § 8): **R5** Gherkin-to-test mapping · **R6** `fails if` honesty · **R7** test-mechanism honesty · **R8** mock diversity · **R9** trivial inline fix carve-out. *Exit:* refactor merged, CI green.
+5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. New rules add a row to § 8. *Exit:* file committed. Merge user-gated.
 
 ### 6.2 Model tier
 
-- **Opus:** planning, 3-phase critical review, code review, refactor planning, retrospective synthesis.
+- **Opus:** planning, critical review, code review, refactor planning, retrospective synthesis.
 - **Sonnet:** failing tests, implementation, refactor execution.
 - **Haiku:** not used yet.
 
 ### 6.3 Sonnet return format
 
-Emit exactly these sections, in order:
-```
-## What was built
-## Red → green sequence (per test)
-## Deviations from plan (with rationale)
-## Unknowns encountered
-## Proposed follow-ups
-## Files touched
-```
-Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md).
+Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model.
 
-**Invocation note (updated, story-maint-01 retro finding):** the Claude Code harness now registers `.claude/agents/*.md` custom agents with the Task / Agent tool. Invoke directly with `subagent_type: "sonnet-implementer"` — no `model` override or inline brief needed; the agent spec file's frontmatter supplies both. Prior Story 1.3 retro guidance ("use `subagent_type: 'general-purpose'` + inline brief") is superseded. If a future harness regression removes custom-agent support, fall back to the general-purpose + inline-brief pattern.
+### 6.4 Commit convention
 
-### 6.4 Commit convention inside a story
-
-State transitions. Story id in every subject, e.g. `(Story 1.3)`.
-
-- `test(<scope>): <scenario> — failing` (red)
-- `feat(<scope>): <scenario> — minimal green` (green)
-- `refactor(<scope>): <what>` (behaviour-preserving cleanup)
-
-**Green-on-landing `test:` commits are acceptable** when the earlier `feat:` commit already covered the tested branches and the subsequent `test:` is adding coverage for a sibling condition. Call it out in the return report's "Deviations" — the TDD-by-intent invariant (the test *would* have failed against a stripped-down implementation) still holds.
-
-**Empty `refactor:` commit with a justification message** (e.g. `refactor(db): tidy prepared statements (Story 1.3)` with body *"No-op: all functions under 50 LOC, naming is clear, no duplication identified"*) is an acceptable pattern when the refactor slot has nothing to clean up. Keeps the commit sequence aligned with the plan and documents the review.
-
-**Commit subjects: summary over enumeration (retro finding, Story 1.4).** Prefer a summary verb in the subject rather than listing every scenario the commit covers. `test(config): schema validation suite — failing (Story 1.4)` ages better than `test(config): rejects missing splits, non-ISO currency, ratio sum — failing (Story 1.4)` — the latter goes stale the moment an 11th assertion lands. Scenario details belong in the commit body, not the subject.
-
-**Plan in slices, not tests-per-commit (retro finding, Story 1.4).** When drafting the TDD commit sequence in the plan-for-Sonnet section, one slice = one behaviour + its tests + the minimal code to make them green (often one Gherkin scenario). Over-decomposing into per-assertion commits invites green-on-landing collapses that divorce the plan from execution. Target 6–10 commits per story; only split further when a slice's failing test genuinely cannot turn green without an intermediate `feat:` step.
-
-Squash on merge is optional.
+- `test(<scope>): <scenario> — failing` · `feat(<scope>): <scenario> — minimal green` · `refactor(<scope>): <what>`
+- Story id in every subject. See § 8: **R10** green-on-landing · **R11** empty refactor · **R12** summary verb · **R13** 6–10 commits/story. Squash on merge optional.
 
 ### 6.5 Refactor-during-green policy
 
-Obvious local cleanups (rename, extract small helper, collapse a duplicated literal) are allowed while tests are green if behaviour is preserved. Structural changes — new abstractions, cross-module moves, touching >~20 LOC of existing code — defer to the refactor phase. Sonnet calls this out in the return report.
+Local cleanups (rename, extract small helper, collapse literal) allowed while green if behaviour is preserved. Structural changes defer to refactor phase. Sonnet calls this out in the return report.
 
 ### 6.6 Story sizing
 
-One PR per story. More than ~3 Gherkin scenarios, or work likely to exceed one Sonnet Task round → split.
-
-**Adapter stories need coarser slices, not finer (retro finding, Story 2.1).** For a bank-CSV adapter, file-format reader, export target, or any boundary adapter, the minimum-viable implementation *intrinsically* includes a bundle of behaviours — encoding tolerance, per-row isolation, header validation, delimiter handling, basic invariants. Planning a separate `test:` + `feat:` pair for each of those invites green-on-landing collapses, because the first `feat:` that satisfies the happy path already covers the others. Pattern: **one slice for the adapter's "obvious basics"** (happy path + the invariants any correct implementation satisfies) + **one slice per deliberately-counterintuitive rule** (e.g., a sign-inversion, a locale quirk, a bank-specific edge case). Target 5–7 commits for adapter stories; finer slicing is for stories with genuinely independent behaviours.
+One PR per story. >~3 Gherkin scenarios or >1 Sonnet Task round → split. See § 8: **R14** adapter stories coarser slices.
 
 ### 6.7 Maintenance sub-loop
 
-Runs **before the planning phase of every new story**. Unconditional.
-
-- **Triage open issues:** re-prioritize, close stale, confirm `deferred-suggestion` items still relevant.
-- **Review open Dependabot PRs:** CI + diff + changelog. Routine bumps (patch or minor, any dep) → merge directly after CI + changelog check, no DoR/DoD/retro. **Major bumps** of runtime deps, **critical-path major bumps** (`better-sqlite3`, `dinero.js`, `zod`, `commander`, `vitest`), or any **breaking change** flagged in a changelog → issue + full story through the main loop. Minor/patch bumps of critical-path deps still merge routinely, but with a slightly closer changelog read (check for deprecations, removed exports, runtime-behaviour notes) — if anything looks non-trivial, escalate.
-- **`npm audit`:** `high`/`critical` → immediate issue, fix before the next story.
-
-**Major-bump-with-zero-code-change subcase.** When a major dep bump goes through the main loop and the breaking-change audit produces a zero-code-change verdict against a pre-planning probe (run `install` + `lint` + `build` + `test` + `audit` *before* committing the plan), the TDD rhythm in § 6.4 cannot apply by construction — there is no behaviour to test-drive. Sequence collapses to `chore(docs): plan` + `chore(deps): bump` + `refactor: empty slot` + `chore(retro)` (+ rebase/rename housekeeping commits as needed). Phase 3 (implementation) collapses into the Phase 1 probe — Sonnet delegation is pure ceremony for a two-file dep diff. Flag the collapse explicitly in the plan's "Implementation phase" section. Exemplars: [story-maint-05](docs/retrospectives/story-maint-05.md) (`@inquirer/prompts` 5→8), [story-maint-06](docs/retrospectives/story-maint-06.md) (ESLint 9→10). The same-PR landing of this rule satisfies § 7 item 10 for the triggering story (story-maint-06).
-
-Lighter than feature work. Aggregate learnings surface at the next per-story retrospective.
+Runs **before every story plan**. Run the [maintenance-sub-loop checklist](docs/templates/maintenance-sub-loop.md). **Major-bump-zero-code subcase:** collapse to 4 commits (`chore(docs)` + `chore(deps)` + `refactor:` empty + `chore(retro)`). See § 8: **R15**.
 
 ## 7. Definition of Done
-
-A story is merge-ready only when **all** of:
 
 1. `npm run lint && npm run build && npm test` — green on CI.
 2. Migrations idempotent.
 3. Every new invariant in Core has a property test.
-4. No `any`, no TODO comments left behind, no dead code.
-5. Commits follow the `test:` / `feat:` / `refactor:` rhythm of § 6.4 — or the `chore(docs)` / `chore(deps)` / `refactor: empty slot` / `chore(retro)` collapse of § 6.7's major-bump-with-zero-code-change subcase, when applicable. Each subject references the story id.
-6. All 10 sections of the PR template are filled — no `TBD` at merge.
-7. Suggestion log has no un-tagged items. Every `deferred` row links a GitHub issue.
-8. P1 / P2 / P3 retro-checks (§ 6.1 phase 4) all pass.
-9. Retrospective file committed at `docs/retrospectives/story-<id>.md`.
-10. Any new rule or constraint from the retrospective lands in the same PR as a CLAUDE.md / `docs/` / template edit.
+4. No `any`, no TODO comments, no dead code.
+5. Commits follow § 6.4 rhythm (or R15 collapse). Each subject references the story id.
+6. All 10 PR template sections filled — no `TBD`.
+7. Suggestion log: no un-tagged items; every `deferred` links an issue.
+8. P1/P2/P3 retro-checks pass.
+9. Retrospective file at `docs/retrospectives/story-<id>.md`.
+10. New rules/constraints land in the same PR as a CLAUDE.md / `docs/` edit.
 11. User has ticked the merge checklist.
+
+## 8. Rule provenance
+
+New retro rules MUST add a row here in the same PR; prose references the tag. Drift scan (see [retrospectives/README.md](docs/retrospectives/README.md)) catches misses.
+
+| Tag | Rule (one-line) | Originating retro |
+| --- | --- | --- |
+| R1 | Plan file committed alongside the code it plans | [story-2.2](docs/retrospectives/story-2.2.md) |
+| R2 | Production-code surface section enumerates type/signature/format changes | [story-maint-10](docs/retrospectives/story-maint-10.md) |
+| R3 | Tool-bundle import audit when a new framework/library enters the deps | [story-3.1](docs/retrospectives/story-3.1.md) |
+| R4 | Composition-root subprocess test required when `program.ts` is touched | [story-maint-09](docs/retrospectives/story-maint-09.md) |
+| R5 | Gherkin-to-test mapping audit at Phase 4 | [story-2.5](docs/retrospectives/story-2.5.md) |
+| R6 | `fails if` note identifies the production path it guards | [story-1.3](docs/retrospectives/story-1.3.md) / [story-2.2](docs/retrospectives/story-2.2.md) |
+| R7 | Test-mechanism honesty: in-process vs subprocess `fails if` scope | [story-maint-10](docs/retrospectives/story-maint-10.md) |
+| R8 | Mock diversity check on structured output (JSON, tables) | [story-2.4](docs/retrospectives/story-2.4.md) |
+| R9 | Trivial inline fix carve-out (≤5 LOC, single file, pre-specified) | [story-maint-01](docs/retrospectives/story-maint-01.md) |
+| R10 | Green-on-landing `test:` commits acceptable when sibling condition | (general) |
+| R11 | Empty `refactor:` commit with justification is acceptable | (general) |
+| R12 | Commit subject: summary verb over scenario enumeration | [story-1.4](docs/retrospectives/story-1.4.md) |
+| R13 | Plan in slices, target 6–10 commits; one slice = one behaviour | [story-1.4](docs/retrospectives/story-1.4.md) |
+| R14 | Adapter stories: coarser slices, target 5–7 commits | [story-2.1](docs/retrospectives/story-2.1.md) |
+| R15 | Major-bump-zero-code subcase: collapse to 4 chore/refactor commits | [story-maint-05](docs/retrospectives/story-maint-05.md) / [story-maint-06](docs/retrospectives/story-maint-06.md) |

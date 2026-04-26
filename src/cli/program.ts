@@ -16,6 +16,43 @@ import { runIngestCommand } from './commands/ingest-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
+import type { AppConfig } from '../core/config/app-config.js';
+import { Result } from '../core/shared/result.js';
+
+interface DbPathError {
+  code: number;
+  message: string;
+}
+
+interface ResolvedDb {
+  config: AppConfig;
+  resolvedDbPath: string;
+}
+
+function resolveDbPathForCommand(
+  options: { dbPathOverride?: string },
+  projectDir: string,
+  stderr: NodeJS.WritableStream,
+): Result<ResolvedDb, DbPathError> {
+  const configService = new FileConfigService({ projectDir });
+  const configResult = configService.load();
+  if (configResult.isFailure) {
+    return Result.fail({ code: 1, message: configResult.error });
+  }
+  const config = configResult.value;
+
+  if (options.dbPathOverride !== undefined) {
+    stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
+  }
+  const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
+
+  const validation = validateDbPath(effectiveDbPath);
+  if (validation.isFailure) {
+    return Result.fail({ code: 2, message: validation.error });
+  }
+
+  return Result.ok({ config, resolvedDbPath: validation.value });
+}
 
 const program = new Command();
 
@@ -29,25 +66,13 @@ program
   .description('Run database migrations')
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action((options: { dbPathOverride?: string }) => {
-    const configService = new FileConfigService({ projectDir: process.cwd() });
-    const configResult = configService.load();
-    if (configResult.isFailure) {
-      process.stderr.write(`error: ${configResult.error}\n`);
-      process.exit(1);
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
     }
-    const config = configResult.value;
-
-    if (options.dbPathOverride !== undefined) {
-      process.stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
-    }
-    const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
-
-    const validation = validateDbPath(effectiveDbPath);
-    if (validation.isFailure) {
-      process.stderr.write(`error: ${validation.error}\n`);
-      process.exit(2);
-    }
-    runMigrate(validation.value);
+    const { resolvedDbPath } = result.value;
+    runMigrate(resolvedDbPath);
   });
 
 program
@@ -58,25 +83,12 @@ program
   .option('--json', 'Output JSON instead of a table', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string }) => {
-    const configService = new FileConfigService({ projectDir: process.cwd() });
-    const configResult = configService.load();
-    if (configResult.isFailure) {
-      process.stderr.write(`error: ${configResult.error}\n`);
-      process.exit(1);
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
     }
-    const config = configResult.value;
-
-    if (options.dbPathOverride !== undefined) {
-      process.stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
-    }
-    const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
-
-    const validation = validateDbPath(effectiveDbPath);
-    if (validation.isFailure) {
-      process.stderr.write(`error: ${validation.error}\n`);
-      process.exit(2);
-    }
-    const resolvedDb = validation.value;
+    const { config, resolvedDbPath: resolvedDb } = result.value;
     const db = getDb(resolvedDb);
 
     const migrationCheck = assertMigrated(db, resolvedDb);

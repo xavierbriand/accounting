@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'child_process';
+import { spawnSync, spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -20,25 +20,20 @@ export interface SpawnOpts {
 
 /**
  * Runs the dist CLI synchronously and captures stdout/stderr.
- * Never throws — caught errors are returned as the result object.
+ * Never throws — always returns a result object with status, stdout, stderr.
  */
 export function spawnCli(args: string[], opts?: SpawnOpts): SpawnResult {
-  try {
-    const stdout = execFileSync('node', [DIST_CLI, ...args], {
-      encoding: 'utf8',
-      cwd: opts?.cwd,
-      env: { ...process.env, ...opts?.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return { status: 0, stdout, stderr: '' };
-  } catch (e) {
-    const err = e as { status: number | null; stdout: string | Buffer; stderr: string | Buffer };
-    return {
-      status: err.status ?? 1,
-      stdout: err.stdout?.toString() ?? '',
-      stderr: err.stderr?.toString() ?? '',
-    };
-  }
+  const result = spawnSync('node', [DIST_CLI, ...args], {
+    encoding: 'utf8',
+    cwd: opts?.cwd,
+    env: { ...process.env, ...opts?.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+  };
 }
 
 export interface InteractiveSpawnResult {
@@ -55,6 +50,11 @@ export interface InteractiveSpawnResult {
  * stdinLines: array of strings to write to stdin, in order.
  * waitForTexts: array of substrings to wait for on stderr before writing each
  *   corresponding stdinLine.  Must be the same length as stdinLines.
+ *
+ * Each waitForTexts[i] is waited for AFTER the previous write, so duplicate
+ * prompts (e.g., same question asked 3 times) are handled correctly:
+ * the helper tracks a per-write "search offset" into stderrBuf, so it waits
+ * for a NEW occurrence of the text past the point already consumed.
  *
  * Resolves when the child process exits.
  */
@@ -74,6 +74,7 @@ export function spawnCliInteractive(
     let stdoutBuf = '';
     let stderrBuf = '';
     let writeIndex = 0;
+    let searchOffset = 0;
 
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuf += chunk.toString();
@@ -87,9 +88,11 @@ export function spawnCliInteractive(
     function tryWrite(): void {
       while (writeIndex < waitForTexts.length) {
         const waitFor = waitForTexts[writeIndex];
-        if (!stderrBuf.includes(waitFor)) break;
+        const idx = stderrBuf.indexOf(waitFor, searchOffset);
+        if (idx === -1) break;
         const line = stdinLines[writeIndex];
         child.stdin?.write(line + '\n');
+        searchOffset = idx + waitFor.length;
         writeIndex++;
       }
     }

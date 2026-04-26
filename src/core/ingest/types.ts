@@ -33,9 +33,14 @@ export interface FreshIngestItem {
   readonly idempotencyHash: string;
 }
 
+export interface DuplicateIngestItem {
+  readonly item: IngestItem;
+  readonly idempotencyHash: string;
+}
+
 export interface IdempotencyOutcome {
   readonly fresh: readonly FreshIngestItem[];
-  readonly duplicates: readonly IngestItem[];
+  readonly duplicates: readonly DuplicateIngestItem[];
 }
 
 export type Classification = 'expense' | 'income' | 'internal-transfer';

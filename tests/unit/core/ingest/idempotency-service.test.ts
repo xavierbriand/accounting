@@ -70,8 +70,8 @@ describe('IdempotencyService.filterNew', () => {
       expect(fresh[0].item.occurredAt).toContain('2026-04-01');
       expect(fresh[1].item.occurredAt).toContain('2026-04-03');
       expect(fresh[2].item.occurredAt).toContain('2026-04-05');
-      expect(duplicates[0].occurredAt).toContain('2026-04-02');
-      expect(duplicates[1].occurredAt).toContain('2026-04-04');
+      expect(duplicates[0].item.occurredAt).toContain('2026-04-02');
+      expect(duplicates[1].item.occurredAt).toContain('2026-04-04');
     });
 
     it('fresh items carry their idempotency hash (FreshIngestItem shape)', () => {
@@ -246,7 +246,7 @@ describe('IdempotencyService.filterNew', () => {
             // Verify relative order of duplicates (items IN duplicateIndices, in input order)
             const expectedDupItems = items.filter((_, i) => dupeIndexSet.has(i));
             for (let i = 0; i < expectedDupItems.length; i++) {
-              if (duplicates[i] !== expectedDupItems[i]) return false;
+              if (duplicates[i].item !== expectedDupItems[i]) return false;
             }
 
             return true;

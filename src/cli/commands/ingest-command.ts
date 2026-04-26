@@ -3,7 +3,7 @@ import type { ConfigService } from '@core/ports/config-service.js';
 import type { CsvParser } from '@core/ports/csv-parser.js';
 import type { IdempotencyService } from '@core/ingest/idempotency-service.js';
 import type { TransactionBuilder } from '@core/ingest/transaction-builder.js';
-import type { BuildOutcome, ParseOutcome } from '@core/ingest/types.js';
+import type { BuildOutcome, DuplicateIngestItem, ParseOutcome } from '@core/ingest/types.js';
 import type { AccountConfig, AppConfig } from '@core/config/app-config.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
@@ -132,7 +132,7 @@ export async function runIngestCommand(
   }
 
   if (opts.nonInteractive || opts.json) {
-    return runNonInteractive(opts, account, built, lowConfidence, duplicates.length, parseOutcome.errors.length, stdout, stderr, exitCode);
+    return runNonInteractive(opts, account, built, lowConfidence, duplicates, parseOutcome.errors.length, stdout, stderr, exitCode);
   }
 
   const resolvedOutcomes = await runInteractiveLoop(built, lowConfidence, prompt, stderr, exitCode);
@@ -226,7 +226,7 @@ function runNonInteractive(
   account: AccountConfig,
   built: readonly BuildOutcome[],
   lowConfidence: readonly BuildOutcome[],
-  duplicatesCount: number,
+  duplicates: readonly DuplicateIngestItem[],
   parseErrorsCount: number,
   stdout: Writable,
   stderr: Writable,
@@ -240,14 +240,19 @@ function runNonInteractive(
     );
 
     if (opts.json) {
-      const needsReview = lowConfidence.map((o) => o.transaction.id);
+      const lowConfidenceIds = lowConfidence.map((o) => o.transaction.id);
+      const duplicatesPayload = duplicates.map((d) => ({
+        description: d.item.description,
+        idempotencyHash: d.idempotencyHash,
+      }));
       stdout.write(
         JSON.stringify({
           file: opts.file,
           source_account: account.id,
-          summary: { total: built.length, autoTagged: built.length - lowConfidence.length, needsReview: lowConfidence.length, duplicates: duplicatesCount, parseErrors: parseErrorsCount },
+          summary: { total: built.length, autoTagged: built.length - lowConfidence.length, lowConfidence: lowConfidence.length, duplicates: duplicates.length, parseErrors: parseErrorsCount },
           items: [],
-          needsReview,
+          lowConfidence: lowConfidenceIds,
+          duplicates: duplicatesPayload,
         }) + '\n',
       );
     }
@@ -273,12 +278,19 @@ function runNonInteractive(
       };
     });
 
+    const duplicatesPayload = duplicates.map((d) => ({
+      description: d.item.description,
+      idempotencyHash: d.idempotencyHash,
+    }));
+
     stdout.write(
       JSON.stringify({
         file: opts.file,
         source_account: account.id,
-        summary: { total: built.length, autoTagged: built.length, needsReview: 0, duplicates: duplicatesCount, parseErrors: parseErrorsCount },
+        summary: { total: built.length, autoTagged: built.length, lowConfidence: 0, duplicates: duplicates.length, parseErrors: parseErrorsCount },
         items,
+        lowConfidence: [],
+        duplicates: duplicatesPayload,
       }) + '\n',
     );
     exitCode(0);

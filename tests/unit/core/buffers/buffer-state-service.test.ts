@@ -310,6 +310,35 @@ describe('BufferStateService', () => {
       expect(result.isFailure).toBe(true);
       expect(result.error).toContain('USD');
     });
+
+    it('returns failure when balance currency differs from target currency (deriveStatus guard)', () => {
+      // Branch: ltTargetResult.isFailure in deriveStatus (line 15)
+      // This covers the defensive guard in deriveStatus against impossible-in-production
+      // cross-currency balance vs target.
+      const buckets = [makeBucket('Car', 'assets:buffer:car', 100_00)];
+      const usdLedger: BufferLedgerQuery = {
+        sumEntriesByAccount(): Result<Money> {
+          return Money.fromCents(50_00, 'USD');
+        },
+      };
+      const service = new BufferStateService(buckets, 'EUR', usdLedger);
+      const result = service.getStateAsOf('2026-04-26');
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('returns failure when balance currency differs from cap currency (deriveStatus lteCapResult guard)', () => {
+      // Branch: lteCapResult.isFailure in deriveStatus (line 21)
+      // Similar to above — forces the above-cap comparison with a mismatched currency.
+      const buckets = [makeBucket('Car', 'assets:buffer:car', 50_00, 200_00)];
+      const usdLedger: BufferLedgerQuery = {
+        sumEntriesByAccount(): Result<Money> {
+          return Money.fromCents(100_00, 'USD');
+        },
+      };
+      const service = new BufferStateService(buckets, 'EUR', usdLedger);
+      const result = service.getStateAsOf('2026-04-26');
+      expect(result.isFailure).toBe(true);
+    });
   });
 
   describe('asOf date validation (Story 3.2 slice 6)', () => {

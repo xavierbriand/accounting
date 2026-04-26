@@ -71,7 +71,7 @@ Two formal gates: **DoR** (phases 1–2 complete) · **DoD** (phases 3–5 compl
 ### 6.1 Phases
 
 1. **Plan** (Opus): collect intent → converge → Gherkin → draft PR → hand off to Sonnet. Plan file at `docs/plans/story-<id>.md`. *Exit:* draft PR, sections 1–6 filled. Sub-rules (see § 8): **R1** plan file alongside code · **R2** production-code surface section · **R3** tool-bundle import audit · **R4** composition-root subprocess test when `program.ts` touched.
-2. **Critical review** (Opus, P1/P2/P3): tag every suggestion adopted/deferred/rejected. Deferred → GitHub issue. *Exit (DoR):* no un-tagged suggestions, every deferred has an issue link.
+2. **Critical review** (Opus, P1/P2/P3): invoke `plan-reviewer` sub-agent (`subagent_type: "plan-reviewer"`) with the plan path; consume the structured findings; tag each adopted/deferred/rejected in the suggestion log. Deferred → GitHub issue. *Exit (DoR):* no un-tagged suggestions, every deferred has an issue link.
 3. **Implement** (Sonnet): failing acceptance → failing unit → green → structured report. *Exit:* tests green, branch pushed, PR in draft.
 4. **Code review + refactor** (Opus): re-run P1/P2/P3 against the code. Sub-rules (see § 8): **R5** Gherkin-to-test mapping · **R6** `fails if` honesty · **R7** test-mechanism honesty · **R8** mock diversity · **R9** trivial inline fix carve-out. *Exit:* refactor merged, CI green.
 5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. New rules add a row to § 8. *Exit:* file committed. Merge user-gated.
@@ -84,7 +84,7 @@ Two formal gates: **DoR** (phases 1–2 complete) · **DoD** (phases 3–5 compl
 
 ### 6.3 Sonnet return format
 
-Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model.
+Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model. **New custom agents** added to `.claude/agents/*.md` require a session restart to register with the harness Agent tool. For same-session verification, invoke `general-purpose` with the spec file's contents inline as the prompt.
 
 ### 6.4 Commit convention
 

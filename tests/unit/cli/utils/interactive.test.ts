@@ -1,6 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fc from 'fast-check';
-import { validateNewCategoryName } from '../../../../src/cli/utils/interactive.js';
+import { validateNewCategoryName, inquirerPrompter } from '../../../../src/cli/utils/interactive.js';
+
+// Mock @inquirer/prompts at module level so we can control select/input behaviour
+vi.mock('@inquirer/prompts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@inquirer/prompts')>();
+  return {
+    ...original,
+    select: vi.fn(),
+    input: vi.fn(),
+    confirm: vi.fn(),
+  };
+});
 
 // fails if: validateNewCategoryName accepts empty/whitespace names (guards rule 1),
 //           accepts names over 64 chars (guards rule 2),
@@ -186,5 +197,65 @@ describe('validateNewCategoryName — property test', () => {
         },
       ),
     );
+  });
+});
+
+// ---- selectCategory: + Define new category… branch and ESC re-show ----
+// fails if: '+ Define new category…' choice is not offered (user can't define a new category),
+//           input() is not called when '__new__' is selected (no prompt shown),
+//           ExitPromptError from input() does not re-show the menu (ESC aborts ingest),
+//           the returned action.category is not the trimmed name (wrong value propagated)
+
+describe('inquirerPrompter.selectCategory — define-new branch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('offers + Define new category… as a choice', async () => {
+    const { select } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    // Return a non-new-category value to avoid triggering input
+    mockSelect.mockResolvedValueOnce('Keep: Uncategorized');
+
+    await inquirerPrompter.selectCategory('PAYPAL', 'Uncategorized', ['Groceries']);
+
+    expect(mockSelect).toHaveBeenCalledOnce();
+    const callArg = mockSelect.mock.calls[0][0] as unknown as { choices: Array<{ name: string; value: string }> };
+    const choiceNames = callArg.choices.map((c) => c.name);
+    expect(choiceNames).toContain('+ Define new category…');
+  });
+
+  it('calls input() when __new__ is chosen and returns { action: change, category: trimmed-name }', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__new__');
+    mockInput.mockResolvedValueOnce('AutoInsurance');
+
+    const result = await inquirerPrompter.selectCategory('PAYPAL', 'Uncategorized', ['Groceries']);
+
+    expect(mockInput).toHaveBeenCalledOnce();
+    expect(result).toEqual({ action: 'change', category: 'AutoInsurance' });
+  });
+
+  it('re-shows select when ExitPromptError is thrown by input()', async () => {
+    const { ExitPromptError } = await import('@inquirer/core');
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    // First loop: user picks + Define new category…, then ESC in input
+    // Second loop: user picks Keep
+    mockSelect
+      .mockResolvedValueOnce('__new__')
+      .mockResolvedValueOnce('Keep: Uncategorized');
+
+    mockInput.mockRejectedValueOnce(new ExitPromptError());
+
+    const result = await inquirerPrompter.selectCategory('PAYPAL', 'Uncategorized', ['Groceries']);
+
+    expect(mockSelect).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ action: 'keep' });
   });
 });

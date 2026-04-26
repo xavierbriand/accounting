@@ -27,9 +27,22 @@ program
 program
   .command('migrate')
   .description('Run database migrations')
-  .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
-  .action((options: { dbPath: string }) => {
-    const validation = validateDbPath(options.dbPath);
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action((options: { dbPathOverride?: string }) => {
+    const configService = new FileConfigService({ projectDir: process.cwd() });
+    const configResult = configService.load();
+    if (configResult.isFailure) {
+      process.stderr.write(`error: ${configResult.error}\n`);
+      process.exit(1);
+    }
+    const config = configResult.value;
+
+    if (options.dbPathOverride !== undefined) {
+      process.stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
+    }
+    const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
+
+    const validation = validateDbPath(effectiveDbPath);
     if (validation.isFailure) {
       process.stderr.write(`error: ${validation.error}\n`);
       process.exit(2);
@@ -43,9 +56,22 @@ program
   .requiredOption('-f, --file <path>', 'Path to the bank CSV file')
   .option('--non-interactive', 'Fail if any item needs review (CI mode)', false)
   .option('--json', 'Output JSON instead of a table', false)
-  .option('--db-path <path>', 'Path to the SQLite database', 'accounting.db')
-  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPath: string }) => {
-    const validation = validateDbPath(options.dbPath);
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string }) => {
+    const configService = new FileConfigService({ projectDir: process.cwd() });
+    const configResult = configService.load();
+    if (configResult.isFailure) {
+      process.stderr.write(`error: ${configResult.error}\n`);
+      process.exit(1);
+    }
+    const config = configResult.value;
+
+    if (options.dbPathOverride !== undefined) {
+      process.stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
+    }
+    const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
+
+    const validation = validateDbPath(effectiveDbPath);
     if (validation.isFailure) {
       process.stderr.write(`error: ${validation.error}\n`);
       process.exit(2);
@@ -59,7 +85,6 @@ program
       process.exit(2);
     }
 
-    const configService = new FileConfigService({ projectDir: process.cwd() });
     const csvParser = new NodeCsvParser();
     const hashRepo = new SqliteHashRepository(db);
     const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
@@ -71,7 +96,7 @@ program
     await runIngestCommand(
       { file: options.file, nonInteractive: options.nonInteractive, json: options.json },
       {
-        configService,
+        config,
         csvParser,
         idempotencyService,
         transactionBuilder,

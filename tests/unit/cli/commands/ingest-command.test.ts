@@ -95,7 +95,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: {
         parse: () => Result.ok({
           items: [
@@ -149,7 +149,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: {
         parse: () => Result.ok({
           items: [{ sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'UBER TRIP', direction: 'outflow', amount: EUR }],
@@ -188,7 +188,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'CARREFOUR', direction: 'outflow', amount: EUR }], errors: [] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -222,7 +222,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'UBER TRIP', direction: 'outflow', amount: EUR }], errors: [] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -250,7 +250,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     const capturedExitCode: number[] = [];
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: vi.fn() },
       idempotencyService: { filterNew: vi.fn() },
       transactionBuilder: () => ({ buildAll: vi.fn() }),
@@ -297,7 +297,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
     };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: {
         parse: () => Result.ok({
           items: [{ sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'UBER TRIP', direction: 'outflow', amount: EUR }],
@@ -356,7 +356,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
     ];
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({
         items: outcomes.map((o) => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })),
         errors: [],

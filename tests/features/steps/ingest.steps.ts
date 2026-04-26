@@ -51,8 +51,10 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
   const tmpDir = makeTmpDir();
   state.tmpDir = tmpDir;
   state.dbPath = path.join(tmpDir, 'test.db');
+  // dbPath in YAML uses relative './test.db'; cwd=tmpDir makes it resolve to tmpDir/test.db
   writeStubYaml(tmpDir);
-  spawnCli(['migrate', '--db-path', state.dbPath], { cwd: tmpDir });
+  // YAML-authoritative: no --db-path flag after #65 (story-maint-11)
+  spawnCli(['migrate'], { cwd: tmpDir });
 });
 
 Given('a BPCE CSV copied to that temp dir as {string}', function (state: IngestWorld, filename: string) {
@@ -71,6 +73,10 @@ Given('the CSV has been committed interactively', async function (state: IngestW
   db.pragma('foreign_keys = ON');
 
   const configService = new FileConfigService({ projectDir: state.tmpDir! });
+  const configResult = configService.load();
+  if (configResult.isFailure) throw new Error(`Config load failed: ${configResult.error}`);
+  const config = configResult.value;
+
   const csvParser = new NodeCsvParser();
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
@@ -85,7 +91,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
   await runIngestCommand(
     { file: state.csvPath!, nonInteractive: false, json: false },
     {
-      configService,
+      config,
       csvParser,
       idempotencyService,
       transactionBuilder: transactionBuilderFactory,
@@ -109,7 +115,8 @@ Given('the CSV has been committed interactively', async function (state: IngestW
 
 When('I run ingest with {string}', function (state: IngestWorld, flagsStr: string) {
   const flags = flagsStr.trim().split(/\s+/);
-  const args = ['ingest', '--file', state.csvPath!, ...flags, '--db-path', state.dbPath!];
+  // YAML-authoritative dbPath after #65: no --db-path flag; cwd=tmpDir resolves ./test.db
+  const args = ['ingest', '--file', state.csvPath!, ...flags];
   state.lastResult = spawnCli(args, { cwd: state.tmpDir });
 });
 

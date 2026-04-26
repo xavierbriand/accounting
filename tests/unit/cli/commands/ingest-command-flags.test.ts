@@ -87,7 +87,7 @@ describe('--non-interactive mode', () => {
     const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn() };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -116,7 +116,7 @@ describe('--non-interactive mode', () => {
     const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn() };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: outcomes.map(o => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })), errors: [] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -148,7 +148,7 @@ describe('--json mode', () => {
     const parseErrorRow = { line: 1, reason: 'bad date', raw: 'x' };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -192,7 +192,7 @@ describe('--json mode', () => {
     const parseErrorRow = { line: 2, reason: 'missing amount', raw: 'y' };
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: () => Result.ok({ items: [{ sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: outcomes[0].transaction.description, direction: 'outflow' as const, amount: EUR }], errors: [parseErrorRow, parseErrorRow] }) },
       idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [dupItem, dupItem] }) },
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
@@ -231,7 +231,7 @@ describe('--json mode', () => {
     const exitCodes: number[] = [];
 
     const deps: IngestCommandDeps = {
-      configService: { load: () => Result.ok(baseConfig) },
+      config: baseConfig,
       csvParser: { parse: vi.fn() },
       idempotencyService: { filterNew: vi.fn() },
       transactionBuilder: () => ({ buildAll: vi.fn() }),

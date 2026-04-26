@@ -49,6 +49,10 @@ async function runIngestInProcess(
   db.pragma('foreign_keys = ON');
 
   const configService = new FileConfigService({ projectDir: state.tmpDir! });
+  const configResult = configService.load();
+  if (configResult.isFailure) throw new Error(`Config load failed: ${configResult.error}`);
+  const config = configResult.value;
+
   const csvParser = new NodeCsvParser();
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
@@ -71,7 +75,7 @@ async function runIngestInProcess(
   await runIngestCommand(
     { file: state.csvPath!, nonInteractive: false, json: false },
     {
-      configService,
+      config,
       csvParser,
       idempotencyService,
       transactionBuilder: transactionBuilderFactory,

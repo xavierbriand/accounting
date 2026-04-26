@@ -91,7 +91,7 @@ function makeRealDeps(
   };
 
   const deps: IngestCommandDeps = {
-    configService: { load: () => Result.ok(config) },
+    config,
     csvParser: new NodeCsvParser(),
     idempotencyService,
     transactionBuilder: (accounts) => new TransactionBuilder(accounts, undefined, nodeUuidGen),

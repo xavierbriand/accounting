@@ -1,5 +1,4 @@
 import type { Writable } from 'stream';
-import type { ConfigService } from '@core/ports/config-service.js';
 import type { CsvParser } from '@core/ports/csv-parser.js';
 import type { IdempotencyService } from '@core/ingest/idempotency-service.js';
 import type { TransactionBuilder } from '@core/ingest/transaction-builder.js';
@@ -23,7 +22,7 @@ export type TransactionBuilderFactory =
   (accounts: readonly AccountConfig[]) => Pick<TransactionBuilder, 'buildAll'>;
 
 export interface IngestCommandDeps {
-  readonly configService: Pick<ConfigService, 'load'>;
+  readonly config: AppConfig;
   readonly csvParser: Pick<CsvParser, 'parse'>;
   readonly idempotencyService: Pick<IdempotencyService, 'filterNew'>;
   readonly transactionBuilder: TransactionBuilderFactory;
@@ -44,17 +43,9 @@ function writeln(stream: Writable, msg: string): void {
 
 async function loadAndParse(
   opts: IngestCommandOptions,
-  deps: Pick<IngestCommandDeps, 'configService' | 'csvParser' | 'pickSourceAccount' | 'readFile' | 'stderr' | 'exitCode'>,
-): Promise<{ config: AppConfig; account: AccountConfig; parseOutcome: ParseOutcome } | null> {
-  const { configService, csvParser, pickSourceAccount, readFile, stderr, exitCode } = deps;
-
-  const configResult = configService.load();
-  if (configResult.isFailure) {
-    writeln(stderr, `Configuration error: ${configResult.error}`);
-    exitCode(1);
-    return null;
-  }
-  const config = configResult.value;
+  deps: Pick<IngestCommandDeps, 'config' | 'csvParser' | 'pickSourceAccount' | 'readFile' | 'stderr' | 'exitCode'>,
+): Promise<{ account: AccountConfig; parseOutcome: ParseOutcome } | null> {
+  const { config, csvParser, pickSourceAccount, readFile, stderr, exitCode } = deps;
 
   const accountResult = pickSourceAccount(opts.file, config.accounts);
   if (accountResult.isFailure) {
@@ -90,14 +81,14 @@ async function loadAndParse(
     }
   }
 
-  return { config, account, parseOutcome };
+  return { account, parseOutcome };
 }
 
 export async function runIngestCommand(
   opts: IngestCommandOptions,
   deps: IngestCommandDeps,
 ): Promise<void> {
-  const { idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath } = deps;
+  const { config, idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath } = deps;
 
   const parsed = await loadAndParse(opts, deps);
   if (parsed === null) return;
@@ -110,7 +101,7 @@ export async function runIngestCommand(
   }
   const { fresh, duplicates } = idempotencyResult.value;
 
-  const builder = transactionBuilder(parsed.config.accounts);
+  const builder = transactionBuilder(config.accounts);
   const buildResult = builder.buildAll(fresh);
   if (buildResult.isFailure) {
     writeln(stderr, `Build error: ${buildResult.error}`);

@@ -37,10 +37,11 @@ afterEach(() => {
 });
 
 describe('assertMigrated', () => {
-  it('(a) empty DB (user_version=0) returns Result.fail with friendly message containing dbPath', () => {
+  it('(a) empty DB (user_version=0) returns Result.fail with friendly YAML-authoritative hint', () => {
     // fails if: assertMigrated returns ok on an uninitialised DB
     //   (the migration guard would be bypassed, SqliteTransactionRepository constructor
     //    would throw a raw SqliteError that reaches the user as a stack trace)
+    // story-maint-11: hint updated to not reference --db-path flag (YAML is authoritative)
     const db = makeEmptyDb();
     const dbPath = '/tmp/test-uninit.db';
 
@@ -48,8 +49,10 @@ describe('assertMigrated', () => {
 
     expect(result.isFailure).toBe(true);
     expect(result.error).toContain('database not initialised');
-    expect(result.error).toContain("hint: run 'accounting migrate");
     expect(result.error).toContain(dbPath);
+    expect(result.error).toContain("hint: run 'accounting migrate' first");
+    expect(result.error).toContain('accounting.yaml');
+    expect(result.error).not.toContain('--db-path');
   });
 
   it('(b) migrated DB (after runMigrations) returns Result.ok', () => {

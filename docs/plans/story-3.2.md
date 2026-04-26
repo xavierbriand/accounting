@@ -23,7 +23,7 @@ This story also establishes the **bucket→ledger-account convention**: an expli
 
 **And** each `BufferState` has shape `{ name, balance: Money, target: Money, cap?: Money, status: 'below' | 'on-target' | 'above-cap' }`.
 
-**And** `balance` is the asset-balance sum of `transaction_entries` rows where `account = bucket.account` and `substr(transactions.occurred_at, 1, 10) <= asOfDate`, computed as `sum(debit cents) − sum(credit cents)` in `defaultCurrency`.
+**And** `balance` is the asset-balance sum of `transaction_entries` rows where `account = bucket.account` and `substr(transactions.occurred_at, 1, 10) <= asOfDate`, computed as `sum(debit cents) − sum(credit cents)` in `defaultCurrency`. The `substr` predicate compares **receipt-truth local dates** (the `YYYY-MM-DD` prefix of `occurred_at` regardless of timezone offset), matching the PRD's "receipt truth" definition (§ 3 Money & precision). Same-day rows at any offset are inclusive.
 
 **And** status is derived deterministically:
 - `balance.lessThan(target)` → `'below'`
@@ -47,10 +47,9 @@ New types / signatures introduced:
 - `BufferBucket` (modified): adds `readonly account: string`.
 - `BufferState` (new) at `src/core/buffers/buffer-state.ts`: `{ name, balance: Money, target: Money, cap?: Money, status: BufferStatus }`.
 - `BufferStatus` (new): `'below' | 'on-target' | 'above-cap'`.
-- `BufferLedgerQuery` (new) at `src/core/ports/buffer-ledger-query.ts`: `sumEntriesByAccount(account: string, asOfDate: string): Result<LedgerSums>`.
-- `LedgerSums` (new): `{ debitCents: number; creditCents: number; currency: string }`. Adapter must fail if more than one currency appears for that account.
+- `BufferLedgerQuery` (new) at `src/core/ports/buffer-ledger-query.ts`: `sumEntriesByAccount(account: string, expectedCurrency: string, asOfDate: string): Result<Money>`. **Port returns `Money`, not raw cents.** Adapter aggregates debits/credits and constructs the signed-balance `Money` internally; if any matching row carries a different currency, adapter returns `Result.fail` citing the offending account/currency. Empty-result case (no rows match): adapter returns `Money.zero(expectedCurrency)`. Core never sees `debitCents` / `creditCents` / raw currency strings — boundary translation lives entirely in the adapter (architecture.md § "Data boundaries").
 - `BufferStateService` (new) at `src/core/buffers/buffer-state-service.ts`: `getStateAsOf(date: string): Result<readonly BufferState[]>`.
-- `Money` (extended) at `src/core/shared/money.ts`: `compare(other: Money): Result<number>`, `lessThan(other): Result<boolean>`, `lessThanOrEqual(other): Result<boolean>`.
+- `Money` (extended) at `src/core/shared/money.ts`: `lessThan(other: Money): Result<boolean>`, `lessThanOrEqual(other: Money): Result<boolean>`. Both return `Result.fail` on currency mismatch (matching `add` / `subtract` precedent). `compare` is **not** added — YAGNI: the service uses only the two predicates.
 - `SqliteBufferLedgerQuery` (new adapter) at `src/infra/db/repositories/sqlite-buffer-ledger-query.ts`.
 
 YAML format change: every entry under `buffers:` must now declare `account:`. `accounting.example.yaml` updated; no migration script needed (config is read fresh each run).
@@ -65,19 +64,19 @@ No new framework / library entering deps. Reuses: `dinero.js` (Money), `better-s
 
 1. **`feat(buffers): add account field to BufferBucket — minimal green`** + paired `test`. Update `src/core/config/app-config.ts`, `src/infra/config/config-schema.ts` (add `account: z.string().min(1)`), `accounting.example.yaml`. Unit test: missing `account` → `buffers.0.account` path-cited error.
 
-2. **`feat(buffers): reject duplicate buffer accounts at parse — minimal green`** + paired `test`. superRefine in `BuffersSchema` (mirror existing duplicate-name check). Path-cited error `buffers.<i>.account: duplicate of buffers.<j>.account`.
+2. **`feat(buffers): reject duplicate buffer accounts at parse — minimal green`** + paired `test`. Add a second `superRefine` on the `buffers` array using the existing `findDuplicateIndices` helper (`b => b.account`), mirroring the existing duplicate-name pattern at `config-schema.ts:152-160`. Path-cited error: `path: [i, 'account']`, message `'duplicate account'`. Output via `formatZodError` becomes `buffers.<i>.account: duplicate account`.
 
-3. **`feat(money): ordering helpers compare/lessThan/lessThanOrEqual — minimal green`** + paired `test` (unit + fast-check). Trichotomy property; currency-mismatch returns `Result.fail`. Self-contained, unblocks slice 5.
+3. **`feat(money): lessThan + lessThanOrEqual — minimal green`** + paired `test` (unit + fast-check). Add `lessThan(other: Money): Result<boolean>` and `lessThanOrEqual(other: Money): Result<boolean>`; both return `Result.fail` on currency mismatch. Properties: trichotomy (∀ same-currency a, b: exactly one of `lessThan`, `equals`, `b.lessThan(a)`); `lessThanOrEqual` strict superset of `lessThan` ∪ `equals`; currency-mismatch failure path. Self-contained; unblocks slice 5.
 
-4. **`test(buffers): buffer-status acceptance feature — failing`** (R10 green-on-landing acceptable for steps that exercise still-absent service via Result.fail "service not implemented"). Create `tests/features/buffer-status.feature` with all four scenarios (see below). Create `tests/features/steps/buffer-status.steps.ts` skeleton. Create the `BufferLedgerQuery` port file (interface only, no impl). Acceptance run RED.
+4. **`test(buffers): buffer-status acceptance feature — failing`** (R10 green-on-landing acceptable for steps that exercise still-absent service via Result.fail "service not implemented"). Create `tests/features/buffer-status.feature` with all four scenarios (see below). Create `tests/features/steps/buffer-status.steps.ts` skeleton. Create the `BufferLedgerQuery` port file (interface only, no impl). **Step-wiring policy (R7):** scenario 2 ("same-day asOf bound") and scenario 4 ("currency mismatch") MUST construct the service with the real `SqliteBufferLedgerQuery` against an in-memory `Database(':memory:')` after `runMigrations` — otherwise neither `# fails if` claim is reachable from the test mechanism. Scenarios 1 and 3 may use a fake `BufferLedgerQuery` (status derivation and config-parse paths don't need real SQL). Steps file documents this split in a header comment. Acceptance run RED.
 
-5. **`feat(buffers): BufferStateService happy path — minimal green`**. Create `src/core/buffers/buffer-state.ts` (interfaces) and `src/core/buffers/buffer-state-service.ts` (~30 LOC, mirrors `SplitRulesService`). Service takes constructor deps: `(buffers: readonly BufferBucket[], defaultCurrency: string, ledger: BufferLedgerQuery)`. Unit tests for status branches + property test for status totality and order-independence. First two acceptance scenarios flip GREEN.
+5. **`feat(buffers): BufferStateService happy path — minimal green`**. Create `src/core/buffers/buffer-state.ts` (interfaces only — `BufferState`, `BufferStatus`; `LedgerSums` is **not** added to Core, see § "Production-code surface") and `src/core/buffers/buffer-state-service.ts` (~30 LOC, mirrors `SplitRulesService`). Service takes constructor deps: `(buffers: readonly BufferBucket[], defaultCurrency: string, ledger: BufferLedgerQuery)`. Unit tests for status branches + property test for status totality (negative balances included in generator) and order-independence. First two acceptance scenarios flip GREEN.
 
-6. **`feat(buffers): asOf ISO-date validation + monotonicity — minimal green`** + paired `test`. ISO_DATE regex check (copy from `SplitRulesService`); fast-check property: monotonic in asOf for debit-only ledgers. Acceptance scenario "same-day asOf bound" flips GREEN.
+6. **`feat(buffers): asOf ISO-date validation + monotonicity — minimal green`** + paired `test`. ISO_DATE regex check (copy from `SplitRulesService`); fast-check property: monotonic in asOf for debit-only ledgers. Acceptance scenario "same-day asOf bound" flips GREEN (uses real adapter per slice-4 wiring policy).
 
-7. **`feat(buffers): SqliteBufferLedgerQuery adapter — minimal green`** + paired integration `test`. SQL: parameterised `account = ?` and `substr(occurred_at, 1, 10) <= ?` predicate. Detect cross-currency on that account → `Result.fail` citing offending currency. Real in-memory SQLite + `runMigrations`; **no `vi.mock`** (R7 test-mechanism honesty).
+7. **`feat(buffers): SqliteBufferLedgerQuery adapter — minimal green`** + paired integration `test`. SQL: parameterised `account = ?` and `substr(occurred_at, 1, 10) <= ?` predicate. Adapter aggregates `SUM(amount_cents)` grouped by `side`, then constructs `Money.fromCents(debit) - Money.fromCents(credit)` inside the adapter (signed-balance `Money` is what the port returns; raw cents never leave Infra). Detect cross-currency on that account → `Result.fail` citing offending currency. Real in-memory SQLite + `runMigrations`; **no `vi.mock`** (R7 test-mechanism honesty).
 
-8. **`refactor(buffers): cleanup`** — branch-coverage check on `src/core/buffers/`, run lint/build/test. May be empty (R11) if nothing surfaces.
+8. **`refactor(buffers): cleanup or empty — green`** — runs `npm run lint && npm run build && npm test`, then verifies branch coverage on `src/core/buffers/` is 100% via `npm run test -- --coverage`. If no actionable cleanup surfaces, lands as an empty commit; commit body justification in that case: *"branch coverage on src/core/buffers/ verified at 100%; no extract / rename / dedupe candidates surfaced. Empty per R11."*
 
 Slices 1+2 may compress to one commit if the diff is small; review at execution time.
 
@@ -102,7 +101,8 @@ Feature: Buffer state reader (Story 3.2)
     And "Car"   has balance 800.00 EUR  and status "below"
     And "House" has balance 6000.00 EUR and status "on-target"
     And "Vac"   has balance 2000.00 EUR and status "above-cap"
-    # fails if status thresholds invert, cap inclusivity wrong, or formatting drifts
+    # fails if status thresholds are inverted or formatting drifts.
+    # Note: balance == target / balance == cap boundary inclusivity is covered by property test #2 (fast-check), not this scenario.
 
   Scenario: same-day ledger entry is included by asOf bound (substr-based compare)
     Given a config with one buffer "Car" mapped to "assets:buffer:car" target 1000
@@ -114,8 +114,8 @@ Feature: Buffer state reader (Story 3.2)
   Scenario: duplicate buffer-account mapping rejected at config parse
     Given a config where two buffers share the account "assets:buffer:shared"
     When the configuration is loaded
-    Then loading fails with an error citing "buffers.1.account"
-    # fails if superRefine missing or path not cited
+    Then loading fails with an error containing "buffers.1.account: duplicate account"
+    # fails if superRefine missing or path not cited. Message format mirrors the existing duplicate-name precedent.
 
   Scenario: currency mismatch on a buffer account fails the read
     Given a config with default currency EUR and buffer "Car" on "assets:buffer:car"
@@ -130,12 +130,12 @@ Feature: Buffer state reader (Story 3.2)
 
 Co-located with unit tests in `tests/unit/core/buffers/buffer-state-service.test.ts` and `tests/unit/core/shared/money.test.ts`:
 
-1. **Status totality** — ∀ (balance, target, cap?): exactly one of the three statuses.
+1. **Status totality** — ∀ (balance, target, cap?): exactly one of the three statuses. **Generator MUST include negative balance cents** (`fc.integer({ min: -10_000_00, max: 10_000_00 })`) so the negative-balance branch (`'below'`) is exercised.
 2. **Boundary inclusivity** — `balance == target` ⇒ `'on-target'`; `balance == cap` ⇒ `'on-target'`.
 3. **Order-independence on entries** — shuffled fake-ledger entries ⇒ identical `BufferState[]`.
 4. **Monotonicity in asOf** — debit-only entries: `asOf₁ ≤ asOf₂` ⇒ `balance₁ ≤ balance₂`.
 5. **Money trichotomy** — ∀ (a, b) same currency: exactly one of `a.lessThan(b)`, `a.equals(b)`, `b.lessThan(a)`.
-6. **Money currency-mismatch on compare** — different currencies ⇒ `Result.fail`.
+6. **Money currency-mismatch on `lessThan`/`lessThanOrEqual`** — different currencies ⇒ `Result.fail`.
 7. **Purity / no system clock** — source of `src/core/buffers/buffer-state-service.ts` MUST NOT contain `Date.now`, `new Date(`, or `performance.now`. Asserted via regex on the file contents (mirror Story 3.1 convention).
 
 ## Files touched
@@ -145,9 +145,9 @@ Co-located with unit tests in `tests/unit/core/buffers/buffer-state-service.test
 | [src/core/config/app-config.ts](src/core/config/app-config.ts) | add `account: string` to `BufferBucket` |
 | [src/infra/config/config-schema.ts](src/infra/config/config-schema.ts) | Zod field + duplicate-account superRefine |
 | [accounting.example.yaml](accounting.example.yaml) | example `account:` lines |
-| [src/core/shared/money.ts](src/core/shared/money.ts) | `compare`, `lessThan`, `lessThanOrEqual` |
-| `src/core/ports/buffer-ledger-query.ts` | NEW port |
-| `src/core/buffers/buffer-state.ts` | NEW interfaces (`BufferState`, `BufferStatus`, `LedgerSums`) |
+| [src/core/shared/money.ts](src/core/shared/money.ts) | `lessThan`, `lessThanOrEqual` (no `compare`) |
+| `src/core/ports/buffer-ledger-query.ts` | NEW port returning `Result<Money>` |
+| `src/core/buffers/buffer-state.ts` | NEW interfaces (`BufferState`, `BufferStatus`) — `LedgerSums` deliberately NOT in Core |
 | `src/core/buffers/buffer-state-service.ts` | NEW service |
 | `src/infra/db/repositories/sqlite-buffer-ledger-query.ts` | NEW adapter |
 | `tests/features/buffer-status.feature` | NEW |
@@ -178,9 +178,12 @@ No CLI / `program.ts` change → R4 (composition-root subprocess test) does not 
 ## Blind spots (acknowledged)
 
 - **target = 0 buckets.** With `balance == 0 == target` and no cap, status is `'on-target'` (since `balance >= target`). Allowed by Zod (`nonnegative`). Not tightened in this story; documented as accepted edge.
-- **Negative balances.** `Money.subtract(debit, credit)` carries a negative amount when credits exceed debits on an asset account. `toString` renders `EUR -2.50`. Status falls through to `'below'` (target ≥ 0). Property-tested (#1 totality).
-- **Account strings echoed in error messages.** Account ids are technical (`assets:buffer:car`), not PII — echoing is safe. Partner-name redaction precedent does NOT apply.
+- **Negative balances.** Adapter computes `Money.fromCents(debit) - Money.fromCents(credit)`; result Money carries a negative amount when credits exceed debits on an asset account. `toString` renders `EUR -2.50`. Status falls through to `'below'` (target ≥ 0). Property-tested (#1 totality with negative-cent generator).
+- **Account strings echoed in error messages.** Account identifiers in this codebase are user-defined logical paths (e.g., `assets:buffer:car`), not bank account numbers / IBANs. The security-checklist redaction list targets the latter. Echoing logical paths is consistent with how SQL-table names appear in errors (technical ids, not PII). Partner-name redaction precedent does NOT apply. Documented here so reviewer can confirm at Phase 4.
 - **Adapter SQL injection surface.** All bindings parameterised (`?`); no string concatenation. Documented in slice-7 commit message.
+- **No raw cents arithmetic in Core.** Because the port returns `Result<Money>` (not `LedgerSums`), the service never touches `debitCents - creditCents` directly. Money math (`Money.subtract`) lives in the adapter; service layer only reads `.balance`, `.target`, `.cap`, and calls `lessThan` / `lessThanOrEqual`. This satisfies the security-checklist "no `+ - * /` on monetary values" rule for Core code in this story.
+- **`account` index absent.** `transaction_entries` has no index on `account`; the adapter SQL will table-scan. Acceptable at MVP volumes (couples-app, ~hundreds to low thousands of rows). Performance-NFR risk is logged as a deferred follow-up issue (see Section 7 of the PR — to be filed).
+- **`substr(occurred_at, 1, 10)` not index-friendly.** SQLite cannot use a B-tree index on a `substr` expression without a generated column. Same deferred follow-up issue.
 
 ## Out of scope
 

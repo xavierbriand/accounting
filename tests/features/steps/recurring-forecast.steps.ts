@@ -33,6 +33,10 @@ interface World {
   pendingRules?: RuleTableRow[];
   pendingAmendments?: Record<string, AmendmentTableRow[]>;
   forecastResult?: Result<readonly ForecastOccurrence[]>;
+  // stateResult mirrors forecastResult so the shared `Then the result is success/failure`
+  // step from buffer-status.steps.ts resolves correctly. The two fields are always
+  // set together in the When step — no divergence is possible.
+  stateResult?: Result<readonly ForecastOccurrence[]>;
   parseResult?: Result<unknown>;
 }
 
@@ -127,11 +131,15 @@ When(
     );
     const configResult = parseRawConfig(baseRaw(rules));
     if (configResult.isFailure) {
-      state.forecastResult = Result.fail(configResult.error);
+      const failure = Result.fail<readonly ForecastOccurrence[]>(configResult.error);
+      state.forecastResult = failure;
+      state.stateResult = failure;
       return;
     }
     const service = new RecurringForecastService(configResult.value.recurring);
-    state.forecastResult = service.forecastBetween(from, to);
+    const forecastResult = service.forecastBetween(from, to);
+    state.forecastResult = forecastResult;
+    state.stateResult = forecastResult;
   },
 );
 

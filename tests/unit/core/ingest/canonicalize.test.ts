@@ -181,7 +181,13 @@ describe('canonicalize', () => {
     });
 
     it('property: error reason never echoes field content (PII safety)', () => {
-      // fails if: error message includes raw field content for any field
+      // fails if: error message includes the raw tampered field value verbatim.
+      // We assert against `withUs` (the full tampered string including the US byte
+      // and the `injection` suffix) rather than against `content` alone — short
+      // random `content` prefixes (e.g. "con") collide with common English words
+      // ("contains") in the error template, producing false positives. The
+      // PII-safety contract is that the *user-supplied value* is not echoed; the
+      // full string is the meaningful witness for that.
       fc.assert(
         fc.property(
           fc.constantFrom('sourceAccount', 'occurredAt', 'direction', 'description'),
@@ -194,14 +200,13 @@ describe('canonicalize', () => {
             } else if (field === 'occurredAt') {
               item = makeItem({ occurredAt: withUs });
             } else if (field === 'direction') {
-              // direction can't realistically contain US but we test the contract
-              item = makeItem({ description: withUs }); // test description instead
+              item = makeItem({ description: withUs });
             } else {
               item = makeItem({ description: withUs });
             }
             const r = canonicalize(item);
             if (r.isFailure) {
-              return !r.error.includes(content);
+              return !r.error.includes(withUs);
             }
             return true;
           },

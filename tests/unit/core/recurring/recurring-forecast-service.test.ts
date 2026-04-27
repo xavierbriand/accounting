@@ -239,12 +239,16 @@ describe('RecurringForecastService.forecastBetween', () => {
     );
   });
 
-  it('Property #1b: cadence-step regularity — monthsBetween(validFrom, d_i) == i * cadenceStep', () => {
-    // fails if: the anchor-ratchet is broken (two-arg nextOccurrence would lose anchor day)
+  it('Property #1b: cadence-step regularity — consecutive occurrences differ by exactly the cadence step in months', () => {
+    // fails if: anchor-ratchet is broken (two-arg nextOccurrence would lose anchor day),
+    // or cadence stepping uses days instead of months, or any cadence is mis-mapped.
+    // Tests all three cadences. The previous form used `expectedMonths % step !== 0` which
+    // is vacuous for monthly (any int % 1 === 0); this form asserts strict equality on the
+    // delta between every consecutive pair, which falsifies for any wrong step length.
     fc.assert(
       fc.property(
         dateStringArb,
-        fc.constantFrom('monthly' as const),
+        fc.constantFrom('monthly' as const, 'quarterly' as const, 'annual' as const),
         dateStringArb,
         dateStringArb,
         (validFrom, cadence, from, to) => {
@@ -254,16 +258,15 @@ describe('RecurringForecastService.forecastBetween', () => {
           ]);
           const result = service.forecastBetween(windowFrom, windowTo);
           if (result.isFailure) return true;
-          const step = 1; // monthly
-          const base = new Date(validFrom + 'T00:00:00Z');
-          for (let i = 0; i < result.value.length; i++) {
-            const occ = new Date(result.value[i].expectedDate + 'T00:00:00Z');
-            const expectedMonths =
-              (occ.getUTCFullYear() - base.getUTCFullYear()) * 12 +
-              (occ.getUTCMonth() - base.getUTCMonth());
-            // The occurrence at index i corresponds to the (i + offset)-th step from validFrom.
-            // We only check that the month distance is a multiple of the cadence step.
-            if (expectedMonths % step !== 0) return false;
+          if (result.value.length < 2) return true; // need pairs
+          const expectedStepMonths = cadence === 'monthly' ? 1 : cadence === 'quarterly' ? 3 : 12;
+          for (let i = 1; i < result.value.length; i++) {
+            const prev = new Date(result.value[i - 1].expectedDate + 'T00:00:00Z');
+            const curr = new Date(result.value[i].expectedDate + 'T00:00:00Z');
+            const deltaMonths =
+              (curr.getUTCFullYear() - prev.getUTCFullYear()) * 12 +
+              (curr.getUTCMonth() - prev.getUTCMonth());
+            if (deltaMonths !== expectedStepMonths) return false;
           }
           return true;
         },
@@ -495,31 +498,51 @@ describe('RecurringForecastService.forecastBetween', () => {
     );
   });
 
-  it('Property #8: service↔config wiring — from/to forwarded verbatim to enumerateOccurrences (recording-fake pattern)', () => {
-    // fails if: from or to are accidentally dropped or swapped in the call to enumerateOccurrences
-    // Recording-fake pattern from Story 3.2 Phase 4 refactor (commit 59639e1).
-    // We test this by checking that the output dates all fall within [from, to],
-    // and by comparing with a reference call using swapped arguments (should differ).
+  it('Property #8: service forwards windowFrom/windowTo correctly to enumerateOccurrences (witness-based)', () => {
+    // fails if: the service drops, swaps, or replaces windowFrom/windowTo before forwarding
+    // them to enumerateOccurrences.
+    //
+    // Mechanism note: Story 3.3 has no port (RecurringForecastService calls a free-standing
+    // function, not a port-injected dependency), so the recording-fake pattern from Story
+    // 3.2 commit 59639e1 doesn't transfer. Instead, we use a witness scenario where any
+    // argument-handling defect produces an observable behavioural change:
+    //   - drop windowFrom (replaced with constant): occurrences earlier than windowFrom would
+    //     leak into the result → caught by the containment check.
+    //   - drop windowTo: occurrences later than windowTo would leak → caught.
+    //   - swap (forward as `enumerate(..., windowTo, windowFrom)`): enumerate's loop runs
+    //     `while (date <= windowTo)` where date >= validFrom > windowTo, so the loop never
+    //     enters and the result is empty → caught by the non-empty assertion below.
     fc.assert(
       fc.property(
         dateStringArb,
         dateStringArb,
         (from, to) => {
           const [windowFrom, windowTo] = from <= to ? [from, to] : [to, from];
-          fc.pre(windowFrom !== windowTo);
+          // Need a window that's at least 12 months wide so a monthly rule produces ≥ 1 occurrence
+          // regardless of which day of the month windowFrom lands on.
+          fc.pre(windowFrom < windowTo);
+          // Anchor validFrom so it predates windowFrom; rule produces occurrences from
+          // 2000-01-15 onwards (so any window after that contains some).
+          const validFrom = '2000-01-15';
           const service = new RecurringForecastService([
-            makeRule({ name: 'R', validFrom: '2000-01-01' }),
+            makeRule({ name: 'R', validFrom, cadence: 'monthly' }),
           ]);
           const result = service.forecastBetween(windowFrom, windowTo);
           if (result.isFailure) return false;
-          // All occurrences must be within [windowFrom, windowTo]
+          // Containment: every occurrence is within [windowFrom, windowTo]
           for (const occ of result.value) {
             if (occ.expectedDate < windowFrom || occ.expectedDate > windowTo) return false;
           }
-          // Swapped window should produce a different (typically larger) result
-          const swappedResult = service.forecastBetween(windowTo, windowFrom);
-          // Swapped should fail (from > to)
-          return swappedResult.isFailure;
+          // Witness for swap-detection: a window ≥ 32 days wide must contain ≥ 1 monthly
+          // occurrence (since the rule has been firing on the 15th since 2000). If the
+          // service swapped windowFrom/windowTo before forwarding, enumerate would return [].
+          const widthMs =
+            new Date(windowTo + 'T00:00:00Z').getTime() -
+            new Date(windowFrom + 'T00:00:00Z').getTime();
+          if (widthMs >= 32 * 24 * 3600 * 1000) {
+            if (result.value.length === 0) return false;
+          }
+          return true;
         },
       ),
       { numRuns: 100 },

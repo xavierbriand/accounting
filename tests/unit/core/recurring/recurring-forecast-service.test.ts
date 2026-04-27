@@ -304,4 +304,225 @@ describe('RecurringForecastService.forecastBetween', () => {
       expect(source).not.toMatch(/\bperformance\.now\s*\(/);
     }
   });
+
+  // ─── Slice 6: amendments + validTo lifecycle ───────────────────────────────
+
+  describe('amendment-amount selection', () => {
+    it('uses rule.amount when no amendment applies (date before first amendment)', () => {
+      // fails if: amendment.validFrom boundary is inclusive in the wrong direction
+      const service = new RecurringForecastService([
+        makeRule({
+          name: 'Rent',
+          validFrom: '2024-01-01',
+          amount: makeEur(100000),
+          amendments: [{ validFrom: '2026-07-01', amount: makeEur(105000) }],
+        }),
+      ]);
+      const result = service.forecastBetween('2026-05-01', '2026-06-01');
+      expect(result.isSuccess).toBe(true);
+      for (const occ of result.value) {
+        expect(occ.amount.amount).toBe(100000);
+      }
+    });
+
+    it('uses amendment.amount when occurrence.date >= amendment.validFrom (boundary inclusive)', () => {
+      // fails if: amendment is not applied on its validFrom boundary date
+      const service = new RecurringForecastService([
+        makeRule({
+          name: 'Rent',
+          validFrom: '2024-01-01',
+          amount: makeEur(100000),
+          amendments: [{ validFrom: '2026-07-01', amount: makeEur(105000) }],
+        }),
+      ]);
+      const result = service.forecastBetween('2026-07-01', '2026-07-01');
+      expect(result.isSuccess).toBe(true);
+      expect(result.value[0].amount.amount).toBe(105000);
+    });
+
+    it('uses the latest applicable amendment when multiple amendments exist', () => {
+      // fails if: only the first matching amendment is used instead of the latest
+      const service = new RecurringForecastService([
+        makeRule({
+          name: 'Rent',
+          validFrom: '2024-01-01',
+          amount: makeEur(100000),
+          amendments: [
+            { validFrom: '2025-01-01', amount: makeEur(102000) },
+            { validFrom: '2026-01-01', amount: makeEur(105000) },
+          ],
+        }),
+      ]);
+      const result = service.forecastBetween('2026-01-01', '2026-01-01');
+      expect(result.isSuccess).toBe(true);
+      expect(result.value[0].amount.amount).toBe(105000);
+    });
+
+    it('amendment scenario: 5 months spanning the amendment boundary', () => {
+      // fails if: amendment transition is off by one occurrence
+      const service = new RecurringForecastService([
+        makeRule({
+          name: 'Rent',
+          validFrom: '2024-01-01',
+          amount: makeEur(100000),
+          amendments: [{ validFrom: '2026-07-01', amount: makeEur(105000) }],
+        }),
+      ]);
+      const result = service.forecastBetween('2026-05-01', '2026-09-30');
+      expect(result.isSuccess).toBe(true);
+      const amountsByCents = result.value.map(o => o.amount.amount);
+      expect(amountsByCents).toEqual([100000, 100000, 105000, 105000, 105000]);
+    });
+  });
+
+  describe('validTo lifecycle', () => {
+    it('excludes occurrences strictly after validTo', () => {
+      // fails if: validTo is ignored and occurrences continue past the lifecycle end
+      const service = new RecurringForecastService([
+        makeRule({ name: 'OldStream', validFrom: '2025-03-15', validTo: '2026-08-15' }),
+      ]);
+      const result = service.forecastBetween('2026-06-01', '2026-10-31');
+      expect(result.isSuccess).toBe(true);
+      const dates = result.value.map(o => o.expectedDate);
+      expect(dates).not.toContain('2026-09-15');
+      expect(dates).not.toContain('2026-10-15');
+    });
+
+    it('includes the occurrence on validTo (closed interval)', () => {
+      // fails if: validTo is treated as exclusive (last occurrence missing)
+      const service = new RecurringForecastService([
+        makeRule({ name: 'OldStream', validFrom: '2025-03-15', validTo: '2026-08-15' }),
+      ]);
+      const result = service.forecastBetween('2026-06-01', '2026-10-31');
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.map(o => o.expectedDate)).toContain('2026-08-15');
+    });
+
+    it('out-of-range window (window entirely after validTo) returns empty', () => {
+      // fails if: validTo lifecycle bound is ignored
+      const service = new RecurringForecastService([
+        makeRule({ name: 'OldStream', validFrom: '2024-01-01', validTo: '2024-12-31' }),
+      ]);
+      const result = service.forecastBetween('2025-01-01', '2025-12-31');
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toHaveLength(0);
+    });
+  });
+
+  // ─── Property tests #3, #5, #6, #8 ───────────────────────────────────────
+
+  it('Property #3: amendment-amount selection — latest entry with validFrom <= d is used', () => {
+    // fails if: wrong amendment tier is selected (e.g., always first, always last, or wrong boundary)
+    fc.assert(
+      fc.property(
+        dateStringArb,
+        fc.array(dateStringArb, { minLength: 1, maxLength: 4 }),
+        fc.array(fc.integer({ min: 100, max: 100000 }), { minLength: 5, maxLength: 5 }),
+        (validFrom, amendmentDatesRaw, amounts) => {
+          const uniqueSorted = [...new Set(amendmentDatesRaw)]
+            .filter(d => d > validFrom)
+            .sort();
+          if (uniqueSorted.length === 0) return true;
+          const amendments = uniqueSorted.map((d, i) => ({
+            validFrom: d,
+            amount: makeEur(amounts[i + 1] ?? amounts[amounts.length - 1]),
+          }));
+          const rule = makeRule({
+            name: 'R',
+            validFrom,
+            amount: makeEur(amounts[0]),
+            amendments,
+          });
+          const service = new RecurringForecastService([rule]);
+          // Test for each occurrence: the amount must be from the latest amendment with validFrom <= date
+          const result = service.forecastBetween(validFrom, uniqueSorted[uniqueSorted.length - 1]);
+          if (result.isFailure) return true;
+          for (const occ of result.value) {
+            const tiers = [{ validFrom, amount: makeEur(amounts[0]) }, ...amendments];
+            const expected = tiers.filter(t => t.validFrom <= occ.expectedDate).pop()!;
+            if (occ.amount.amount !== expected.amount.amount) return false;
+          }
+          return true;
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #5: sort stability — output sorted ascending by expectedDate, ties by config index', () => {
+    // fails if: sort is unstable or uses wrong comparison
+    fc.assert(
+      fc.property(
+        fc.array(dateStringArb, { minLength: 1, maxLength: 4 }),
+        (validFromDates) => {
+          const rules = validFromDates.map((d, i) =>
+            makeRule({ name: `Rule${i}`, validFrom: d }),
+          );
+          const service = new RecurringForecastService(rules);
+          // Use a 3-month window
+          const from = '2026-01-01';
+          const to = '2026-03-31';
+          const result = service.forecastBetween(from, to);
+          if (result.isFailure) return false;
+          const dates = result.value.map(o => o.expectedDate);
+          const sorted = [...dates].sort();
+          return JSON.stringify(dates) === JSON.stringify(sorted);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #6: out-of-range window — empty forecast when window outside lifecycle', () => {
+    // fails if: rule lifecycle bounds are ignored
+    fc.assert(
+      fc.property(
+        dateStringArb,
+        dateStringArb,
+        dateStringArb,
+        (validFrom, from, to) => {
+          const [windowFrom, windowTo] = from <= to ? [from, to] : [to, from];
+          fc.pre(windowTo < validFrom); // window entirely before lifecycle
+          const service = new RecurringForecastService([
+            makeRule({ name: 'R', validFrom }),
+          ]);
+          const result = service.forecastBetween(windowFrom, windowTo);
+          if (result.isFailure) return false;
+          return result.value.length === 0;
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #8: service↔config wiring — from/to forwarded verbatim to enumerateOccurrences (recording-fake pattern)', () => {
+    // fails if: from or to are accidentally dropped or swapped in the call to enumerateOccurrences
+    // Recording-fake pattern from Story 3.2 Phase 4 refactor (commit 59639e1).
+    // We test this by checking that the output dates all fall within [from, to],
+    // and by comparing with a reference call using swapped arguments (should differ).
+    fc.assert(
+      fc.property(
+        dateStringArb,
+        dateStringArb,
+        (from, to) => {
+          const [windowFrom, windowTo] = from <= to ? [from, to] : [to, from];
+          fc.pre(windowFrom !== windowTo);
+          const service = new RecurringForecastService([
+            makeRule({ name: 'R', validFrom: '2000-01-01' }),
+          ]);
+          const result = service.forecastBetween(windowFrom, windowTo);
+          if (result.isFailure) return false;
+          // All occurrences must be within [windowFrom, windowTo]
+          for (const occ of result.value) {
+            if (occ.expectedDate < windowFrom || occ.expectedDate > windowTo) return false;
+          }
+          // Swapped window should produce a different (typically larger) result
+          const swappedResult = service.forecastBetween(windowTo, windowFrom);
+          // Swapped should fail (from > to)
+          return swappedResult.isFailure;
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
 });

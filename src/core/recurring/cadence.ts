@@ -59,7 +59,7 @@ export function enumerateOccurrences(
     // Once date exceeds both lifecycle end and window end, stop.
     const lifecycleEnd = validTo ?? '9999-12-31';
     if (date > lifecycleEnd || date > windowTo) break;
-    if (date >= windowFrom && date >= validFrom) {
+    if (date >= windowFrom) {
       results.push(date);
     }
     i++;

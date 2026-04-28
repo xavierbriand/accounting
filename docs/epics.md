@@ -238,7 +238,21 @@ So that the settlement engine and CLI can answer "how much sits in my Car / Hous
 
 ### Story 3.3: Recurring Cost Forecast
 
-*Title only. Acceptance criteria deferred to Story 3.3's planning phase.*
+As a System,
+I want to forecast every recurring fixed-cost occurrence (rent, subscriptions, insurance premiums, utilities) within a given date window from configured rules,
+So that the Safe Monthly Transfer Calculator (Story 3.4) can pre-fund the joint accounts for known liabilities and the buffer-fill engine can plan ahead.
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` config with a `recurring:` section listing one or more rules — each with `name` (unique), `category`, `cadence` ∈ `{monthly, quarterly, annual}`, `amount` (positive), `validFrom` (ISO 8601 `YYYY-MM-DD`), optional `validTo`, optional `amendments: [{ validFrom, amount }]`,
+**When** I call `RecurringForecastService.forecastBetween(from, to)` with two ISO 8601 dates and `from <= to`,
+**Then** it returns one `ForecastOccurrence` per rule per scheduled cadence step whose date lies in the closed interval `[from, to]` AND in the rule's lifecycle `[validFrom, validTo]` (or `[validFrom, +∞)` if no `validTo`), shape `{ name, category, expectedDate, amount }`, sorted ascending by `expectedDate` (ties broken by config order).
+**And** `expectedDate` is computed by stepping from `validFrom` (which is itself the first occurrence) by `+1 / +3 / +12` calendar months for monthly / quarterly / annual respectively, with day-of-month overflow **clamped to the last valid day of the target month without rebound** (`2024-01-31` monthly → `2024-02-29`, `2024-03-31`, `2024-04-30`, …; `2024-02-29` annual → `2025-02-28`, `2026-02-28`, `2027-02-28`, `2028-02-29`).
+**And** `amount` for an occurrence dated `d` is the `amount` of the latest entry in `[{validFrom: rule.validFrom, amount: rule.amount}, ...rule.amendments]` whose `validFrom ≤ d` (amendments inclusive on their `validFrom`); all amounts in `defaultCurrency`.
+**And** the YAML is rejected at parse with a path-cited Zod error if: two rules share the same `name`; `cadence` is not in the enum; any `amount` is not positive; `validTo < validFrom`; amendments are not strictly ascending by `validFrom`; the first amendment is not strictly after `rule.validFrom`; the last amendment is at or after `validTo`; or any date is not ISO 8601 `YYYY-MM-DD`.
+**And** if `from > to`, or either is not ISO 8601 `YYYY-MM-DD`, `forecastBetween` returns `Result.fail` with a clear message.
+**And** an empty `recurring: []` config (or omitted entirely) is valid — the forecast over any window returns `Result.ok([])`.
+**And** `forecastBetween` is pure: it never reads the system clock — re-running with the same `(from, to)` yields byte-identical output regardless of `Date.now()`.
 
 ### Story 3.4: Safe Monthly Transfer Calculator
 

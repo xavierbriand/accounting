@@ -54,3 +54,30 @@ buffers:
     account: assets:buffer:house
     target: 5000
     cap: 10000
+
+# Recurring costs: fixed expenses that hit joint accounts on a predictable cadence.
+# Used by RecurringForecastService to project upcoming expenses over a date window.
+#
+# cadence: monthly | quarterly | annual
+# amount:  positive decimal in defaultCurrency (EUR above)
+# validFrom: ISO 8601 date (YYYY-MM-DD) — when this rule's lifecycle begins
+# validTo:   optional ISO date — inclusive end date (omit for open-ended rules)
+# amendments: optional list of amount changes (strictly ascending validFrom,
+#             first amendment must be strictly after rule validFrom,
+#             last amendment validFrom must be <= validTo when validTo is set)
+#
+# An empty list is valid if you have no recurring costs configured yet.
+recurring:
+  - name: Netflix
+    category: Subscriptions
+    cadence: monthly
+    amount: 12.99
+    validFrom: "2024-01-01"
+  - name: Rent
+    category: Rent
+    cadence: monthly
+    amount: 1000
+    validFrom: "2024-01-01"
+    amendments:
+      - validFrom: "2026-07-01"
+        amount: 1050

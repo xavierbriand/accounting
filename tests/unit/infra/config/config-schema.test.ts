@@ -722,6 +722,78 @@ describe('parseRawConfig', () => {
       expect(result.error).toContain('buffers.2.account');
     });
   });
+
+  describe('buffer targetDate field (Story 3.4)', () => {
+    it('rejects a buffer entry missing the targetDate field', () => {
+      // fails if parseRawConfig accepts a buffer without a targetDate field
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with targetDate that is not ISO 8601 YYYY-MM-DD', () => {
+      // fails if parseRawConfig accepts an invalid targetDate format (e.g. DD/MM/YYYY)
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '01/12/2026' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with targetDate as a datetime string', () => {
+      // fails if parseRawConfig accepts ISO datetime instead of date-only for targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2026-12-01T00:00:00Z' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with an empty targetDate string', () => {
+      // fails if parseRawConfig accepts an empty targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('accepts a buffer with a valid ISO 8601 targetDate', () => {
+      // fails if parseRawConfig rejects a valid targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2026-12-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].targetDate).toBe('2026-12-01');
+    });
+
+    it('passes targetDate through to the domain type unchanged', () => {
+      // fails if targetDate is not threaded through from schema to AppConfig
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Vacation', account: 'assets:buffer:vacation', target: 1200, targetDate: '2026-12-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].targetDate).toBe('2026-12-01');
+    });
+
+    it('allows targetDate that has already passed (runtime concern, not parser concern)', () => {
+      // fails if parseRawConfig rejects a past targetDate — past dates are valid at parse
+      // time; the SafeTransferCalculator checks at calc time whether the buffer is stale.
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2020-01-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
+    });
+  });
 });
 
 describe('parseRawConfig — autoTagRules (Story B)', () => {

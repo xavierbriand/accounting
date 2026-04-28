@@ -6,7 +6,8 @@ This is the **runnable** form of the rule. The conceptual statement lives in CLA
 
 ## Checklist
 
-- [ ] **Working tree clean.** `git status` clean; `main` synced (`git fetch && git pull`).
+- [ ] **Sibling work check.** `gh pr list --state open --draft --base main` + `gh issue list --state open` — for each open/draft PR or issue, confirm it isn't already addressing the same goal you're about to plan against. If overlap, defer or coordinate.
+- [ ] **Working tree clean.** `git status` clean; story branch rebased on `origin/main`.
 - [ ] **Open issues.** `gh issue list --state open --limit 50` — re-prioritise, close stale, confirm `deferred-suggestion` items still relevant.
 - [ ] **Open PRs.** `gh pr list --state open` — Dependabot/draft state.
   - Routine bumps (patch or minor, any dep) → merge directly after CI + changelog check, no DoR/DoD/retro.

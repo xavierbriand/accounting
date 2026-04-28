@@ -17,7 +17,7 @@ On conflict between this file and a `docs/` file, `docs/` wins. The retrospectiv
 
 **Couples Expense Sharing App** — a local-first, CLI-based "predictive asset-based financial engine" for couples managing joint finances. Replaces reactive joint-account top-ups with a deterministic engine that predicts fair transfers, buffers volatility, and keeps an immutable ledger.
 
-Current position: see [docs/status.md](docs/status.md). Refreshed by the retro of any story that ships an epic milestone or changes the "Next" line.
+Current position: see [docs/status.md](docs/status.md). Refreshed by the retro of any story that ships an epic milestone or changes the "Next" line; routine merges drop a fragment under [`docs/status.d/`](docs/status.d/).
 
 **Stack:** Node.js 20, TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
 
@@ -91,6 +91,27 @@ Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-im
 - `test(<scope>): <scenario> — failing` · `feat(<scope>): <scenario> — minimal green` · `refactor(<scope>): <what>`
 - Story id in every subject. See § 8: **R10** green-on-landing · **R11** empty refactor · **R12** summary verb · **R13** 6–10 commits/story. Squash on merge optional.
 
+### 6.4.1 Push protocol (parallel-safe)
+
+- **One agent per branch.** Don't open a second session against a branch with an active session.
+- **All work on a branch — never on `main`.** Story worktrees never push `main`. Main advances only via `gh pr merge`, gated by the user.
+- **Before every push:**
+  1. `git fetch origin`
+  2. `git rebase origin/main` (or `git pull --rebase` if upstream is the story branch)
+  3. If rebase reports **conflicts** → enter the Conflict-resolution protocol below. Do not auto-resolve.
+  4. If rebase fails for **non-conflict reasons** (lockfile, detached HEAD, corruption, network failure mid-fetch, etc.) → stop, report the error verbatim to the user, ask before any recovery action (`git rebase --abort`, removing `.git/index.lock`, etc.). Never silently retry.
+- **Push only the current branch:** `git push origin HEAD`. Don't use bare `git push` if local `push.default` is unset/`matching` — it can advance `main` unintentionally.
+
+#### Conflict-resolution protocol
+
+When a rebase conflict appears, the agent's reply must include three sections:
+
+1. **Diagnosis** — for each conflicted file: which hunks conflict, who introduced the competing change (`git log --oneline origin/main -- <file>` and the local commit), classification *mechanical* (independent edits to a shared structure) vs *semantic* (same lines edited for different reasons).
+2. **Suggested resolutions** — at least two named options each with the concrete edit. For status-log style: "(a) keep both, stack chronologically newest-first" / "(b) drop ours and re-author after rebase if upstream supersedes." For semantic: name the trade-off. `--ours`/`--theirs` only when one side is unambiguously stale.
+3. **Recommendation + question** — one-sentence pick with reason; explicit ask before applying.
+
+If the conflict is on `docs/status.d/<file>` (rare — only if two retros pick the same `<date>-story-<id>` filename), the diagnosis must name that specifically and the Suggested-resolutions section must offer at least: **(a) rename the local fragment by appending `-b` to the story id** (e.g. `2026-04-28-story-B.md` → `2026-04-28-story-B-b.md`) so both fragments coexist verbatim; or **(b) merge the two fragment bodies into a single file** (rarely correct — only when the retros documented the same outcome).
+
 ### 6.5 Refactor-during-green policy
 
 Local cleanups (rename, extract small helper, collapse literal) allowed while green if behaviour is preserved. Structural changes defer to refactor phase. Sonnet calls this out in the return report.
@@ -101,7 +122,7 @@ One PR per story. >~3 Gherkin scenarios or >1 Sonnet Task round → split. See �
 
 ### 6.7 Maintenance sub-loop
 
-Runs **before every story plan**. Run the [maintenance-sub-loop checklist](docs/templates/maintenance-sub-loop.md). **Major-bump-zero-code subcase:** collapse to 4 commits (`chore(docs)` + `chore(deps)` + `refactor:` empty + `chore(retro)`). See § 8: **R15**.
+Runs **at the start of each new planning session**, treating the check as a read-only snapshot — no blocking on sibling stories in flight. Run the [maintenance-sub-loop checklist](docs/templates/maintenance-sub-loop.md). **Major-bump-zero-code subcase:** collapse to 4 commits (`chore(docs)` + `chore(deps)` + `refactor:` empty + `chore(retro)`). See § 8: **R15**.
 
 ## 7. Definition of Done
 
@@ -138,3 +159,7 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R13 | Plan in slices, target 6–10 commits; one slice = one behaviour | [story-1.4](docs/retrospectives/story-1.4.md) |
 | R14 | Adapter stories: coarser slices, target 5–7 commits | [story-2.1](docs/retrospectives/story-2.1.md) |
 | R15 | Major-bump-zero-code subcase: collapse to 4 chore/refactor commits | [story-maint-05](docs/retrospectives/story-maint-05.md) / [story-maint-06](docs/retrospectives/story-maint-06.md) |
+| R16 | R15 collapse extends to any zero-behaviour-change story (process refresh, agent spec, doc refresh, parallel-safety): **4 change-body commits** — `chore(docs)`/`feat(agent)` change + `refactor:` empty slot + `chore(retro)` + (optional 4th body slice when the change spans process **and** docs); the preparatory `chore(docs): plan + P1/P2/P3 review` commit is authored before phase 3 and is **not** counted in the 4 | [story-maint-15](docs/retrospectives/story-maint-15.md) |
+| R17 | Status log fragmented into `docs/status.d/` per-story files; `docs/status.md` keeps only Current position + Refresh trigger + pointer | [story-maint-16](docs/retrospectives/story-maint-16.md) |
+| R18 | Worktree push protocol: one agent per branch, never push `main`, fetch+rebase+propose-resolutions-on-conflict before push | [story-maint-16](docs/retrospectives/story-maint-16.md) |
+| R19 | Maintenance sub-loop checks open/draft PRs **and** issues for sibling-work overlap before opening a new plan | [story-maint-16](docs/retrospectives/story-maint-16.md) |

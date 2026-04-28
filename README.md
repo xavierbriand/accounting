@@ -6,6 +6,8 @@ Full problem framing and vision: [docs/product-brief.md](docs/product-brief.md).
 
 ## Status
 
+*Refresh when the 'Next' line in [`docs/status.md`](docs/status.md) changes, or when adding a new top-level npm script.*
+
 Active development.
 
 - **Epic 1 (Foundation)** — complete. Money value object, append-only ledger, migration runner, YAML config.

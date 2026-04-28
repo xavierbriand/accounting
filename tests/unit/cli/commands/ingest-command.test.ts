@@ -490,3 +490,71 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
     expect(exitCodes).toContain(0);
   });
 });
+
+describe('runIngestCommand — new category propagates to subsequent prompts (Story A)', () => {
+  // fails if: the new category name is not pushed into the in-memory categories array
+  //   after a define-new action — subsequent prompts would not offer 'AutoInsurance'
+  //   as a 'Change to:' option, silently dropping the feature (guards
+  //   ingest-command.ts:runInteractiveLoop categories-array push).
+
+  it('new category from first outcome appears in availableCategories for second outcome', async () => {
+    const stdout = makeStdout();
+    const stderr = makeStderr();
+    const capturedExitCode: number[] = [];
+
+    const outcomes = [
+      makeLowOutcome('UBER TRIP', 'Uncategorized'),
+      makeLowOutcome('AMAZON', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'AutoInsurance' })
+      .mockResolvedValueOnce({ action: 'keep' });
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+    };
+
+    const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: 2 }));
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: {
+        parse: () => Result.ok({
+          items: [
+            { sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'UBER TRIP', direction: 'outflow', amount: EUR },
+            { sourceAccount: 'main-X', occurredAt: '2026-04-20T00:00:00+02:00', description: 'AMAZON', direction: 'outflow', amount: EUR },
+          ],
+          errors: [],
+        }),
+      },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
+      transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: prompter,
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => capturedExitCode.push(code),
+      transactionRepository: { saveBatch: saveBatchMock },
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    // Second selectCategory call receives the new name in availableCategories.
+    const secondCallCategories = selectCategoryMock.mock.calls[1][2] as readonly string[];
+    expect(secondCallCategories).toContain('AutoInsurance');
+
+    // saveBatch payload: outcome 1 was 'change'd to AutoInsurance with confidence promoted to 'high';
+    // outcome 2 was 'kept' so its original category and confidence are unchanged.
+    expect(saveBatchMock).toHaveBeenCalledOnce();
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[0]).toMatchObject({ category: 'AutoInsurance', confidence: 'high' });
+    expect(committed[1]).toMatchObject({ category: 'Uncategorized', confidence: 'low' });
+
+    expect(capturedExitCode).toContain(0);
+  });
+});

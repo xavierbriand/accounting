@@ -206,6 +206,9 @@ async function runInteractiveLoop(
       if (idx !== -1) {
         resolved[idx] = { ...outcome, category: answer.category, confidence: 'high' };
       }
+      if (!categories.includes(answer.category)) {
+        categories.push(answer.category);
+      }
     }
   }
 

@@ -84,6 +84,7 @@ accounting/
 ├── vitest.config.js
 ├── src/
 │   ├── core/                  # PURE DOMAIN (no external deps)
+│   │   ├── categories/        # category-name validator (shared by Story A CLI + Story B schema)
 │   │   ├── ingest/
 │   │   │   ├── ingest-use-case.ts
 │   │   │   └── types.ts

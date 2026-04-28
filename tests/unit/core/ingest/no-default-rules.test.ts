@@ -25,7 +25,7 @@ const SRC_DIR = path.resolve(__dirname, '../../../../src');
 describe('DEFAULT_RULES removed from src/ (Story B)', () => {
   it('no .ts file under src/ contains the literal token DEFAULT_RULES', () => {
     // fails if DEFAULT_RULES constant remains anywhere in source
-    const allFiles = fs.readdirSync(SRC_DIR, { recursive: true }) as string[];
+    const allFiles = fs.readdirSync(SRC_DIR, { recursive: true, encoding: 'utf8' });
     const tsFiles = allFiles.filter((f) => f.endsWith('.ts'));
 
     const filesWithDefaultRules = tsFiles.filter((relative) => {

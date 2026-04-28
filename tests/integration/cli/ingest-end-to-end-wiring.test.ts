@@ -4,12 +4,15 @@
  * Gherkin coverage:
  *   - "Real BPCE fixture ingests with all rows built (regresses #60)"
  *
- * fails if: TransactionBuilder is constructed with an empty accounts array in program.ts
- *   (the bug in #60) — every row would be rejected with "Unknown sourceAccount: <id>"
- *   and stderr would show "Found 0 new transactions" + "Build failed" lines instead of
- *   the expected "Found 5 new transactions" with no "Build failed" lines.
- *   The exit-code assertion (2, not 0) also fails under the bug because 0 rows are built,
- *   so there are 0 low-confidence rows, so --non-interactive exits 0 rather than 2.
+ * fails if (a) TransactionBuilder is constructed with an empty accounts array in program.ts
+ *   (the original #60 bug — every row would be rejected with "Unknown sourceAccount: <id>"
+ *   and stderr would show "Found 0 new transactions" + "Build failed" lines), OR
+ *   (b) the autoTagRules wiring at program.ts:104 is reverted to passing undefined
+ *   (Story B): writeStubYaml injects two rules (Insurance/mutuelle, Subscriptions/abonnement);
+ *   under the bug, both fixture rows that should auto-tag would land in Uncategorized,
+ *   altering the low-confidence count and breaking the exit-2 assertion.
+ *   The exit-code assertion (2, not 0) anchors both regressions: 0 rows built ⇒ 0 low-confidence
+ *   ⇒ exit 0; or wrong tagging ⇒ a different low-confidence count ⇒ assertion drift.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';

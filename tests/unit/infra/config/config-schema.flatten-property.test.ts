@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { parseRawConfig } from '../../../../src/infra/config/config-schema.js';
+import { RESERVED_TOKENS } from '../../../../src/core/categories/category-name.js';
 
 const minimalBase = {
   dbPath: './data/ledger.db',
@@ -39,8 +40,14 @@ const minimalBase = {
 // Avoids generating patterns that would fail regex compilation.
 const safePattern = fc.stringMatching(/^[a-zA-Z0-9]+(\|[a-zA-Z0-9]+)*$/);
 
-// Generate a safe category name: alphanumerics, 1-20 chars.
-const safeCategory = fc.stringMatching(/^[a-zA-Z][a-zA-Z0-9]{0,19}$/);
+// Generate a safe category name: alphanumerics, 1-20 chars, not a reserved token.
+// Reserved tokens (Uncategorized, Asset, Income, Expense, Liability — case-insensitive) would
+// be rejected by validateNewCategoryName in the schema's superRefine, causing parseRawConfig
+// to return Result.fail and the property assertion to silently skip via the early-return guard.
+// Filtering them out here keeps every generated case exercising the flatten loop.
+const safeCategory = fc
+  .stringMatching(/^[a-zA-Z][a-zA-Z0-9]{0,19}$/)
+  .filter((s) => !RESERVED_TOKENS.includes(s.toLowerCase()));
 
 // A group: one category + 1-4 patterns.
 const groupArb = fc.record({

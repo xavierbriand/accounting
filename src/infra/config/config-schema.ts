@@ -4,6 +4,7 @@ import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { AppConfig, RecurringRule } from '@core/config/app-config.js';
 import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
+import { validateNewCategoryName } from '@core/categories/category-name.js';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATE_MSG = 'must be ISO 8601 date (YYYY-MM-DD)';
@@ -247,7 +248,30 @@ const RawConfigSchema = z
     autoTagRules: z
       .array(AutoTagRuleGroupSchema)
       .optional()
-      .default([]),
+      .default([])
+      .superRefine((groups, ctx) => {
+        for (let i = 0; i < groups.length; i++) {
+          const categoryResult = validateNewCategoryName(groups[i].category, []);
+          if (categoryResult.isFailure) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, 'category'],
+              message: categoryResult.error,
+            });
+          }
+          for (let j = 0; j < groups[i].patterns.length; j++) {
+            try {
+              new RegExp(groups[i].patterns[j], 'i');
+            } catch (err) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: [i, 'patterns', j],
+                message: err instanceof Error ? err.message : 'invalid regex',
+              });
+            }
+          }
+        }
+      }),
   })
   .strict();
 

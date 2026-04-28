@@ -59,7 +59,7 @@ const BufferBucketRawSchema = z.object({
   name: z.string().min(1),
   account: z.string().min(1),
   target: z.number().nonnegative(),
-  targetDate: z.string().optional(),
+  targetDate: z.string().regex(ISO_DATE_REGEX, ISO_DATE_MSG),
   cap: z.number().nonnegative().optional(),
 });
 
@@ -308,7 +308,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
       }
       cap = capResult.value;
     }
-    buffers.push({ name: b.name, account: b.account, target: targetResult.value, targetDate: b.targetDate ?? '', cap });
+    buffers.push({ name: b.name, account: b.account, target: targetResult.value, targetDate: b.targetDate, cap });
   }
 
   const recurring: RecurringRule[] = [];

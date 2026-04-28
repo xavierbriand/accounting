@@ -28,10 +28,12 @@ buffers:
   - name: Car
     account: assets:buffer:car
     target: 1000
+    targetDate: "2099-12-31"
   - name: House
     account: assets:buffer:house
     target: 5000
     cap: 10000
+    targetDate: "2099-12-31"
 accounts:
   - id: main-12345678901
     type: bank

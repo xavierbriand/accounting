@@ -3,6 +3,7 @@ import type { ZodError } from 'zod';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { AppConfig, RecurringRule } from '@core/config/app-config.js';
+import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATE_MSG = 'must be ISO 8601 date (YYYY-MM-DD)';
@@ -137,6 +138,13 @@ const RecurringRuleRawSchema = z
     }
   });
 
+const AutoTagRuleGroupSchema = z
+  .object({
+    category: z.string(),
+    patterns: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+
 const RawConfigSchema = z
   .object({
     dbPath: z.string().min(1),
@@ -236,6 +244,10 @@ const RawConfigSchema = z
           });
         }
       }),
+    autoTagRules: z
+      .array(AutoTagRuleGroupSchema)
+      .optional()
+      .default([]),
   })
   .strict();
 
@@ -301,6 +313,13 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     });
   }
 
+  const autoTagRules: AutoTagRule[] = [];
+  for (const group of data.autoTagRules) {
+    for (const pattern of group.patterns) {
+      autoTagRules.push({ pattern: new RegExp(pattern, 'i'), category: group.category });
+    }
+  }
+
   return Result.ok({
     dbPath: data.dbPath,
     defaultCurrency: currency,
@@ -309,5 +328,6 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     buffers,
     accounts: data.accounts,
     recurring,
+    autoTagRules,
   });
 }

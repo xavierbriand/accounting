@@ -1,4 +1,5 @@
 import type { Money } from '@core/shared/money.js';
+import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
 
 export interface SplitRule {
   readonly partner: string;
@@ -49,4 +50,5 @@ export interface AppConfig {
   readonly buffers: readonly BufferBucket[];
   readonly accounts: readonly AccountConfig[];
   readonly recurring: readonly RecurringRule[];
+  readonly autoTagRules: readonly AutoTagRule[];
 }

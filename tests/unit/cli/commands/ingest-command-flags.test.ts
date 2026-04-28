@@ -29,6 +29,7 @@ const baseConfig: AppConfig = {
   buffers: [],
   accounts: [makeAccount('main-X', 'X_')],
   recurring: [],
+  autoTagRules: [],
 };
 
 function makeHighOutcome(description: string, category: string): BuildOutcome {

@@ -89,6 +89,7 @@ function makeRealDeps(
     buffers: [],
     accounts: [mainAccount],
     recurring: [],
+    autoTagRules: [],
   };
 
   const deps: IngestCommandDeps = {

@@ -141,6 +141,7 @@ describe('ingest-throughput (perf)', () => {
         buffers: [],
         accounts: [mainAccount],
         recurring: [],
+        autoTagRules: [],
       };
 
       const stdout = makeCapture();

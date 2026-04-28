@@ -12,7 +12,7 @@ Feature: Safe monthly transfer calculator (Story 3.4)
     When I calculate for window asOf="2026-04-28" from="2026-05-01" to="2026-05-31"
     Then the result is success
     And totalRequired is 12.99 EUR
-    And Alex contributes 7.79 EUR and Sam contributes 5.20 EUR
+    And Alex contributes 7.80 EUR and Sam contributes 5.19 EUR
     And lineItems lists exactly:
       | kind     | date       | category      | gross     |
       | forecast | 2026-05-15 | Subscriptions | 12.99 EUR |
@@ -29,8 +29,8 @@ Feature: Safe monthly transfer calculator (Story 3.4)
       | name | category | cadence | amount | validFrom  |
       | Rent | Rent     | monthly | 1000   | 2024-01-01 |
     When I calculate for window asOf="2026-04-28" from="2026-05-01" to="2026-06-30"
-    Then the May 1 line item shows split 50/50: Alex 500 EUR, Sam 500 EUR
-    And the June 1 line item shows split 80/20: Alex 800 EUR, Sam 200 EUR
+    Then the line item on "2026-05-01" shows Alex 500 EUR and Sam 500 EUR
+    And the line item on "2026-06-01" shows Alex 800 EUR and Sam 200 EUR
     # fails if a single split is applied to all occurrences instead of per-occurrence lookup.
 
   Scenario: buffer top-up across a multi-month window

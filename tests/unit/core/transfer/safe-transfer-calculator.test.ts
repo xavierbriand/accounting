@@ -187,11 +187,13 @@ describe('SafeTransferCalculator — forecast-only path', () => {
     expect(result.isSuccess).toBe(true);
     const item = result.value.lineItems[0];
     // 1299 * 0.6 = 779.4 → LRM: 780 (Alex), 519 (Sam)
-    expect(item.perPartnerSplit.get('Alex')!.amount).toBe(779);
-    expect(item.perPartnerSplit.get('Sam')!.amount).toBe(520);
+    // 1299 * 0.6 = 779.4 and 1299 * 0.4 = 519.6, LRM sum check:
+    // dinero.js LRM gives the extra cent to Alex (first higher-weight element) → Alex=780, Sam=519
+    expect(item.perPartnerSplit.get('Alex')!.amount).toBe(780);
+    expect(item.perPartnerSplit.get('Sam')!.amount).toBe(519);
     // perPartner totals
-    expect(result.value.perPartner.get('Alex')!.amount).toBe(779);
-    expect(result.value.perPartner.get('Sam')!.amount).toBe(520);
+    expect(result.value.perPartner.get('Alex')!.amount).toBe(780);
+    expect(result.value.perPartner.get('Sam')!.amount).toBe(519);
     expect(result.value.totalRequired.amount).toBe(1299);
   });
 

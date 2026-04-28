@@ -218,15 +218,6 @@ Then(
 );
 
 Then(
-  'totalRequired is {int} EUR',
-  function (state: World, amount: number) {
-    const calc = state.stateResult!.value;
-    expect(calc.totalRequired.amount).toBe(amount * 100);
-    expect(calc.totalRequired.currency).toBe('EUR');
-  },
-);
-
-Then(
   'Alex contributes {float} EUR and Sam contributes {float} EUR',
   function (state: World, alexAmount: number, samAmount: number) {
     const calc = state.stateResult!.value;
@@ -257,24 +248,13 @@ Then(
 );
 
 Then(
-  'the May 1 line item shows split 50/50: Alex {int} EUR, Sam {int} EUR',
-  function (state: World, alexAmount: number, samAmount: number) {
+  'the line item on {string} shows Alex {int} EUR and Sam {int} EUR',
+  function (state: World, date: string, alexAmount: number, samAmount: number) {
     const calc = state.stateResult!.value;
-    const mayItem = calc.lineItems.find(i => i.date === '2026-05-01');
-    expect(mayItem).toBeDefined();
-    expect(mayItem!.perPartnerSplit.get('Alex')?.amount).toBe(alexAmount * 100);
-    expect(mayItem!.perPartnerSplit.get('Sam')?.amount).toBe(samAmount * 100);
-  },
-);
-
-Then(
-  'the June 1 line item shows split 80/20: Alex {int} EUR, Sam {int} EUR',
-  function (state: World, alexAmount: number, samAmount: number) {
-    const calc = state.stateResult!.value;
-    const junItem = calc.lineItems.find(i => i.date === '2026-06-01');
-    expect(junItem).toBeDefined();
-    expect(junItem!.perPartnerSplit.get('Alex')?.amount).toBe(alexAmount * 100);
-    expect(junItem!.perPartnerSplit.get('Sam')?.amount).toBe(samAmount * 100);
+    const item = calc.lineItems.find(i => i.date === date);
+    expect(item).toBeDefined();
+    expect(item!.perPartnerSplit.get('Alex')?.amount).toBe(alexAmount * 100);
+    expect(item!.perPartnerSplit.get('Sam')?.amount).toBe(samAmount * 100);
   },
 );
 

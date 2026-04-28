@@ -10,6 +10,7 @@ import type { BuildOutcome } from '@core/ingest/types.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import { Money } from '@core/shared/money.js';
+import type { ConfigWriter } from '@core/ports/config-writer.js';
 
 // fails if: the summary table is not written to stdout,
 //           or the interactive loop is skipped for low-confidence items,
@@ -557,5 +558,173 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
     expect(committed[1]).toMatchObject({ category: 'Uncategorized', confidence: 'low' });
 
     expect(capturedExitCode).toContain(0);
+  });
+});
+
+// ---- configWriter integration in runIngestCommand (Story C) ----
+// fails if: configWriter is not called before saveBatch (guards YAML-before-DB ordering),
+//           configWriter failure does not abort with exit 5 and prevent saveBatch (guards Q1-b),
+//           configWriter is called when there are no remembered rules (wasteful write)
+
+function makeNoOpConfigWriter(): ConfigWriter {
+  return {
+    appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
+  };
+}
+
+describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => {
+  function makeDepsWithWriter(
+    configWriter: ConfigWriter,
+    prompter: InteractivePrompter,
+    outcomes: BuildOutcome[],
+  ): {
+    deps: IngestCommandDeps;
+    stdout: Writable & { captured: string };
+    stderr: Writable & { captured: string };
+    exitCodes: number[];
+    saveBatchMock: ReturnType<typeof vi.fn>;
+  } {
+    const stdout = makeStdout();
+    const stderr = makeStderr();
+    const exitCodes: number[] = [];
+    const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: outcomes.length }));
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: {
+        parse: () => Result.ok({
+          items: outcomes.map((o) => ({
+            sourceAccount: 'main-X',
+            occurredAt: o.transaction.occurredAt,
+            description: o.transaction.description,
+            direction: 'outflow' as const,
+            amount: EUR,
+          })),
+          errors: [],
+        }),
+      },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
+      transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: prompter,
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: { saveBatch: saveBatchMock },
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter,
+    };
+
+    return { deps, stdout, stderr, exitCodes, saveBatchMock };
+  }
+
+  it('(a) configWriter is called before saveBatch when remembered rules exist', async () => {
+    // fails if: YAML-before-DB ordering is violated
+    const callOrder: string[] = [];
+
+    const configWriter: ConfigWriter = {
+      appendAutoTagRules: vi.fn().mockImplementation(async () => {
+        callOrder.push('configWriter');
+        return Result.ok();
+      }),
+    };
+
+    const outcomes = [makeLowOutcome('ALTIMA COURTAGE', 'Uncategorized')];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'courtage' }),
+    };
+
+    const { deps, saveBatchMock, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);
+    saveBatchMock.mockImplementation(() => { callOrder.push('saveBatch'); return Result.ok({ written: 1 }); });
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(callOrder).toEqual(['configWriter', 'saveBatch']);
+    expect(exitCodes).toContain(0);
+  });
+
+  it('(b) configWriter failure exits 5 and does NOT call saveBatch', async () => {
+    // fails if: saveBatch is called when configWriter fails (guards Q1-b atomicity)
+    const configWriter: ConfigWriter = {
+      appendAutoTagRules: vi.fn().mockResolvedValue(
+        Result.fail({ kind: 'mtime-race' as const }),
+      ),
+    };
+
+    const outcomes = [makeLowOutcome('ALTIMA COURTAGE', 'Uncategorized')];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'courtage' }),
+    };
+
+    const { deps, saveBatchMock, exitCodes, stderr } = makeDepsWithWriter(configWriter, prompter, outcomes);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(saveBatchMock).not.toHaveBeenCalled();
+    expect(exitCodes).toContain(5);
+    expect(stderr.captured).toMatch(/yaml|config|changed/i);
+  });
+
+  it('(c) configWriter not called when no rules are remembered', async () => {
+    // fails if: configWriter is called on empty rememberedRules (wasteful no-op write)
+    const configWriter: ConfigWriter = {
+      appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
+    };
+
+    const outcomes = [makeLowOutcome('ALTIMA COURTAGE', 'Uncategorized')];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'skip' }),
+    };
+
+    const { deps, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(configWriter.appendAutoTagRules).not.toHaveBeenCalled();
+    expect(exitCodes).toContain(0);
+  });
+
+  it('(d) in-batch duplicate (same cat+pat twice) is collapsed to one entry', async () => {
+    // Q5-c: user confirms (AutoInsurance, courtage) twice → only one append
+    const configWriter: ConfigWriter = {
+      appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
+    };
+
+    const outcomes = [
+      makeLowOutcome('ALTIMA COURTAGE', 'Uncategorized'),
+      makeLowOutcome('ALTIMA SOLO', 'Uncategorized'),
+    ];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn()
+        .mockResolvedValueOnce({ action: 'change', category: 'AutoInsurance' })
+        .mockResolvedValueOnce({ action: 'change', category: 'AutoInsurance' }),
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn()
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'courtage' })
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'courtage' }),
+    };
+
+    const { deps, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(configWriter.appendAutoTagRules).toHaveBeenCalledOnce();
+    const calledWith = (configWriter.appendAutoTagRules as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{ category: string; pattern: string }>;
+    // Only one entry despite two confirms
+    expect(calledWith).toHaveLength(1);
+    expect(calledWith[0]).toEqual({ category: 'AutoInsurance', pattern: 'courtage' });
+    expect(exitCodes).toContain(0);
   });
 });

@@ -4,7 +4,7 @@
 
 The trio closer. Story A (#73) added inline category creation; Story B (#74) made YAML the only source of `autoTagRules`. Story C delivers the "one-time pain per merchant" promise: after the user picks/creates a category for a low-confidence row, the prompt offers to remember the choice as a rule. On confirm, the rule is appended to `accounting.yaml` (atomic write, comments preserved) so subsequent ingests auto-tag the same merchant without prompting.
 
-**Epic / FR alignment.** Epic 2 / Story 2.4 (Interactive Ingest Command). FR6 ("System can automatically tag transactions based on exact merchant name matches from previous history") is now fulfilled in its full form: previous history accumulates *across* ingests, written by the user inline rather than hand-edited.
+**Epic / FR alignment.** Epic 2 / Story 2.4 (Interactive Ingest Command). Three FRs touched: **FR5** ("User can interactively Tag transactions") is materially extended — a new post-tagging step is added to the interactive loop; **FR6** ("System can automatically tag transactions based on exact merchant name matches from previous history") is now fulfilled in its full form (previous history accumulates *across* ingests, written by the user inline rather than hand-edited); **FR17** ("Snapshot Backup before any write operation") is reordered relative to the new YAML write — the YAML write happens BEFORE the DB snapshot per Q1-b, creating an asymmetry documented in § Risks.
 
 ### Maintenance sub-loop (§ 6.7) run 2026-04-28 pre-planning
 
@@ -53,7 +53,7 @@ Plus three decisions taken silently with no objection:
   export type ConfigWriterError =
     | { kind: 'mtime-race' }
     | { kind: 'conflict'; existingCategory: string; pattern: string }
-    | { kind: 'io'; message: string };
+    | { kind: 'io'; message: string };  // message is sanitised — no absolute paths
 
   export interface ConfigWriter {
     appendAutoTagRules(
@@ -61,6 +61,7 @@ Plus three decisions taken silently with no objection:
     ): Promise<Result<void, ConfigWriterError>>;
   }
   ```
+  **`io.message` sanitisation contract:** when `YamlConfigWriter` catches a Node `Error` (typically from `fs.renameSync` or `fs.writeFileSync`), the message is rewritten via a small `sanitizeFsError(err): string` helper that strips absolute paths (replaces them with `<config>` token) before constructing the variant. Mirrors the `sanitizeSqlError` pattern at [src/cli/commands/ingest-command.ts:163](../../src/cli/commands/ingest-command.ts) (introduced for SQL errors in story-2.5).
 
 - **New Infra impl** `src/infra/config/yaml-config-writer.ts` — wraps `yaml.parseDocument` (first use of the doc API in the repo) + `fs.renameSync` atomic write (mirroring the pattern from `src/infra/db/node-sqlite-snapshot-service.ts`). Constructor takes `(yamlPath: string, expectedMtimeNs: bigint)` captured by the caller at config-load time.
 
@@ -74,9 +75,17 @@ Plus three decisions taken silently with no objection:
   - After each successful `change` action, call `suggestPattern(description)`. If `null` → skip the remember prompt. Else → call `confirmRememberRule`. Buffer `{ category, pattern }` into a session-local `rememberedRules: Array<...>` (collapse duplicates per Q5-c).
   - After the loop returns and `confirmBatch` returns true, but **before** the `snapshotService.create` + `saveBatch` flow, invoke `configWriter.appendAutoTagRules(rememberedRules)`. On `Result.fail`, write a human-readable stderr message (mtime / conflict / io) and `exitCode(5)`; transactions NOT committed.
 
-- **`src/cli/program.ts` wiring** — at config-load time (line ~37 of program.ts), after `configService.load()` succeeds, capture `fs.statSync(configPath).mtimeNs` and construct `new YamlConfigWriter(configPath, mtimeNs)`. Pass into `IngestCommandDeps.configWriter`.
+- **`src/cli/program.ts` wiring** — at config-load time (line ~37 of program.ts), after `configService.load()` succeeds, obtain the resolved config path via the concrete `FileConfigService.getResolvedConfigPath(): string` getter (added this story — see next bullet). Capture `fs.statSync(configPath).mtimeNs` and construct `new YamlConfigWriter(configPath, mtimeNs)`. Pass into `IngestCommandDeps.configWriter`.
 
-- **No new public CLI surface** (no flags, no JSON-shape change). New stderr-side error message and exit code 5 on YAML write failure.
+- **`src/infra/config/config-service.ts` — `FileConfigService.getResolvedConfigPath(): string`** *(new public method on the concrete class, NOT on the `ConfigService` port)*. Returns the path that `load()` actually read (project-dir variant or XDG fallback). Internally, `load()` is updated to set a private `#resolvedPath: string | undefined` field as it picks projectPath/xdgPath; `getResolvedConfigPath` throws if called before a successful `load()`. Keeps the port narrow; only `program.ts` (which constructs the concrete class directly) consumes the new method.
+
+- **`IngestCommandDeps` extension** in `src/cli/commands/ingest-command.ts`:
+  ```ts
+  readonly configWriter: ConfigWriter;
+  ```
+  New required field. All call sites that build `IngestCommandDeps` (`program.ts`, every test that constructs deps) updated. For unit tests that don't exercise the writer, a no-op stub `{ appendAutoTagRules: async () => Result.ok() }` is acceptable.
+
+- **Public CLI surface — exit code 5** is new. Documented here as a stable scriptable contract: `5 = YAML write failed (mtime race / conflict / I/O)`. No flags, no JSON-shape change. Existing exit codes (0, 1, 2, 3, 4) unchanged.
 
 ## Behaviour
 
@@ -96,6 +105,7 @@ france, paris
 
 ### `confirmRememberRule` prompt UX
 
+**When `suggestPattern` returns a non-null suggestion (typical case):**
 ```
 Always tag descriptions matching /<pattern>/i as <Category>?
   [y] yes, append to accounting.yaml
@@ -103,7 +113,16 @@ Always tag descriptions matching /<pattern>/i as <Category>?
   [n] no, just use it for this transaction
 ```
 
-`[e]` opens an `input()` whose `validate` callback runs three checks in order: trim/non-empty, `new RegExp(p, 'i')` compiles, and `compiledRegex.test(description)` returns true. Reject with a specific message per failure. ESC inside the `input()` throws `ExitPromptError`; caught locally and re-shows the y/e/n select (same `while (true)` pattern as Story A's `selectCategory`).
+**When `suggestPattern` returns null (description is all-noise / numeric / sub-4-char):**
+```
+No pattern suggestion for this description. Remember as a rule?
+  [e] enter a pattern manually
+  [n] no, just use it for this transaction
+```
+
+Two-option select; the `[e]` branch is the same `input()` validator. This closes the UX gap surfaced in Phase-2 review (#17): users can still link a remembered rule to descriptions where the heuristic doesn't have a confident token.
+
+`[e]` opens an `input()` whose `validate` callback runs four checks in order: (1) trim/non-empty, (2) **length ≤ 200** (ReDoS guard against pathologically long backtracking patterns; user-typed bound), (3) `new RegExp(p, 'i')` compiles, and (4) `compiledRegex.test(description)` returns true. Reject with a specific message per failure. ESC inside the `input()` throws `ExitPromptError`; caught locally and re-shows the y/e/n (or e/n) select (same `while (true)` pattern as Story A's `selectCategory`).
 
 ### YAML write semantics (`YamlConfigWriter.appendAutoTagRules`)
 
@@ -142,14 +161,13 @@ Feature: Remember-this-rule prompt + YAML write-back
   Scenario: pattern-suggester returns the longest alphabetic token ≥4 chars
     Given the description "ALTIMA COURTAGE 9876"
     When suggestPattern is invoked
-    Then it returns "courtage"  # longest alphabetic ≥4-char token, "altima" has 6 chars wait revisit
-    # Actually altima=6, courtage=8 → returns "courtage"; chosen as longest
+    Then it returns "courtage"  # altima=6 chars, courtage=8 chars; longest wins
     And fails if the longest-token rule is not respected (guards core/ingest/pattern-suggester.ts).
 
   Scenario: pattern-suggester drops noise tokens
-    Given the description "VIR SEPA SARL CARREFOUR PROXI"
+    Given the description "VIR SARL CARREFOUR"
     When suggestPattern is invoked
-    Then it returns "carrefour"  # vir/sepa/sarl/proxi all noise or <4
+    Then it returns "carrefour"  # vir<4 (filtered by length); sarl in NOISE_TOKENS; carrefour=9 chars
     And fails if noise tokens leak past the filter (guards the NOISE_TOKENS list).
 
   Scenario: pattern-suggester returns null when no token qualifies
@@ -164,6 +182,14 @@ Feature: Remember-this-rule prompt + YAML write-back
     Then the select menu shows three labelled choices
     And [y] returns { action: 'remember', pattern: 'courtage' }
     And fails if the suggested pattern is not the default in the prompt's [y] branch.
+
+  Scenario: confirmRememberRule shows e/n (no [y]) when suggestedPattern is null
+    Given a 'change' action with description "CB 12345" (suggestPattern returns null)
+    When confirmRememberRule is invoked with suggestedPattern = null
+    Then the select menu shows two labelled choices ([e] enter pattern manually, [n] skip)
+    And [e] opens the same compile-and-match validator
+    And [n] returns { action: 'skip' }
+    And fails if the prompt is silently skipped, denying the user the chance to remember a rule for an all-noise description (guards the null-suggester UX gap).
 
   Scenario: confirmRememberRule edit branch validates compile-and-match
     Given the user picks [e] for description "ALTIMA COURTAGE", suggested "courtage"
@@ -220,10 +246,11 @@ Feature: Remember-this-rule prompt + YAML write-back
 
   Scenario: YamlConfigWriter writes atomically (tmp + rename)
     Given a YamlConfigWriter
-    When appendAutoTagRules is invoked
-    Then a tmp sibling file (.tmp.<pid>.<rand>) appears transiently and is renamed
+    When appendAutoTagRules is invoked successfully
+    Then post-write the final file is byte-different from the original
+    And no .tmp.<pid>.<rand> sibling file remains in the directory
     And the final file's permissions are 0o600 on POSIX
-    And fails if the file is written in-place without rename (guards atomicity invariant; mirrors snapshot-service pattern).
+    And fails if the file is written in-place without rename or if a tmp sibling remains (guards atomicity invariant; mirrors snapshot-service pattern at src/infra/db/node-sqlite-snapshot-service.ts:10-40).
 
   Scenario: ingest CLI subprocess writes YAML before committing DB (R4)
     Given an accounting.yaml with autoTagRules: [Transport]
@@ -265,7 +292,7 @@ Feature: Remember-this-rule prompt + YAML write-back
 
 - **[src/cli/program.ts](../../src/cli/program.ts)** — at config-load (around line 37), after a successful load, capture `fs.statSync(configPath).mtimeNs` and construct `new YamlConfigWriter(configPath, mtimeNs)`. Pass into the ingest deps.
 
-- **[tests/unit/core/ingest/pattern-suggester.test.ts](../../tests/unit/core/ingest/pattern-suggester.test.ts)** *(new)* — golden cases per Gherkin scenarios 1-3 + fast-check property test asserting the returned token (when non-null) is always alphabetic, ≥4 chars, present in the lowercased description, not in `NOISE_TOKENS`.
+- **[tests/unit/core/ingest/pattern-suggester.test.ts](../../tests/unit/core/ingest/pattern-suggester.test.ts)** *(new)* — golden cases per Gherkin scenarios 1-3 + fast-check property test asserting **four invariants** when the result is non-null: (1) alphabetic only, (2) length ≥4, (3) present in the lowercased description, (4) not in `NOISE_TOKENS`, AND **(5) is the LONGEST eligible token in the description** (the determinism invariant that defines the function — flagged by Phase-2 review #26). Tie-break: first occurrence in description order; the property test enforces this with a deterministic generator that produces tied lengths.
 
 - **[tests/integration/infra/config/yaml-config-writer.test.ts](../../tests/integration/infra/config/yaml-config-writer.test.ts)** *(new)* — uses `os.tmpdir()` + `fs.mkdtempSync` (existing pattern from `tests/integration/cli/ingest-end-to-end-wiring.test.ts`). Covers Gherkin 8-13: append to existing, create new, mtime race, conflict, dedup no-op, atomic write (verifies the `.tmp.<pid>.<rand>` file appears and is renamed by sampling `fs.readdirSync` at write time — or just asserts the final file is byte-different and the tmp is gone).
 
@@ -273,7 +300,9 @@ Feature: Remember-this-rule prompt + YAML write-back
 
 - **[tests/unit/cli/commands/ingest-command.test.ts](../../tests/unit/cli/commands/ingest-command.test.ts)** — extend with: (a) buffer-then-flush ordering (writer called before `saveBatch`), (b) writer failure aborts ingest with exit 5, no `saveBatch` called.
 
-- **[tests/integration/cli/ingest-remember-rule-wiring.test.ts](../../tests/integration/cli/ingest-remember-rule-wiring.test.ts)** *(new — R4 subprocess smoke)* — uses `spawnCli` from `tests/_helpers/spawn-cli.ts` + `writeStubYaml` from `tests/_helpers/inline-config.ts`. Covers Gherkin 14-15: end-to-end YAML-write-then-DB-commit round-trip, and mtime-race abort.
+- **[tests/_helpers/spawn-cli.ts](../../tests/_helpers/spawn-cli.ts)** — extend `SpawnOpts` with optional `stdin?: string` and switch the `stdio` config from `['ignore', 'pipe', 'pipe']` to `['pipe', 'pipe', 'pipe']` when stdin is provided. Stays backwards-compatible (existing callers omit the field). This is required to drive the interactive prompts in subprocess; without it, the R4 test cannot exercise the new code paths. `@inquirer/prompts` reads from stdin via raw-mode TTY by default — we run subprocess with `INQUIRER_FORCE_TTY=0` env var (or equivalent) so it falls back to line-buffered stdin reads. *Phase-2 review #6 surfaced this gap; the plan now pins the mechanism rather than leaving it for Sonnet to design.*
+
+- **[tests/integration/cli/ingest-remember-rule-wiring.test.ts](../../tests/integration/cli/ingest-remember-rule-wiring.test.ts)** *(new — R4 subprocess smoke)* — uses extended `spawnCli` with `stdin` option + `writeStubYaml` from `tests/_helpers/inline-config.ts`. Covers Gherkin 14-15. **Implementer fallback:** if the `INQUIRER_FORCE_TTY=0` approach proves unreliable (the package may require a TTY for raw-mode key handling), fall back to driving the subprocess via a `--scripted-prompts <json>` CLI flag added to `program.ts` *for tests only* (gated by `NODE_ENV === 'test'`), which feeds the prompter from a fixture JSON rather than stdin. Sonnet picks the path that lands clean and notes the choice in the return report.
 
 - **[tests/features/ingest.feature](../../tests/features/ingest.feature)** + **[tests/features/steps/ingest.steps.ts](../../tests/features/steps/ingest.steps.ts)** — add the round-trip scenario (Gherkin 16): define-new + remember on first ingest, auto-tag on second. **This closes the Story A retro carry-over** ("end-to-end BDD scenario for define-new + auto-tag interaction"). The step parameterised by sequenced prompter — keep ≤ ~20 LOC per Story A retro. Judgment-call to land or split if step plumbing exceeds that.
 
@@ -340,7 +369,36 @@ Story C is unusually wide (3 new files in Core + Infra; 1 new prompt method; 2 n
 - **Pattern-suggester noise-list maintenance.** The initial noise list is derived from BPCE descriptions; it will need iteration as users encounter merchants whose names are close to noise tokens (e.g. a merchant literally named `Sasu Foo` would lose `sasu`). The retro reserves a section for "what surprises us about real bank descriptions." Recovery: edit `NOISE_TOKENS` + the property test in a follow-up.
 - **`yaml.parseDocument` round-trip fidelity.** The library claims comment + key-order preservation but flow-style maps and certain anchor patterns can drift. The integration test asserts byte-equality of the *header* and *non-target* sections after a write. If a real-world `accounting.yaml` exhibits drift, file an issue + add the offending shape to a regression fixture.
 - **Future-command callout (Q2 follow-up).** A separate command analysing the whole transaction set for cross-batch patterns is desirable but out of scope; logged in the retro as an open action item.
+- **Audit-trail asymmetry — YAML rule persists without a corresponding ledger event.** Per Q1-b, the YAML write happens before the DB snapshot+commit. If steps 5-7 (snapshot/saveBatch/snapshot-remove) fail *after* step 4 (YAML write) succeeded, the YAML carries a new rule for transactions that were never committed. From the [docs/quality-assurance.md](../quality-assurance.md) audit-trail invariant ("every user action that changes state leaves a traceable entry"), this is a partial deviation: the YAML edit is itself a traceable state change (the user's git or backups can show it), but it isn't tied to a ledger transaction id. **Deliberate trade-off** — rules are idempotent and self-healing: on the next ingest, the new rule auto-tags the previously-failed merchant correctly; the user re-runs and the transactions land. No data loss, no silent corruption. Documented here so the trade-off is explicit; future-Story 3.x liquidity work that depends on cross-state invariants should re-examine this.
+- **YAML symlink hijacking — known unaddressed gap.** The `validateDbPath` symlink check at [src/infra/db/db-path-validator.ts](../../src/infra/db/db-path-validator.ts) protects the DB file but has no equivalent for `accounting.yaml`. A symlink at the YAML path could redirect Story C's atomic write. The CLI is single-user local-first; the threat model is the user themselves. **Out of scope for Story C** — generalising the symlink check to all config-file paths is a separate maint refactor. The security-checklist edit in slice 12 documents this gap with a `[deferred]` note pointing at a new issue (filed during slice 12 if not already open). Phase-2 review #24 flagged this.
+- **ReDoS via user-edited regex** — the `[e]` edit branch creates `new RegExp(p, 'i')` from user input. A pathological pattern `(a+)+$` could cause catastrophic backtracking when matched against a long description. **Mitigation:** length cap of 200 chars on the user-typed pattern (validate callback rejects longer). Threat actor is the user themselves; cap is cheap insurance, not a security boundary.
 
 ## Suggestion log (Phase 2 critical review — P1/P2/P3)
 
-_Populated after the `plan-reviewer` sub-agent runs; each finding tagged `adopt` / `defer` (with issue link) / `reject` (with rationale)._
+Findings from `plan-reviewer` on commit `a41154e`. Resolutions: `adopt` (plan rewritten), `defer` (linked issue), `reject` (rationale).
+
+| # | Phase | Finding (one-line) | Resolution | Link / reason |
+| - | ----- | ------------------ | ---------- | ------------- |
+| 1 | P1 | R1/R3/R4 baseline compliance | acknowledge | Compliant. |
+| 2 | P1 | R2 — `IngestCommandDeps.configWriter` extension not enumerated in Production-code surface | adopt | Added explicit `IngestCommandDeps` extension bullet; all call-site updates noted. |
+| 3 | P1 | R2 — exit code 5 is a public CLI surface | adopt | Production-code surface now enumerates exit code 5 as a stable scriptable contract. |
+| 4 | P1 | R4/R7 — `spawnCli` doesn't drive stdin; subprocess interactive-input mechanism unspecified | adopt | Plan now pins the mechanism: extend `SpawnOpts` with `stdin?: string` + flip `stdio` to `'pipe'`, with `INQUIRER_FORCE_TTY=0` env. Documented fallback to a `--scripted-prompts` test-only flag if the inquirer raw-mode TTY requirement is unworkable. |
+| 5 | P1 | R6 — Gherkin scenario 1 left-in-place draft note | adopt | Cleaned up the `# longest…wait revisit` comment; final Then-clause unambiguous. |
+| 6 | P1 | R6 — Gherkin scenario 2 reasoning incorrect (sepa/proxi NOT in NOISE_TOKENS) | adopt | Reworked the example to use only tokens whose noise/length filters are accurate (`VIR SARL CARREFOUR`). Comment now correctly explains: vir<4 length-filtered, sarl noise-filtered, carrefour=longest-eligible. |
+| 7 | P1 | R7 — atomicity scenario hedge ("or just asserts the final file is byte-different") | adopt | Tightened to byte-difference + tmp-sibling-absence + 0o600 perms; dropped the transient-observation hedge. |
+| 8 | P1 | FR coverage — FR5 + FR17 not cited despite being materially extended | adopt | Context paragraph now cites all three: FR5 (extended), FR6 (fulfilled), FR17 (reordered with documented asymmetry). |
+| 9 | P1 | Epic alignment (Story 2.4) — fine | acknowledge | Compliant. |
+| 10 | P2 | `io.message` could leak filesystem absolute paths | adopt | `ConfigWriterError.io.message` now spec'd to be sanitised via a `sanitizeFsError` helper mirroring the existing `sanitizeSqlError` pattern. |
+| 11 | P2 | Mock-diversity / R8 not triggered (no new structured output) | acknowledge | N/A. |
+| 12 | P2 | Audit-trail asymmetry: YAML rule can persist without committed transactions | adopt | Documented in § Risks as a deliberate trade-off; rules are idempotent and self-heal on retry; flagged for future liquidity-engine work to revisit. |
+| 13 | P2 | Null-suggester skip denies user the chance to remember a rule for an all-noise description | adopt | Added two-option fallback prompt (`[e] enter pattern manually`, `[n] skip`) when suggester returns null. New Gherkin scenario added. |
+| 14 | P3 | `program.ts` cannot get `configPath` from the narrow `ConfigService.load()` port | adopt | Added `FileConfigService.getResolvedConfigPath(): string` (concrete-class method, port unchanged); `program.ts` consumes the concrete class anyway. |
+| 15 | P3 | Slice 8 bundles three layers (interactive + ingest-loop + program.ts wiring) | acknowledge | Defended pattern (Story B slice 7 precedent); compile-time chain forces the bundle. |
+| 16 | P3 | Slice count 11+ vs R13 ceiling | acknowledge | Documented in plan; cross-layer scope justifies. |
+| 17 | P3 | R11 deferred (slice 13 only authored after Phase-4) | acknowledge | Compliant with Story-A retro Try-list R-rule. |
+| 18 | P3 | R12 commit subjects compliant | acknowledge | Compliant. |
+| 19 | P3 | ReDoS via user-edited regex pattern | adopt | Added 200-char length cap as the second `validate` step; documented in § Risks as cheap insurance (user is threat model). |
+| 20 | P3 | YAML symlink-hijacking gap (no equivalent of `validateDbPath`) | adopt | Documented in § Risks; security-checklist slice 12 carries the explicit `[deferred]` note + new issue ref. Generalising the symlink check is a separate maint refactor. |
+| 21 | P3 | Property test missing the LONGEST-token determinism invariant | adopt | Property test spec extended to four invariants; LONGEST + tie-break first-occurrence is now property #5. |
+
+**DoR check.** All 21 findings have a non-blank Resolution (14 `adopt` + 7 `acknowledge` + 0 `defer` + 0 `reject`). Zero deferred → no GitHub issues filed for plan findings (the symlink-gap issue is filed separately during slice 12, not as a deferred plan suggestion).

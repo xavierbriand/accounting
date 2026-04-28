@@ -1,6 +1,8 @@
+import fs from 'fs';
 import { Command } from 'commander';
 import { getDb } from '../infra/db/sqlite-client.js';
 import { FileConfigService } from '../infra/config/config-service.js';
+import { YamlConfigWriter } from '../infra/config/yaml-config-writer.js';
 import { NodeCsvParser } from '../infra/csv/node-csv-parser.js';
 import { IdempotencyService } from '../core/ingest/idempotency-service.js';
 import { TransactionBuilder } from '../core/ingest/transaction-builder.js';
@@ -27,6 +29,7 @@ interface DbPathError {
 interface ResolvedDb {
   config: AppConfig;
   resolvedDbPath: string;
+  configService: FileConfigService;
 }
 
 function resolveDbPathForCommand(
@@ -51,7 +54,7 @@ function resolveDbPathForCommand(
     return Result.fail({ code: 2, message: validation.error });
   }
 
-  return Result.ok({ config, resolvedDbPath: validation.value });
+  return Result.ok({ config, resolvedDbPath: validation.value, configService });
 }
 
 const program = new Command();
@@ -88,7 +91,7 @@ program
       process.stderr.write(`error: ${result.error.message}\n`);
       process.exit(result.error.code);
     }
-    const { config, resolvedDbPath: resolvedDb } = result.value;
+    const { config, resolvedDbPath: resolvedDb, configService } = result.value;
     const db = getDb(resolvedDb);
 
     const migrationCheck = assertMigrated(db, resolvedDb);
@@ -96,6 +99,10 @@ program
       process.stderr.write(`error: ${migrationCheck.error}\n`);
       process.exit(2);
     }
+
+    const configPath = configService.getResolvedConfigPath();
+    const configMtimeNs = fs.statSync(configPath, { bigint: true }).mtimeNs;
+    const configWriter = new YamlConfigWriter(configPath, configMtimeNs);
 
     const csvParser = new NodeCsvParser();
     const hashRepo = new SqliteHashRepository(db);
@@ -121,6 +128,7 @@ program
         transactionRepository,
         snapshotService,
         dbPath: resolvedDb,
+        configWriter,
       },
     );
   });

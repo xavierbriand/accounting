@@ -84,6 +84,16 @@ function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
   };
 }
 
+function makeNoOpConfigWriterStub(): ConfigWriter {
+  return {
+    appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
+  };
+}
+
+// No-op InteractivePrompter stub that satisfies the updated interface.
+// Used in tests that don't exercise confirmRememberRule.
+const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
+
 describe('runIngestCommand — happy path (interactive)', () => {
   it('writes summary table to stdout and calls final confirm once', async () => {
     const stdout = makeStdout();
@@ -95,6 +105,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     const prompter: InteractivePrompter = {
       selectCategory: vi.fn().mockResolvedValue({ action: 'keep' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const deps: IngestCommandDeps = {
@@ -122,6 +133,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     const opts: IngestCommandOptions = {
@@ -149,6 +161,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     const prompter: InteractivePrompter = {
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const deps: IngestCommandDeps = {
@@ -170,6 +183,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -188,6 +202,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     const prompter: InteractivePrompter = {
       selectCategory: vi.fn(),
       confirmBatch: vi.fn().mockResolvedValue(false),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const deps: IngestCommandDeps = {
@@ -204,6 +219,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -222,6 +238,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
     const prompter: InteractivePrompter = {
       selectCategory: vi.fn().mockResolvedValue({ action: 'abort' }),
       confirmBatch: vi.fn(),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const deps: IngestCommandDeps = {
@@ -238,6 +255,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -259,13 +277,14 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('no account configured for this filename'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => capturedExitCode.push(code),
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/orphan.csv', nonInteractive: false, json: false }, deps);
@@ -297,6 +316,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
         void count;
         return Promise.resolve(true);
       }),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const deps: IngestCommandDeps = {
@@ -318,6 +338,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -371,6 +392,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
       prompt: {
         selectCategory: vi.fn(),
         confirmBatch: vi.fn().mockResolvedValue(true),
+        confirmRememberRule: noOpConfirmRememberRule,
       },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
@@ -378,6 +400,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
       ...overrides,
     };
 
@@ -516,6 +539,7 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
     const prompter: InteractivePrompter = {
       selectCategory: selectCategoryMock,
       confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: noOpConfirmRememberRule,
     };
 
     const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: 2 }));
@@ -542,6 +566,7 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       transactionRepository: { saveBatch: saveBatchMock },
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);

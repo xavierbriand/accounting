@@ -20,6 +20,7 @@ import { readBpceCsv } from '../../../src/infra/fs/read-bpce-csv.js';
 import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
+import { Result } from '../../../src/core/shared/result.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -107,6 +108,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
       prompt: {
         selectCategory: () => Promise.resolve({ action: 'keep' }),
         confirmBatch: () => Promise.resolve(true),
+        confirmRememberRule: () => Promise.resolve({ action: 'skip' as const }),
       },
       stdout: sink,
       stderr: sink,
@@ -114,6 +116,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
       transactionRepository,
       snapshotService,
       dbPath: state.dbPath!,
+      configWriter: { appendAutoTagRules: async () => Result.ok() },
     },
   );
 

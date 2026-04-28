@@ -2,7 +2,10 @@ import { z } from 'zod';
 import type { ZodError } from 'zod';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
-import type { AppConfig } from '@core/config/app-config.js';
+import type { AppConfig, RecurringRule } from '@core/config/app-config.js';
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_MSG = 'must be ISO 8601 date (YYYY-MM-DD)';
 
 function findDuplicateIndices<T>(items: readonly T[], keyFn: (t: T) => string): number[] {
   const seen = new Map<string, number>();
@@ -27,7 +30,7 @@ const SplitWindowSchema = z
   .object({
     validFrom: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be ISO 8601 date (YYYY-MM-DD)'),
+      .regex(ISO_DATE_REGEX, ISO_DATE_MSG),
     // min(2): enforces the couples-app product constraint — at least two partners.
     rules: z.array(SplitRuleSchema).min(2),
   })
@@ -52,6 +55,7 @@ const SplitWindowSchema = z
 
 const BufferBucketRawSchema = z.object({
   name: z.string().min(1),
+  account: z.string().min(1),
   target: z.number().nonnegative(),
   cap: z.number().nonnegative().optional(),
 });
@@ -78,6 +82,58 @@ const AccountConfigSchema = z
         path: ['cardSuffix'],
         message: 'cardSuffix must not be set on bank accounts',
       });
+    }
+  });
+
+const RecurringAmendmentRawSchema = z.object({
+  validFrom: z.string().regex(ISO_DATE_REGEX, ISO_DATE_MSG),
+  amount: z.number().positive(),
+});
+
+const RecurringRuleRawSchema = z
+  .object({
+    name: z.string().min(1),
+    category: z.string().min(1),
+    cadence: z.enum(['monthly', 'quarterly', 'annual']),
+    amount: z.number().positive(),
+    validFrom: z.string().regex(ISO_DATE_REGEX, ISO_DATE_MSG),
+    validTo: z.string().regex(ISO_DATE_REGEX, ISO_DATE_MSG).optional(),
+    amendments: z.array(RecurringAmendmentRawSchema).optional().default([]),
+  })
+  .superRefine((rule, ctx) => {
+    if (rule.validTo !== undefined && rule.validTo < rule.validFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['validTo'],
+        message: 'validTo must be >= validFrom',
+      });
+    }
+    for (let i = 0; i < rule.amendments.length; i++) {
+      if (i === 0 && rule.amendments[0].validFrom <= rule.validFrom) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['amendments', 0, 'validFrom'],
+          message: 'first amendment validFrom must be strictly after rule validFrom',
+        });
+      }
+      if (i > 0 && rule.amendments[i].validFrom <= rule.amendments[i - 1].validFrom) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['amendments', i, 'validFrom'],
+          message: 'amendments must be in strictly ascending validFrom order',
+        });
+      }
+      if (
+        rule.validTo !== undefined &&
+        i === rule.amendments.length - 1 &&
+        rule.amendments[i].validFrom > rule.validTo
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['amendments', i, 'validFrom'],
+          message: 'last amendment validFrom must be <= validTo (amendment can never apply)',
+        });
+      }
     }
   });
 
@@ -157,6 +213,28 @@ const RawConfigSchema = z
             message: 'duplicate name',
           });
         }
+      })
+      .superRefine((buffers, ctx) => {
+        for (const i of findDuplicateIndices(buffers, b => b.account)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'account'],
+            message: 'duplicate account',
+          });
+        }
+      }),
+    recurring: z
+      .array(RecurringRuleRawSchema)
+      .optional()
+      .default([])
+      .superRefine((rules, ctx) => {
+        for (const i of findDuplicateIndices(rules, r => r.name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'name'],
+            message: 'duplicate name',
+          });
+        }
       }),
   })
   .strict();
@@ -178,7 +256,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
   const data = parsed.data;
   const currency = data.defaultCurrency;
 
-  const buffers: Array<{ name: string; target: Money; cap?: Money }> = [];
+  const buffers: Array<{ name: string; account: string; target: Money; cap?: Money }> = [];
   for (let i = 0; i < data.buffers.length; i++) {
     const b = data.buffers[i];
     const targetResult = Money.fromDecimal(b.target, currency);
@@ -193,7 +271,34 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
       }
       cap = capResult.value;
     }
-    buffers.push({ name: b.name, target: targetResult.value, cap });
+    buffers.push({ name: b.name, account: b.account, target: targetResult.value, cap });
+  }
+
+  const recurring: RecurringRule[] = [];
+  for (let i = 0; i < data.recurring.length; i++) {
+    const r = data.recurring[i];
+    const amountResult = Money.fromDecimal(r.amount, currency);
+    if (amountResult.isFailure) {
+      return Result.fail(`recurring.${i}.amount: ${amountResult.error}`);
+    }
+    const amendments: Array<{ validFrom: string; amount: Money }> = [];
+    for (let j = 0; j < r.amendments.length; j++) {
+      const a = r.amendments[j];
+      const aAmountResult = Money.fromDecimal(a.amount, currency);
+      if (aAmountResult.isFailure) {
+        return Result.fail(`recurring.${i}.amendments.${j}.amount: ${aAmountResult.error}`);
+      }
+      amendments.push({ validFrom: a.validFrom, amount: aAmountResult.value });
+    }
+    recurring.push({
+      name: r.name,
+      category: r.category,
+      cadence: r.cadence,
+      amount: amountResult.value,
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      amendments,
+    });
   }
 
   return Result.ok({
@@ -203,5 +308,6 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     splits: data.splits,
     buffers,
     accounts: data.accounts,
+    recurring,
   });
 }

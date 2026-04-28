@@ -93,7 +93,7 @@ describe('Money Value Object', () => {
       // 100/3 = 33, 33, 34. Sum = 66, 66, 68.
       // So this property does NOT hold for integer math.
       // Instead, let's test that allocate always sums to total.
-      
+
       fc.assert(
         fc.property(fc.integer({ min: 1, max: 1000000 }), fc.array(fc.integer({min: 1, max: 10}), {minLength: 1, maxLength: 10}), (amount, ratios) => {
           const m = Money.fromCents(amount, 'EUR').value;
@@ -101,6 +101,126 @@ describe('Money Value Object', () => {
           const sum = parts.reduce((acc, p) => acc + p.amount, 0);
           return sum === amount;
         })
+      );
+    });
+  });
+
+  describe('lessThan / lessThanOrEqual (Story 3.2)', () => {
+    it('lessThan returns true when a < b (same currency)', () => {
+      // fails if lessThan is not implemented or returns wrong result
+      const a = Money.fromCents(100, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThan(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(true);
+    });
+
+    it('lessThan returns false when a > b (same currency)', () => {
+      const a = Money.fromCents(300, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThan(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(false);
+    });
+
+    it('lessThan returns false when a == b (same currency)', () => {
+      const a = Money.fromCents(200, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThan(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(false);
+    });
+
+    it('lessThan returns Result.fail on currency mismatch', () => {
+      // fails if lessThan does not guard against cross-currency comparison
+      const a = Money.fromCents(100, 'EUR').value;
+      const b = Money.fromCents(100, 'USD').value;
+      const result = a.lessThan(b);
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('lessThanOrEqual returns true when a < b (same currency)', () => {
+      // fails if lessThanOrEqual is not implemented
+      const a = Money.fromCents(100, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThanOrEqual(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(true);
+    });
+
+    it('lessThanOrEqual returns true when a == b (same currency)', () => {
+      const a = Money.fromCents(200, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThanOrEqual(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(true);
+    });
+
+    it('lessThanOrEqual returns false when a > b (same currency)', () => {
+      const a = Money.fromCents(300, 'EUR').value;
+      const b = Money.fromCents(200, 'EUR').value;
+      const result = a.lessThanOrEqual(b);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value).toBe(false);
+    });
+
+    it('lessThanOrEqual returns Result.fail on currency mismatch', () => {
+      // fails if lessThanOrEqual does not guard against cross-currency comparison
+      const a = Money.fromCents(100, 'EUR').value;
+      const b = Money.fromCents(100, 'USD').value;
+      const result = a.lessThanOrEqual(b);
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('Property: trichotomy — for same-currency a, b: exactly one of lessThan(a,b), equals, lessThan(b,a)', () => {
+      // fails if lessThan does not satisfy strict order trichotomy
+      fc.assert(
+        fc.property(
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          (aAmount, bAmount) => {
+            const a = Money.fromCents(aAmount, 'EUR').value;
+            const b = Money.fromCents(bAmount, 'EUR').value;
+            const aLtB = a.lessThan(b).value;
+            const bLtA = b.lessThan(a).value;
+            const eq = a.equals(b);
+            const trueCount = [aLtB, bLtA, eq].filter(Boolean).length;
+            return trueCount === 1;
+          }
+        )
+      );
+    });
+
+    it('Property: lessThanOrEqual is strict superset of lessThan union equals', () => {
+      // fails if lessThanOrEqual is not consistent with lessThan and equals
+      fc.assert(
+        fc.property(
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          (aAmount, bAmount) => {
+            const a = Money.fromCents(aAmount, 'EUR').value;
+            const b = Money.fromCents(bAmount, 'EUR').value;
+            const ltOrEq = a.lessThanOrEqual(b).value;
+            const lt = a.lessThan(b).value;
+            const eq = a.equals(b);
+            return ltOrEq === (lt || eq);
+          }
+        )
+      );
+    });
+
+    it('Property: currency mismatch always returns Result.fail for both lessThan and lessThanOrEqual', () => {
+      // fails if cross-currency comparison does not return failure
+      fc.assert(
+        fc.property(
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          fc.integer({ min: -10_000_00, max: 10_000_00 }),
+          (aAmount, bAmount) => {
+            const a = Money.fromCents(aAmount, 'EUR').value;
+            const b = Money.fromCents(bAmount, 'USD').value;
+            return a.lessThan(b).isFailure && a.lessThanOrEqual(b).isFailure;
+          }
+        )
       );
     });
   });

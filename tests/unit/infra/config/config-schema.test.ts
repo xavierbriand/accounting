@@ -112,7 +112,7 @@ describe('parseRawConfig', () => {
   it('rejects buffer with cap < target', () => {
     const raw = {
       ...minimalValid,
-      buffers: [{ name: 'Car', target: 200, cap: 100 }],
+      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 200, cap: 100 }],
     };
     // fails if parseRawConfig does not enforce cap >= target for buffers
     const result = parseRawConfig(raw);
@@ -124,8 +124,8 @@ describe('parseRawConfig', () => {
     const raw = {
       ...minimalValid,
       buffers: [
-        { name: 'Car', target: 1000 },
-        { name: 'Car', target: 2000 },
+        { name: 'Car', account: 'assets:buffer:car', target: 1000 },
+        { name: 'Car', account: 'assets:buffer:car2', target: 2000 },
       ],
     };
     // fails if parseRawConfig does not detect duplicate bucket names
@@ -147,7 +147,7 @@ describe('parseRawConfig', () => {
   it('maps decimal targets/caps to Money with defaultCurrency', () => {
     const raw = {
       ...minimalValid,
-      buffers: [{ name: 'Car', target: 1000.5, cap: 2000 }],
+      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000.5, cap: 2000 }],
     };
     // fails if parseRawConfig does not convert decimal amounts to Money using defaultCurrency
     const result = parseRawConfig(raw);
@@ -621,9 +621,9 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'X', target: 100 },
-          { name: 'X', target: 200 },
-          { name: 'X', target: 300 },
+          { name: 'X', account: 'assets:buffer:x1', target: 100 },
+          { name: 'X', account: 'assets:buffer:x2', target: 200 },
+          { name: 'X', account: 'assets:buffer:x3', target: 300 },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -635,9 +635,9 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'Alpha', target: 100 },
-          { name: 'Beta', target: 200 },
-          { name: 'Alpha', target: 300 },
+          { name: 'Alpha', account: 'assets:buffer:alpha', target: 100 },
+          { name: 'Beta', account: 'assets:buffer:beta', target: 200 },
+          { name: 'Alpha', account: 'assets:buffer:alpha2', target: 300 },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -651,15 +651,75 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'First', target: 100 },
-          { name: 'Second', target: 200 },
-          { name: 'Third', target: 300 },
-          { name: 'First', target: 400 },
+          { name: 'First', account: 'assets:buffer:first', target: 100 },
+          { name: 'Second', account: 'assets:buffer:second', target: 200 },
+          { name: 'Third', account: 'assets:buffer:third', target: 300 },
+          { name: 'First', account: 'assets:buffer:first2', target: 400 },
         ],
       });
       expect(result.isFailure).toBe(true);
       expect(result.error).toContain('duplicate');
       expect(result.error).toContain('buffers.3.name');
+    });
+  });
+
+  describe('buffer account field (Story 3.2)', () => {
+    it('rejects a buffer entry missing the account field', () => {
+      // fails if parseRawConfig accepts a buffer without an account field
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('account');
+    });
+
+    it('rejects a buffer entry with an empty account string', () => {
+      // fails if parseRawConfig accepts a buffer with an empty account string
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: '', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('account');
+    });
+
+    it('accepts a buffer with a valid account string', () => {
+      // fails if parseRawConfig rejects a buffer with a valid account string
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000 }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].account).toBe('assets:buffer:car');
+    });
+
+    it('rejects duplicate buffer accounts — path-cited at the duplicate index', () => {
+      // fails if parseRawConfig does not detect duplicate buffer account strings
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'Car', account: 'assets:buffer:shared', target: 1000 },
+          { name: 'House', account: 'assets:buffer:shared', target: 5000 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('duplicate account');
+      expect(result.error).toContain('buffers.1.account');
+    });
+
+    it('rejects non-adjacent duplicate accounts — path-cited at the later index', () => {
+      // fails if duplicate-account detection is position-sensitive
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [
+          { name: 'Car', account: 'assets:buffer:car', target: 1000 },
+          { name: 'House', account: 'assets:buffer:house', target: 5000 },
+          { name: 'Vac', account: 'assets:buffer:car', target: 500 },
+        ],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('buffers.2.account');
     });
   });
 });

@@ -26,8 +26,10 @@ splits:
       - { partner: Sam,  ratio: 0.5 }
 buffers:
   - name: Car
+    account: assets:buffer:car
     target: 1000
   - name: House
+    account: assets:buffer:house
     target: 5000
     cap: 10000
 accounts:

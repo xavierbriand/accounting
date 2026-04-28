@@ -43,19 +43,25 @@ interface LineItem {
 
 **And** for each `ForecastOccurrence` returned by `RecurringForecastService.forecastBetween(from, to)`:
 - One `LineItem` is emitted with `kind: 'forecast'`, `date = occurrence.expectedDate`, `category = rule.category`, `description = rule.name`, `gross = occurrence.amount`.
-- `perPartnerSplit` is computed via `gross.allocate(ratios)` where `ratios` come from `splitRulesService.getSplitsAsOf(occurrence.expectedDate)`. Largest Remainder Method (already encapsulated by `Money.allocate`) ensures `sum(perPartnerSplit) === gross` to the cent.
+- `perPartnerSplit` is computed via `gross.allocate(ratios)` where `ratios = splitsResult.value.map(r => r.ratio)` and `splitsResult = splitRulesService.getSplitsAsOf(occurrence.expectedDate)` (`getSplitsAsOf` returns `Result<readonly SplitRule[]>`; the `.value` unwrap is mandatory). Largest Remainder Method (already encapsulated by `Money.allocate`) ensures `sum(perPartnerSplit) === gross` to the cent.
 
 **And** for each buffer bucket whose `balance < target` as of `asOf`:
+- Define `allFillSlots = enumerateMonthStarts(asOf, dayBefore(targetDate))` — the list of first-of-month dates strictly less than `targetDate` and at or after `asOf`. **`monthsRemaining = allFillSlots.length`.** Trace:
+  - `asOf=2026-04-28, targetDate=2026-05-15` → `allFillSlots = [2026-05-01]`, `monthsRemaining = 1`.
+  - `asOf=2026-04-28, targetDate=2026-05-01` → `allFillSlots = []`, `monthsRemaining = 0` (no full month-start before the deadline).
+  - `asOf=2026-04-28, targetDate=2026-12-01` → `allFillSlots = [May 1, Jun 1, Jul 1, Aug 1, Sep 1, Oct 1, Nov 1]`, `monthsRemaining = 7`.
 - If `asOf >= targetDate`, the calculator returns `Result.fail("buffer "<name>" is below target (€X.XX) and its targetDate (YYYY-MM-DD) has passed — set a new targetDate")`. No partial computation; the entire calculation fails.
-- Else: `monthlyFills = shortfall.allocate(monthsRemaining)` where `shortfall = target − balance` and `monthsRemaining = monthsBetween(asOf, targetDate)` (calendar-month-count, ≥ 1 since `asOf < targetDate`). For each calendar-month-start `m` in `[from, to]` such that `m < targetDate` AND `index < monthsRemaining`:
-  - Emit a `LineItem` with `kind: 'buffer-topup'`, `date = m`, `category = bucket.name`, `description = "${bucket.name} top-up"`, `gross = monthlyFills[index]` (where `index` is the offset from the first month at or after `asOf`).
-  - `perPartnerSplit = gross.allocate(splitRulesService.getSplitsAsOf(m).rules.map(r => r.ratio))`.
+- Else if `monthsRemaining === 0` (deadline too soon for a single full month), `Result.fail("buffer "<name>" targetDate (YYYY-MM-DD) leaves no full month for monthly contributions — extend targetDate or accept the shortfall")`.
+- Else: `monthlyFills = shortfall.allocate(monthsRemaining)` (Largest Remainder over months). Build `indexByMonth = new Map(allFillSlots.map((m, i) => [m, i]))`. For each `m` in `enumerateMonthStarts(from, to)`:
+  - Look up `i = indexByMonth.get(m)`. If `i === undefined`, `m` is not a fill slot for this buffer (either `m < asOf`, `m >= targetDate`, or outside `[asOf, targetDate)`); skip.
+  - Otherwise emit a `LineItem` with `kind: 'buffer-topup'`, `date = m`, `category = bucket.name`, `description = "${bucket.name} top-up"`, `gross = monthlyFills[i]`.
+  - `perPartnerSplit = gross.allocate(splitsResult.value.map(r => r.ratio))` where `splitsResult = splitRulesService.getSplitsAsOf(m)`.
 
 **And** if `balance >= target` for a buffer (no shortfall), the calculator emits no line items for that buffer regardless of `targetDate` state.
 
 **And** `totalRequired = sum(lineItem.gross)` and `perPartner.get(p) = sum(lineItem.perPartnerSplit.get(p))` over all line items, with empty-buffer / empty-recurring producing `totalRequired = 0` and per-partner = `0` for every partner declared in the config (every partner in the splits roster appears in `perPartner` even with zero contribution).
 
-**And** line items are sorted ascending by `date`; ties broken by `kind` (`'buffer-topup'` before `'forecast'`) then `category`, for deterministic output across runs.
+**And** line items are sorted ascending by `date`; ties broken by `kind` (`'buffer-topup'` before `'forecast'`), then `category`, then `description`, for deterministic output across runs (the `description` tie-breaker covers two recurring rules in the same category on the same date).
 
 **And** if `from`, `to`, or `asOf` is not ISO 8601 `YYYY-MM-DD`, or `from > to`, the calculator returns `Result.fail` with a clear message.
 
@@ -69,9 +75,9 @@ interface LineItem {
 - `BufferBucketRawSchema` (modified at `src/infra/config/config-schema.ts`): adds `targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, ...)`.
 - `LineItem` (new) at `src/core/transfer/line-item.ts`: shape per AC above.
 - `SafeTransferCalculation` (new) at `src/core/transfer/safe-transfer-calculation.ts`: shape per AC above.
-- `SafeTransferCalculator` (new) at `src/core/transfer/safe-transfer-calculator.ts`: constructor takes `(splitsService: SplitRulesService, buffersService: BufferStateService, forecastService: RecurringForecastService, partnerRoster: readonly string[])`. (The roster is needed so empty-config calls still emit a per-partner key for every partner; the calculator itself does not parse splits.) Public method: `calculateForWindow(asOf: string, from: string, to: string): Result<SafeTransferCalculation>`. ~70–90 LOC; if it exceeds 50 LOC, extract `buildForecastLineItems` and `buildBufferTopupLineItems` helpers (per Story 3.3 retro precedent).
-- `monthsBetween(from: string, to: string): number` (new internal helper) at `src/core/transfer/date-arithmetic.ts`: calendar-month-count from `from` to `to`, computed as `(toYear - fromYear) * 12 + (toMonth - fromMonth)` adjusted for day-of-month so May 15 → Dec 1 = 6 (not 7). Pure; no clock.
-- `enumerateMonthStarts(from: string, to: string): readonly string[]` (new internal helper) in the same file: list of first-of-month dates in `[from, to]`. Used to anchor buffer-topup line items.
+- `SafeTransferCalculator` (new) at `src/core/transfer/safe-transfer-calculator.ts`: constructor takes **three services only** — `(splitsService: SplitRulesService, buffersService: BufferStateService, forecastService: RecurringForecastService)`. The partner roster is **derived** at calc time by calling `splitsService.getSplitsAsOf(asOf).value.map(r => r.partner)` (Story 3.1 enforces same roster across all windows, so any one window's partners are the canonical roster). No `partnerRoster` constructor parameter — that was YAGNI per Phase 2 plan-review. Public method: `calculateForWindow(asOf: string, from: string, to: string): Result<SafeTransferCalculation>`. ~70–90 LOC; if it exceeds 50 LOC, extract `buildForecastLineItems` and `buildBufferTopupLineItems` helpers in slice 8 (per Story 3.3 retro precedent).
+- `enumerateMonthStarts(from: string, to: string): readonly string[]` (new internal helper) at `src/core/transfer/date-arithmetic.ts`: list of first-of-month ISO dates in `[from, to]` **inclusive on both ends** (so when `from` itself is a first-of-month, `from` IS included). Used to anchor buffer-topup line items.
+- `dayBefore(date: string): string` (new internal helper) in the same file: returns the ISO date one day before the input. Used to express the half-open `[asOf, targetDate)` interval as the closed `[asOf, dayBefore(targetDate)]` for `enumerateMonthStarts`. (`monthsBetween` is NOT exported — `monthsRemaining` is computed via `enumerateMonthStarts(asOf, dayBefore(targetDate)).length`, removing the day-of-month-arithmetic edge case the plan-reviewer flagged.)
 
 YAML format change: every `BufferBucket` MUST now declare `targetDate`. `accounting.example.yaml` updated alongside; existing test fixtures that construct `BufferBucket` instances must be migrated in slice 3 (mirrors the Story 3.2 `account` field migration).
 
@@ -151,10 +157,11 @@ Feature: Safe monthly transfer calculator (Story 3.4)
       | Vacation | assets:buffer:vacation | 1200   | 2026-12-01 | 0              |
     And no recurring rules
     When I calculate for window asOf="2026-04-28" from="2026-05-01" to="2026-08-31"
-    Then totalRequired is approximately 4 monthly fills toward the 1200 EUR target
-    And lineItems contains 4 buffer-topup entries dated 2026-05-01, 2026-06-01, 2026-07-01, 2026-08-01
-    And each buffer-topup is split 50/50 between Alex and Sam (Largest Remainder absorbs penny rounding)
-    # fails if the monthly fill rate ignores monthsBetween, or line items skip a month, or splits aren't applied per-month.
+    Then totalRequired is exactly 685.72 EUR
+    And Alex contributes 342.88 EUR and Sam contributes 342.84 EUR
+    And lineItems contains exactly 4 buffer-topup entries dated 2026-05-01, 2026-06-01, 2026-07-01, 2026-08-01 each at 171.43 EUR gross
+    # fails if monthsRemaining miscounts (should be 7: enumerateMonthStarts(2026-04-28, 2026-11-30) = [May 1..Nov 1]),
+    # or LRM allocation drifts (sum of 7 fills = exactly 1200.00 EUR, first 4 = 685.72 EUR), or splits aren't applied per-month.
 
   Scenario: stale targetDate with shortfall fails the calculation
     Given a config with one buffer:
@@ -184,7 +191,11 @@ Co-located with unit tests in `tests/unit/core/transfer/safe-transfer-calculator
 
 1. **Per-occurrence split application** — for any config with N splits at different `validFrom` dates and any forecast occurrence whose `expectedDate` straddles a split boundary: the line item's `perPartnerSplit` matches `Money.allocate(occurrence.amount, getSplitsAsOf(occurrence.expectedDate).rules.map(r => r.ratio))`. (Defect class: applying a single split to the total. The assertion fails iff the actual perPartnerSplit equals the per-occurrence split, so any global-split implementation produces a ratio mismatch on a boundary date.)
 2. **Total consistency** — for any successful calculation: `sum(lineItem.gross) === totalRequired` AND for every partner `p`, `sum(lineItem.perPartnerSplit.get(p)) === perPartner.get(p)`. (Defect class: aggregation arithmetic drift. Vacuous if compared against a re-derivation; instead, sum-via-Money.add over the line items and compare against the calculator's reported totals via `Money.equals`.)
-3. **Recording-fake wiring (retro action D)** — substitute the `RecurringForecastService` with a recording fake that captures the `(from, to)` arguments and asserts `observedFrom === from && observedTo === to`. Substitute `SplitRulesService` with a recording fake that captures every `getSplitsAsOf(date)` call and asserts each `date` is one of the line-item dates. Substitute `BufferStateService` similarly for `getStateAsOf(asOf)`. Each fake returns deterministic test data; the assertion is on what the calculator forwards, not on what comes back. (Defect class: argument drop, swap, or hardcoding.)
+3. **Recording-fake wiring — three independent sub-properties (retro action D, "one fake at a time" per the action-item wording).**
+   - **3a.** Substitute `RecurringForecastService` with a recording fake that captures the `(from, to)` arguments and asserts `observedFrom === from && observedTo === to`. The other two services are real implementations seeded with deterministic test data.
+   - **3b.** Substitute `BufferStateService` with a recording fake that captures the `asOf` argument forwarded into `getStateAsOf` and asserts `observed === asOf`. The other two services are real.
+   - **3c.** Substitute `SplitRulesService` with a recording fake that captures every `(date)` argument forwarded into `getSplitsAsOf` and asserts every captured `date` is the date of a line item in the calculator's output (or equals `asOf` for the partner-roster derivation). The other two services are real.
+   Splitting into three sub-properties isolates wiring defects; faking all three at once can mask cross-argument confusion (e.g., `from` accidentally passed to `getStateAsOf` instead of `asOf` would still produce consistent fake data). (Defect class: argument drop, swap, or hardcoding into any one of the three injected services.)
 4. **Buffer Largest-Remainder over months** — for any `(target, balance, monthsRemaining)` with `target > balance` and `monthsRemaining ≥ 1`: the sum of buffer-topup line items' `gross` over the full month set (asOf + 0..monthsRemaining-1) equals `target - balance` to the cent. (Defect class: integer division losing pennies. Witness: `target=100, balance=0, monthsRemaining=3 → 33.34, 33.33, 33.33` per LRM, summing to exactly 100.)
 5. **No buffer-topup when balance >= target** — for any buffer with `balance >= target` AND any window AND any targetDate (past, present, or future): no `'buffer-topup'` line items reference that bucket. (Defect class: top-up logic ignoring the shortfall guard or treating `balance == target` as below.)
 6. **Stale targetDate fails iff balance < target** — for any `(target, balance, asOf, targetDate)` with `targetDate <= asOf`: the calculation fails with a path-cited error mentioning the bucket name iff `balance < target`. If `balance >= target`, the calculation succeeds and emits no line items for that bucket. (Defect class: stale-check fires unconditionally vs only-when-shortfall.)
@@ -207,8 +218,14 @@ Co-located with unit tests in `tests/unit/core/transfer/safe-transfer-calculator
 | `tests/features/steps/index.ts` | register new steps file |
 | `tests/unit/infra/config/config-schema.test.ts` | extend with `targetDate` validation tests |
 | `tests/unit/core/transfer/safe-transfer-calculator.test.ts` | NEW unit + property tests |
-| `tests/unit/core/transfer/date-arithmetic.test.ts` | NEW unit + property tests |
-| Existing fixtures referencing `BufferBucket` | migrate to add `targetDate` (Story 3.2 added `account` — same pattern; expect ~5 fixture files) |
+| `tests/unit/core/transfer/date-arithmetic.test.ts` | NEW unit + property tests for `enumerateMonthStarts` + `dayBefore` |
+| **Fixture migration files** | Enumerated below — slice 3 must touch all of them |
+| `tests/unit/infra/config/config-schema.test.ts` | add `targetDate` to all `assets:buffer:` literal fixtures |
+| `tests/unit/core/buffers/buffer-state-service.test.ts` | extend `makeBucket` factory with `targetDate` parameter |
+| `tests/features/buffer-status.feature` | add `targetDate` column to all `Given a config with ... buffers:` Gherkin tables |
+| `tests/features/steps/buffer-status.steps.ts` | thread `targetDate` through any inline buffer construction |
+| `tests/integration/infra/config/config-service.test.ts` | add `targetDate:` lines to embedded YAML buffer fixtures |
+| (any other files Sonnet discovers via grep `buffer.*target`) | apply same migration |
 
 No CLI / `program.ts` change → R4 (composition-root subprocess test) does not apply.
 
@@ -238,11 +255,14 @@ No CLI / `program.ts` change → R4 (composition-root subprocess test) does not 
 
 ## Blind spots (acknowledged)
 
-- **`monthsBetween` calendar arithmetic precision.** Defining "calendar months between two dates" cleanly requires a deliberate convention. We use: `monthsBetween(from, to) = (toYear − fromYear) × 12 + (toMonth − fromMonth) − (toDay < fromDay ? 1 : 0)`. So `2026-05-15 → 2026-12-01 = 6` (not 7), and `2026-05-15 → 2026-12-15 = 7`. Property-tested.
+- **`monthsRemaining` semantic via `enumerateMonthStarts`.** The original draft used a closed-form `monthsBetween(from, to) = (yT-yF)×12 + (mT-mF) - (dT<dF?1:0)` formula and claimed `monthsRemaining ≥ 1` whenever `asOf < targetDate`. Phase 2 plan-review found a bug: the formula yields 0 for near-deadline cases like `asOf=2026-04-28, targetDate=2026-05-15`. The corrected semantic is `monthsRemaining = enumerateMonthStarts(asOf, dayBefore(targetDate)).length` — the count of month-start dates strictly between `asOf` (inclusive) and `targetDate` (exclusive). Property-tested.
+- **`monthsRemaining = 0` while `asOf < targetDate`.** Possible when there's no full month-start between asOf and targetDate (e.g., `asOf=2026-04-28, targetDate=2026-05-01`: zero month-starts in `[Apr 28, Apr 30]`). The calculator returns `Result.fail` citing the buffer + the fact that `targetDate` leaves no full month for monthly contributions — same actionable shape as the stale-targetDate fail.
 - **Buffer-topup line items dated to first-of-month.** A buffer fill conceptually contributes throughout the month; choosing first-of-month is conventional. Forecast occurrences keep their actual `expectedDate`. The mixed dating means a buffer-topup line dated `2026-05-01` and a forecast line dated `2026-05-15` sort with the buffer first — captured in the deterministic-sort property.
 - **Empty splits roster.** The calculator constructor takes `partnerRoster: readonly string[]`. If empty, `perPartner` is empty too. The CLI / Story 3.5 should reject empty rosters at config-load (the splits Zod schema already requires ≥ 2 partners per window — see Story 3.1), so an empty roster reaching the calculator means a programming error. The calculator does not double-validate; it trusts the construction site.
 - **Money allocation pennies in aggregate per-partner sums.** Each line item's `perPartnerSplit` sums to the line item's `gross` exactly (LRM guarantee). The aggregate `perPartner.get(p) = Σ lineItem.perPartnerSplit.get(p)` is consistent with `totalRequired = Σ lineItem.gross` because addition is exact in cents. So `Σ perPartner.values() === totalRequired` always holds — covered by property #2.
-- **Buffer-topup when window starts mid-month.** If `from = 2026-05-15`, the first buffer-topup line item is `2026-06-01` (the first calendar-month-start ≥ `from`). The May fill rate is implicitly skipped. This is acceptable because `asOf` is the calc anchor, not `from`; the actual fill schedule is `asOf, asOf+1mo, …`. If the user wanted a partial-May contribution, they should set `from = 2026-05-01`. Documented here so reviewer can confirm at Phase 4.
+- **Buffer-topup when window starts mid-month.** If `from = 2026-05-15`, the first buffer-topup line item is `2026-06-01` (the first calendar-month-start `≥ from`). The May fill is implicitly skipped relative to that window. The fill schedule itself (in `allFillSlots`) is anchored at `asOf`, not `from` — if `from > asOf`, slots between `asOf` and `from` simply don't appear in this window's output. The user is responsible for choosing windows that align with the schedule.
+- **`from > targetDate` silently emits no buffer line items.** If a buffer's entire fill schedule lands before the window, no buffer-topup line items are emitted for that buffer regardless of shortfall. This is a valid no-op state from the calculator's perspective (the user is asking about a window after the buffer's deadline), but the user can't tell from this calculator alone whether the buffer is on-track or in trouble — Story 3.5's status command surfaces standalone buffer state for that.
+- **Multiple stale-targetDate buckets fail first-only.** If buffer A and buffer B are both stale-with-shortfall, the calculator fails on the first one encountered (in config order) and the user must refresh A's targetDate before learning about B. Acceptable for MVP; an "aggregate all failures" pattern is left for a future story if the ergonomic friction proves real.
 - **No variance reporting.** Comparing forecast to actual ledger transactions (PRD's "<5% variance" success metric) is not in scope. Story 3.5 (Status CLI) may surface variance separately; the calculator output is purely prospective.
 - **No "joint account net out".** The calculator computes the gross transfer; it does not subtract any current joint-account balance. Net-out semantics are deferred to a future story (or to the CLI's display layer).
 - **Buffer-topup date interleaving with month-end forecasts.** A buffer-topup on `2026-05-01` and a forecast on `2026-05-31` both belong to "May" — the deterministic sort places the topup first by date. Story 3.5 may want to group by month for display; that's the CLI's concern.

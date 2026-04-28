@@ -52,7 +52,14 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
   state.tmpDir = tmpDir;
   state.dbPath = path.join(tmpDir, 'test.db');
   // dbPath in YAML uses relative './test.db'; cwd=tmpDir makes it resolve to tmpDir/test.db
-  writeStubYaml(tmpDir);
+  // autoTagRules: minimal set that matches the bpce-valid fixture (mutuelle→Insurance,
+  // abonnement→Subscriptions) so the auto-tagging BDD scenario sees autoTagged=2.
+  writeStubYaml(tmpDir, {
+    autoTagRules: [
+      { category: 'Insurance', patterns: ['mutuelle'] },
+      { category: 'Subscriptions', patterns: ['abonnement'] },
+    ],
+  });
   // YAML-authoritative: no --db-path flag after #65 (story-maint-11)
   spawnCli(['migrate'], { cwd: tmpDir });
 });
@@ -81,7 +88,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
   const transactionBuilderFactory = (accounts: ConstructorParameters<typeof TransactionBuilder>[0]) =>
-    new TransactionBuilder(accounts, undefined, nodeUuidGen);
+    new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen);
   const transactionRepository = new SqliteTransactionRepository(db);
   const snapshotService = new NodeSqliteSnapshotService(db);
 

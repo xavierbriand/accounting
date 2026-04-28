@@ -152,7 +152,7 @@ describe('ingest-throughput (perf)', () => {
         config,
         csvParser: new NodeCsvParser(),
         idempotencyService,
-        transactionBuilder: (accounts) => new TransactionBuilder(accounts, undefined, nodeUuidGen),
+        transactionBuilder: (accounts) => new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen),
         pickSourceAccount,
         readFile: readBpceCsv,
         prompt: {

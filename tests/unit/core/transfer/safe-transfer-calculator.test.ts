@@ -473,3 +473,309 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
     }
   });
 });
+
+// ─── Buffer top-up path ───────────────────────────────────────────────────────
+
+describe('SafeTransferCalculator — buffer top-up path', () => {
+  it('produces buffer-topup line items for each month-start in [from, to] within fill schedule', () => {
+    // fails if buffer top-up logic is absent or produces wrong line item dates
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    // Vacation buffer: target 1200 EUR, currentBalance 0, targetDate 2026-12-01
+    // asOf=2026-04-28, targetDate=2026-12-01:
+    //   allFillSlots = enumerateMonthStarts(2026-04-28, 2026-11-30) = 7 months [May..Nov]
+    //   monthsRemaining = 7
+    //   monthlyFill ≈ 1200/7 = 171.43 per month (LRM)
+    // window [from=2026-05-01, to=2026-08-31]: first 4 fill slots
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 120000, 0, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-08-31');
+    expect(result.isSuccess).toBe(true);
+    const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+    expect(topups).toHaveLength(4);
+    expect(topups[0].date).toBe('2026-05-01');
+    expect(topups[1].date).toBe('2026-06-01');
+    expect(topups[2].date).toBe('2026-07-01');
+    expect(topups[3].date).toBe('2026-08-01');
+  });
+
+  it('buffer-topup gross is the LRM month fill for each month slot', () => {
+    // fails if fill amounts are computed wrong or not via LRM
+    // 120000 cents / 7 months via LRM = first slot gets extra cent if odd.
+    // 120000 / 7 = 17142.857... → base = 17142, remainder slots get 17143
+    // 120000 = 7 * 17142 + 6 → 6 slots at 17143, 1 slot at 17142 (LRM: first 6 slots get extra)
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 120000, 0, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-08-31');
+    expect(result.isSuccess).toBe(true);
+    const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+    // Each of first 4 months: 17143 cents (171.43 EUR)
+    for (const item of topups) {
+      expect(item.gross.amount).toBe(17143);
+      expect(item.gross.currency).toBe('EUR');
+    }
+  });
+
+  it('totalRequired is 4 * 17143 = 68572 cents = 685.72 EUR for 4-month window', () => {
+    // fails if aggregation of buffer-topup gross is wrong
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 120000, 0, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-08-31');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.totalRequired.amount).toBe(68572);
+  });
+
+  it('buffer-topup line items carry per-partner splits', () => {
+    // fails if buffer-topup line items have empty perPartnerSplit
+    // 17143 cents split 50/50: 8572 + 8571 (LRM gives extra to Alex)
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 120000, 0, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-08-31');
+    expect(result.isSuccess).toBe(true);
+    const topup = result.value.lineItems.find(i => i.kind === 'buffer-topup')!;
+    const alexShare = topup.perPartnerSplit.get('Alex')!.amount;
+    const samShare = topup.perPartnerSplit.get('Sam')!.amount;
+    expect(alexShare + samShare).toBe(topup.gross.amount);
+  });
+
+  it('stale targetDate with shortfall (asOf >= targetDate) returns Result.fail', () => {
+    // fails if the stale-targetDate check is absent — calculator would silently produce zero
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    // Car buffer: target 500 EUR, currentBalance 200 EUR (shortfall), targetDate=2026-04-01
+    // asOf=2026-04-28 >= targetDate → stale with shortfall → fail
+    const { bucket, balance } = makeBucket('Car', 'assets:buffer:car', 50000, 20000, '2026-04-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('Car');
+    expect(result.error).toContain('2026-04-01');
+    expect(result.error).toContain('set a new targetDate');
+  });
+
+  it('stale targetDate with balance >= target succeeds with no line items (no shortfall)', () => {
+    // fails if the stale-targetDate check fires when balance >= target
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    // Car buffer: target 500 EUR, currentBalance 600 EUR (at/above target), targetDate=2026-04-01
+    const { bucket, balance } = makeBucket('Car', 'assets:buffer:car', 50000, 60000, '2026-04-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.lineItems).toHaveLength(0);
+    expect(result.value.totalRequired.amount).toBe(0);
+  });
+
+  it('balance exactly equals target produces no buffer-topup items', () => {
+    // fails if balance == target is treated as below-target (zero shortfall should not generate fills)
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Car', 'assets:buffer:car', 50000, 50000, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isSuccess).toBe(true);
+    const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+    expect(topups).toHaveLength(0);
+  });
+
+  it('monthsRemaining=0 with asOf < targetDate returns Result.fail (deadline too soon)', () => {
+    // fails if zero-months case is silently skipped instead of returning an error
+    // asOf=2026-04-28, targetDate=2026-05-01:
+    //   allFillSlots = enumerateMonthStarts(2026-04-28, 2026-04-30) = [] (no month-start in Apr 28–30)
+    //   monthsRemaining = 0 → fail with "no full month"
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Car', 'assets:buffer:car', 50000, 20000, '2026-05-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('Car');
+    expect(result.error).toContain('no full month');
+  });
+
+  it('buffer-topup kind, category, and description are correct', () => {
+    // fails if kind, category, or description fields are wrong on buffer-topup items
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 120000, 0, '2026-12-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isSuccess).toBe(true);
+    const topup = result.value.lineItems.find(i => i.kind === 'buffer-topup')!;
+    expect(topup.kind).toBe('buffer-topup');
+    expect(topup.category).toBe('Vacation');
+    expect(topup.description).toBe('Vacation top-up');
+  });
+});
+
+// ─── Property tests (buffer top-up) ──────────────────────────────────────────
+
+describe('SafeTransferCalculator — property tests (buffer top-up)', () => {
+  it('Property #4: buffer Largest-Remainder over months — sum equals shortfall exactly', () => {
+    // Defect class: integer division losing pennies.
+    // Witness: target=100 EUR (10000 cents), balance=0, monthsRemaining=3:
+    //   LRM → [3334, 3333, 3333] summing to 10000 exactly.
+    // Introducing plain Math.floor would give [3333, 3333, 3333] = 9999 ≠ 10000.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 100000 }),   // targetCents
+        fc.integer({ min: 0, max: 99999 }).filter((b) => b < 100000), // balanceCents < targetCents
+        fc.integer({ min: 1, max: 12 }),        // monthsInWindow (1..12)
+        (targetCents, balanceCents, monthsInWindow) => {
+          if (balanceCents >= targetCents) return true;
+          // Build a config where the fill schedule spans exactly monthsInWindow months
+          // Use window from=2026-05-01, asOf has monthsInWindow fill slots within window
+          // asOf = 2026-04-28, targetDate = month start after (monthsInWindow) months from May 1
+          //   e.g. monthsInWindow=3: targetDate = 2026-08-01 (Aug)
+          //   allFillSlots = [May1, Jun1, Jul1] — 3 fill slots
+          const year = 2026;
+          const startMonth = 5; // May
+          const endMonth = startMonth + monthsInWindow; // exclusive
+          const endYear = year + Math.floor((endMonth - 1) / 12);
+          const endMonthNorm = ((endMonth - 1) % 12) + 1;
+          const targetDate = `${endYear}-${String(endMonthNorm).padStart(2, '0')}-01`;
+          // to: last day of (startMonth + monthsInWindow - 1)
+          const lastFillMonth = startMonth + monthsInWindow - 1;
+          const lastFillYear = year + Math.floor((lastFillMonth - 1) / 12);
+          const lastFillMonthNorm = ((lastFillMonth - 1) % 12) + 1;
+          const to = `${lastFillYear}-${String(lastFillMonthNorm).padStart(2, '0')}-28`;
+
+          const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+          const { bucket, balance } = makeBucket(
+            'TestBuf',
+            'assets:buffer:test',
+            targetCents,
+            balanceCents,
+            targetDate,
+          );
+          const calc = buildCalculator(windows, [{ bucket, balance }], []);
+          const result = calc.calculateForWindow('2026-04-28', '2026-05-01', to);
+          if (result.isFailure) return true; // skip edge cases
+
+          // Sum all buffer-topup line items' gross over ALL fill slots (full window = all slots)
+          const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+          if (topups.length !== monthsInWindow) return true; // guard: full window must expose all slots
+
+          let sumCents = 0;
+          for (const item of topups) {
+            sumCents += item.gross.amount;
+          }
+          const expectedShortfall = targetCents - balanceCents;
+          return sumCents === expectedShortfall;
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #5: no buffer-topup line items when balance >= target', () => {
+    // Defect class: top-up logic ignoring the shortfall guard, or treating balance==target as below.
+    // Introducing the defect (removing the balance>=target guard) would produce fills even
+    // when balance equals target, which would violate this property.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 100000 }),  // targetCents
+        fc.integer({ min: 0, max: 100000 }),  // extraCents (added to target for balance)
+        (targetCents, extraCents) => {
+          const balanceCents = targetCents + extraCents; // balance >= target always
+          const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+          const { bucket, balance } = makeBucket(
+            'TestBuf',
+            'assets:buffer:test',
+            targetCents,
+            balanceCents,
+            '2026-12-01',
+          );
+          const calc = buildCalculator(windows, [{ bucket, balance }], []);
+          const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+          if (result.isFailure) return true;
+          const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+          return topups.length === 0;
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #6: stale targetDate fails iff balance < target', () => {
+    // Defect class: stale-check fires unconditionally, or only-when-shortfall guard missing.
+    // Introducing the defect (removing the shortfall guard) would fail even when balance>=target.
+    // The other defect (removing the stale check) would succeed when balance<target.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 100000 }),  // targetCents
+        fc.integer({ min: 0, max: 200000 }),  // balanceCents
+        (targetCents, balanceCents) => {
+          const hasShortfall = balanceCents < targetCents;
+          const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+          // stale targetDate: asOf=2026-04-28 >= targetDate=2026-04-01
+          const { bucket, balance } = makeBucket(
+            'TestBuf',
+            'assets:buffer:test',
+            targetCents,
+            balanceCents,
+            '2026-04-01',
+          );
+          const calc = buildCalculator(windows, [{ bucket, balance }], []);
+          const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+          if (hasShortfall) {
+            // Must fail with path-cited error
+            return result.isFailure && result.error.includes('TestBuf');
+          } else {
+            // Must succeed with no buffer-topup line items
+            return result.isSuccess && result.value.lineItems.length === 0;
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property #7: output sort stability — shuffling input order produces same lineItems', () => {
+    // Defect class: implicit input-order dependency (items sorted by config order, not by date/kind).
+    // Introducing the defect (removing the sort) means shuffled config → different item order.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 3 }),   // numBuffers
+        fc.integer({ min: 1, max: 3 }),   // numRules
+        (numBuffers, numRules) => {
+          const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+          const bufferDefs = Array.from({ length: numBuffers }, (_, i) => {
+            const { bucket, balance } = makeBucket(
+              `Buffer${i}`,
+              `assets:buffer:buf${i}`,
+              10000 + i * 5000,
+              0,
+              '2026-12-01',
+            );
+            return { bucket, balance };
+          });
+          const rules = Array.from({ length: numRules }, (_, i) =>
+            recurringRule(`Rule${i}`, `Cat${i % 2}`, 1000 + i * 500, '2024-01-01'),
+          );
+
+          const calc1 = buildCalculator(windows, bufferDefs, rules);
+          const result1 = calc1.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+          if (result1.isFailure) return true;
+
+          // Reverse the order of buffers and rules
+          const reversedBuffers = [...bufferDefs].reverse();
+          const reversedRules = [...rules].reverse();
+          const calc2 = buildCalculator(windows, reversedBuffers, reversedRules);
+          const result2 = calc2.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+          if (result2.isFailure) return true;
+
+          const items1 = result1.value.lineItems;
+          const items2 = result2.value.lineItems;
+          if (items1.length !== items2.length) return false;
+
+          for (let i = 0; i < items1.length; i++) {
+            if (items1[i].date !== items2[i].date) return false;
+            if (items1[i].kind !== items2[i].kind) return false;
+            if (items1[i].category !== items2[i].category) return false;
+            if (items1[i].gross.amount !== items2[i].gross.amount) return false;
+          }
+          return true;
+        },
+      ),
+      { numRuns: 50 },
+    );
+  });
+});

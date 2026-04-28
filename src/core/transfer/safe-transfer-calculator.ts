@@ -5,6 +5,7 @@ import type { BufferStateService } from '@core/buffers/buffer-state-service.js';
 import type { RecurringForecastService } from '@core/recurring/recurring-forecast-service.js';
 import type { SafeTransferCalculation } from './safe-transfer-calculation.js';
 import type { LineItem } from './line-item.js';
+import { enumerateMonthStarts, dayBefore } from './date-arithmetic.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -68,9 +69,72 @@ export class SafeTransferCalculator {
       });
     }
 
-    // Collect buffer top-up line items — implemented in slice 7
+    // Collect buffer top-up line items
     const bufferStateResult = this.buffersService.getStateAsOf(asOf);
     if (bufferStateResult.isFailure) return Result.fail(bufferStateResult.error);
+
+    for (const state of bufferStateResult.value) {
+      // Only top up buffers with a shortfall
+      const isBelow = state.status === 'below';
+      if (!isBelow) continue;
+
+      // Stale targetDate check: if asOf >= targetDate and balance < target → fail
+      if (asOf >= state.targetDate) {
+        return Result.fail(
+          `buffer "${state.name}" is below target and its targetDate (${state.targetDate}) has passed — set a new targetDate`,
+        );
+      }
+
+      // Compute fill schedule: month-starts in [asOf, dayBefore(targetDate)]
+      const allFillSlots = enumerateMonthStarts(asOf, dayBefore(state.targetDate));
+      const monthsRemaining = allFillSlots.length;
+
+      if (monthsRemaining === 0) {
+        return Result.fail(
+          `buffer "${state.name}" targetDate (${state.targetDate}) leaves no full month for monthly contributions — extend targetDate or accept the shortfall`,
+        );
+      }
+
+      // LRM allocation of shortfall across all fill months
+      const shortfallResult = state.target.subtract(state.balance);
+      if (shortfallResult.isFailure) return Result.fail(shortfallResult.error);
+      const shortfall = shortfallResult.value;
+
+      const monthlyFillsResult = shortfall.allocate(Array(monthsRemaining).fill(1));
+      if (monthlyFillsResult.isFailure) return Result.fail(monthlyFillsResult.error);
+      const monthlyFills = monthlyFillsResult.value;
+
+      // Build index: month-start date → fill slot index
+      const indexByMonth = new Map(allFillSlots.map((m, i) => [m, i]));
+
+      // Emit line items for fill slots that fall within [from, to]
+      for (const m of enumerateMonthStarts(from, to)) {
+        const i = indexByMonth.get(m);
+        if (i === undefined) continue;
+
+        const gross = monthlyFills[i];
+        const splitsResult = this.splitsService.getSplitsAsOf(m);
+        if (splitsResult.isFailure) return Result.fail(splitsResult.error);
+        const ratios = splitsResult.value.map(r => r.ratio);
+
+        const allocResult = gross.allocate(ratios);
+        if (allocResult.isFailure) return Result.fail(allocResult.error);
+
+        const perPartnerSplit = new Map<string, Money>();
+        for (let j = 0; j < splitsResult.value.length; j++) {
+          perPartnerSplit.set(splitsResult.value[j].partner, allocResult.value[j]);
+        }
+
+        lineItems.push({
+          kind: 'buffer-topup',
+          date: m,
+          category: state.name,
+          description: `${state.name} top-up`,
+          gross,
+          perPartnerSplit,
+        });
+      }
+    }
 
     // Sort line items: ascending by (date, kind, category, description)
     lineItems.sort((a, b) => {

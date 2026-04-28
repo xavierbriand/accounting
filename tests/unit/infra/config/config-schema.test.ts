@@ -723,3 +723,39 @@ describe('parseRawConfig', () => {
     });
   });
 });
+
+describe('parseRawConfig — autoTagRules (Story B)', () => {
+  describe('Scenario: schema accepts grouped rules and flattens them in YAML order', () => {
+    it('flattens two groups with multiple patterns, preserving order and flags', () => {
+      // fails if the grouped→flat transform breaks order or omits flags (guards parseRawConfig flatten loop)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [
+          { category: 'Transport', patterns: ['uber\\|bolt', 'taxi'] },
+          { category: 'Groceries', patterns: ['carrefour'] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isSuccess).toBe(true);
+      const rules = result.value.autoTagRules;
+      expect(rules).toHaveLength(3);
+      expect(rules[0].category).toBe('Transport');
+      expect(rules[0].pattern).toBeInstanceOf(RegExp);
+      expect(rules[0].pattern.flags).toContain('i');
+      expect(rules[0].pattern.source).toBe('uber\\|bolt');
+      expect(rules[1].category).toBe('Transport');
+      expect(rules[1].pattern.source).toBe('taxi');
+      expect(rules[2].category).toBe('Groceries');
+      expect(rules[2].pattern.source).toBe('carrefour');
+    });
+  });
+
+  describe('Scenario: schema defaults missing autoTagRules to []', () => {
+    it('returns autoTagRules = [] when the key is absent', () => {
+      // fails if the missing key throws or yields undefined (guards .optional().default([]))
+      const result = parseRawConfig(minimalValid);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.autoTagRules).toEqual([]);
+    });
+  });
+});

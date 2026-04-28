@@ -229,7 +229,7 @@ function runNonInteractive(
   if (lowConfidence.length > 0) {
     writeln(
       stderr,
-      `${lowConfidence.length} item(s) need manual review. Run without --non-interactive to review them, ` +
+      `${lowConfidence.length} item(s) need manual review. Run without --non-interactive to review them (you can define new categories inline), ` +
         `or re-ingest after updating accounting.yaml's auto-tag-rules.`,
     );
 

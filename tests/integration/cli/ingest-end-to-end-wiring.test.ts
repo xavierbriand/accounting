@@ -48,7 +48,15 @@ describe('ingest end-to-end wiring against real BPCE CSV', () => {
     const csvPath = path.join(tmpDir, 'bpce-valid_real.csv');
 
     fs.copyFileSync(FIXTURE_CSV, csvPath);
-    writeStubYaml(tmpDir);
+    // Include autoTagRules so the tagging assertion (3 low-confidence, 2 auto-tagged) remains
+    // meaningful post-Story-B. Without rules, all 5 rows would be Uncategorized (low-confidence)
+    // and exit 2 would still happen, but the test would no longer guard the actual tagging wiring.
+    writeStubYaml(tmpDir, {
+      autoTagRules: [
+        { category: 'Insurance', patterns: ['mutuelle'] },
+        { category: 'Subscriptions', patterns: ['abonnement'] },
+      ],
+    });
 
     // Seed the DB schema via YAML-authoritative dbPath (no flag needed after #65)
     spawnCli(['migrate'], { cwd: tmpDir });

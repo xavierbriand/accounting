@@ -81,3 +81,36 @@ recurring:
     amendments:
       - validFrom: "2026-07-01"
         amount: 1050
+
+# Auto-tag rules: automatically categorise transactions by matching their description
+# against the patterns below (case-insensitive regex, first match wins).
+# Add, remove or adjust rules to match your bank's description format.
+# Each category name follows the same rules as inline-defined categories
+# (max 64 chars, no ':', '/', '\', not a reserved token like Uncategorized/Asset/Income/Expense/Liability).
+# If no rule matches, the transaction is tagged Uncategorized and flagged for manual review.
+# An empty list is valid; every transaction will be Uncategorized until rules are added.
+autoTagRules:
+  - category: Transport
+    patterns:
+      - "uber|bolt|taxi|freenow"
+  - category: Groceries
+    patterns:
+      - "carrefour|monoprix|auchan|intermarche|biocoop|leclerc"
+  - category: Fuel
+    patterns:
+      - "total|shell|bp|esso|station service"
+  - category: Restaurant
+    patterns:
+      - "restaurant|cafe|bar|brasserie|snack"
+  - category: Utilities
+    patterns:
+      - "edf|engie|veolia|orange|sfr|free|bouygues"
+  - category: BankingFees
+    patterns:
+      - "cotisation|frais bancaires|agios"
+  - category: Insurance
+    patterns:
+      - "assurance|mutuelle"
+  - category: Subscriptions
+    patterns:
+      - "netflix|spotify|prime|disney|apple\\.com|abonnement"

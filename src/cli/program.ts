@@ -101,7 +101,7 @@ program
     const hashRepo = new SqliteHashRepository(db);
     const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
     const transactionBuilder = (accounts: ConstructorParameters<typeof TransactionBuilder>[0]) =>
-      new TransactionBuilder(accounts, undefined, nodeUuidGen);
+      new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen);
     const transactionRepository = new SqliteTransactionRepository(db);
     const snapshotService = new NodeSqliteSnapshotService(db);
 

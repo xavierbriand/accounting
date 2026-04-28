@@ -723,3 +723,147 @@ describe('parseRawConfig', () => {
     });
   });
 });
+
+describe('parseRawConfig — autoTagRules (Story B)', () => {
+  describe('Scenario: schema accepts grouped rules and flattens them in YAML order', () => {
+    it('flattens two groups with multiple patterns, preserving order and flags', () => {
+      // fails if the grouped→flat transform breaks order or omits flags (guards parseRawConfig flatten loop)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [
+          { category: 'Transport', patterns: ['uber\\|bolt', 'taxi'] },
+          { category: 'Groceries', patterns: ['carrefour'] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isSuccess).toBe(true);
+      const rules = result.value.autoTagRules;
+      expect(rules).toHaveLength(3);
+      expect(rules[0].category).toBe('Transport');
+      expect(rules[0].pattern).toBeInstanceOf(RegExp);
+      expect(rules[0].pattern.flags).toContain('i');
+      expect(rules[0].pattern.source).toBe('uber\\|bolt');
+      expect(rules[1].category).toBe('Transport');
+      expect(rules[1].pattern.source).toBe('taxi');
+      expect(rules[2].category).toBe('Groceries');
+      expect(rules[2].pattern.source).toBe('carrefour');
+    });
+  });
+
+  describe('Scenario: schema defaults missing autoTagRules to []', () => {
+    it('returns autoTagRules = [] when the key is absent', () => {
+      // fails if the missing key throws or yields undefined (guards .optional().default([]))
+      const result = parseRawConfig(minimalValid);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.autoTagRules).toEqual([]);
+    });
+  });
+
+  describe('Scenario: schema rejects an empty patterns array', () => {
+    it('returns Result.fail citing autoTagRules.0.patterns', () => {
+      // fails if z.array(...).min(1) is missing (guards "at least one pattern per category")
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Transport', patterns: [] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.patterns');
+    });
+  });
+
+  describe('Scenario: schema rejects an empty pattern string', () => {
+    it('returns Result.fail citing autoTagRules.0.patterns.0', () => {
+      // fails if z.string().min(1) is missing inside the array
+      // (an empty string compiles to a regex matching every description, silently mis-tagging everything)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Transport', patterns: [''] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.patterns.0');
+    });
+  });
+
+  describe('Scenario: schema rejects an uncompilable regex pattern', () => {
+    it('returns Result.fail citing autoTagRules.0.patterns.0 with the regex error', () => {
+      // fails if regex compile is not pre-validated in superRefine
+      // (the runtime new RegExp in transform would throw uncaught)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Transport', patterns: ['[invalid'] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.patterns.0');
+    });
+  });
+
+  describe('Scenario: schema rejects a reserved category token (case-insensitive)', () => {
+    it("returns Result.fail citing autoTagRules.0.category: 'Expense' is reserved", () => {
+      // fails if Story A's validateNewCategoryName is not applied to YAML categories (guards Q1-a consistency)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Expense', patterns: ['supermarche'] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.category');
+      expect(result.error).toContain("'Expense' is reserved");
+    });
+
+    it('is case-insensitive — rejects UNCATEGORIZED', () => {
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'UNCATEGORIZED', patterns: ['test'] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.category');
+    });
+  });
+
+  describe('Scenario: schema rejects a category containing path-separator characters', () => {
+    it("returns Result.fail citing autoTagRules.0.category for 'Expense/Sub'", () => {
+      // fails if forbidden-char rule is bypassed (would corrupt the Expense:<category> account path)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Expense/Sub', patterns: ['test'] }],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('autoTagRules.0.category');
+    });
+
+    it("rejects category with colon or backslash", () => {
+      const rawColon = {
+        ...minimalValid,
+        autoTagRules: [{ category: 'Transport:Road', patterns: ['test'] }],
+      };
+      expect(parseRawConfig(rawColon).isFailure).toBe(true);
+    });
+  });
+
+  describe('Scenario: two YAML groups with the same category produce two separate flat rule entries', () => {
+    it('does not merge or reject duplicate-category groups — produces 2 flat entries', () => {
+      // fails if duplicate-category groups are silently merged or rejected
+      // (guards the documented "duplicates allowed by design" decision)
+      const raw = {
+        ...minimalValid,
+        autoTagRules: [
+          { category: 'Transport', patterns: ['uber'] },
+          { category: 'Transport', patterns: ['bolt'] },
+        ],
+      };
+      const result = parseRawConfig(raw);
+      expect(result.isSuccess).toBe(true);
+      const rules = result.value.autoTagRules;
+      expect(rules).toHaveLength(2);
+      expect(rules[0].category).toBe('Transport');
+      expect(rules[0].pattern.source).toBe('uber');
+      expect(rules[1].category).toBe('Transport');
+      expect(rules[1].pattern.source).toBe('bolt');
+    });
+  });
+});

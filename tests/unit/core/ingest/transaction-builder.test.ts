@@ -18,8 +18,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TransactionBuilder } from '../../../../src/core/ingest/transaction-builder.js';
 import type { AccountConfig } from '../../../../src/core/config/app-config.js';
+import type { AutoTagRule } from '../../../../src/core/ingest/auto-tag-rules.js';
 import type { IngestItem, FreshIngestItem } from '../../../../src/core/ingest/types.js';
 import { Money } from '../../../../src/core/shared/money.js';
+
+const TEST_RULES: readonly AutoTagRule[] = [
+  { pattern: /uber|bolt/i, category: 'Transport' },
+  { pattern: /carrefour/i, category: 'Groceries' },
+  { pattern: /restaurant|cafe/i, category: 'Restaurant' },
+  { pattern: /edf|orange|sfr|free/i, category: 'Utilities' },
+  { pattern: /assurance|mutuelle/i, category: 'Insurance' },
+  { pattern: /netflix|spotify|abonnement/i, category: 'Subscriptions' },
+];
 
 const bankAccount: AccountConfig = {
   id: 'main-1',
@@ -72,7 +82,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario AC1/AC2: expense on a bank account (bank + outflow)', () => {
     it('returns Result.ok with classification=expense, category=Transport, confidence=high', () => {
       // fails if: bank→outflow row routes to wrong accounts, or Uber rule absent
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2026' });
       const result = builder.build(asFresh(item));
 
@@ -85,7 +95,7 @@ describe('TransactionBuilder — obvious basics', () => {
 
     it('transaction has debit Expense:Transport and credit Assets:Bank:main-1', () => {
       // fails if: direction table maps bank+outflow to wrong credit account
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2026', amount: eur(2000) });
       const outcome = builder.build(asFresh(item)).value;
       const entries = outcome.transaction.entries;
@@ -102,7 +112,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: expense on a card account (card + outflow)', () => {
     it('routes credit to Liabilities:CreditCard, not Assets:Bank', () => {
       // fails if: card→outflow row routes to Assets:Bank instead of Liabilities:CreditCard
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'card-1234',
         direction: 'outflow',
@@ -123,7 +133,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: income/refund on a card account (card + inflow)', () => {
     it('reverses sides: debit CreditCard, credit Income', () => {
       // fails if: inflow on a card is treated as expense (would wrongly increase CC liability)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'card-1234',
         direction: 'inflow',
@@ -144,7 +154,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: bank account inflow → income', () => {
     it('routes to debit Assets:Bank, credit Income', () => {
       // fails if: bank+inflow row routes credit to Expense instead of Income
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'inflow',
@@ -164,7 +174,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: unmatched description → Uncategorized, confidence=low', () => {
     it('sets category=Uncategorized and confidence=low, does NOT drop the item', () => {
       // fails if: unmatched items get dropped (silent data loss), or confidence reports 'high'
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -182,7 +192,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: batch buildAll preserves input order and splits built/failed', () => {
     it('built.length == 4, failed.length == 1, order preserved', () => {
       // fails if: one bad item aborts the batch, or ordering is lost
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const goodItem = (desc: string): IngestItem =>
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: desc });
 
@@ -204,7 +214,7 @@ describe('TransactionBuilder — obvious basics', () => {
 
     it('built items appear in the same relative order as input', () => {
       // fails if: ordering is lost (e.g. parallel processing without sort)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const items: IngestItem[] = [
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 1', amount: eur(100) }),
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'CARREFOUR', amount: eur(200) }),
@@ -223,7 +233,7 @@ describe('TransactionBuilder — obvious basics', () => {
       // or a cached UUID leaks across items
       let callCount = 0;
       const uniqueIdGen = (): string => `uid-${++callCount}`;
-      const builder = new TransactionBuilder(accounts, undefined, uniqueIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, uniqueIdGen);
 
       const items: IngestItem[] = Array.from({ length: 5 }, (_, i) =>
         makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: `UBER ${i}` }),
@@ -238,7 +248,7 @@ describe('TransactionBuilder — obvious basics', () => {
   describe('Scenario: Transaction.description pass-through', () => {
     it('transaction.description === original item.description, NOT the category', () => {
       // fails if: the category leaks into description, or builder rewrites the description
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -254,7 +264,7 @@ describe('TransactionBuilder — obvious basics', () => {
     it('transaction.occurredAt === original item.occurredAt, no reformat', () => {
       // fails if: the builder re-parses and re-serialises the timestamp,
       // or strips the offset (Story 2.2 idempotency hash depends on exact string)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -270,7 +280,7 @@ describe('TransactionBuilder — obvious basics', () => {
       // fails if: buildAll drops or ignores idempotencyHash from FreshIngestItem,
       //           or if the hash is overwritten with a different value in makeOutcome.
       //           This guards the chain: IdempotencyService → buildAll → saveBatch.
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({ sourceAccount: 'main-1', direction: 'outflow' });
       const freshItem: FreshIngestItem = { item, idempotencyHash: 'abc123hash' };
 
@@ -284,7 +294,7 @@ describe('TransactionBuilder — obvious basics', () => {
 
     it('each outcome carries its own hash when multiple fresh items are provided', () => {
       // fails if: hash from item[0] is applied to all outcomes (off-by-one in loop)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const freshItems: FreshIngestItem[] = [
         { item: makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 1' }), idempotencyHash: 'hash-one' },
         { item: makeItem({ sourceAccount: 'main-1', direction: 'outflow', description: 'UBER TRIP 2' }), idempotencyHash: 'hash-two' },
@@ -308,7 +318,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
   describe('Scenario AC/#26: PAIEMENT CARTE on main account → internal transfer', () => {
     it('matches PAIEMENT CARTE X1234 and classifies as internal-transfer', () => {
       // fails if: the classifier doesn't run, or it doesn't recognise the PAIEMENT CARTE pattern
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -326,7 +336,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
     it('debit Liabilities:CreditCard:card-1234, credit Assets:Bank:main-1', () => {
       // fails if: the internal-transfer entries swap debit/credit sides,
       // or it resolves to the wrong card account id
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -344,7 +354,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
 
     it('also matches without X prefix: PAIEMENT CARTE 1234', () => {
       // fails if: the regex requires the X prefix (some BPCE statements omit it)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -359,7 +369,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
   describe('Scenario: PAIEMENT CARTE with unknown suffix → Uncategorized expense, confidence=low', () => {
     it('falls back to expense when suffix matches no card', () => {
       // fails if: the classifier silently guesses a card, or hard-fails the item (silent data loss)
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'main-1',
         direction: 'outflow',
@@ -379,7 +389,7 @@ describe('TransactionBuilder — card-settlement classifier', () => {
     it('PAIEMENT CARTE on a card account is treated as regular expense, not internal-transfer', () => {
       // fails if: the classifier runs against card-sourced items
       // (should only fire when sourceAccount.type === 'bank')
-      const builder = new TransactionBuilder(accounts, undefined, seqIdGen);
+      const builder = new TransactionBuilder(accounts, TEST_RULES, seqIdGen);
       const item = makeItem({
         sourceAccount: 'card-1234',
         direction: 'outflow',

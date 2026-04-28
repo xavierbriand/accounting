@@ -57,7 +57,7 @@ async function runIngestInProcess(
   const hashRepo = new SqliteHashRepository(db);
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
   const transactionBuilderFactory = (accounts: ConstructorParameters<typeof TransactionBuilder>[0]) =>
-    new TransactionBuilder(accounts, undefined, nodeUuidGen);
+    new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen);
   const realRepo = new SqliteTransactionRepository(db);
   const transactionRepository = saveBatchOverride ?? realRepo;
   const snapshotService = new NodeSqliteSnapshotService(db);

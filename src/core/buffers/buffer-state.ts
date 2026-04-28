@@ -8,4 +8,5 @@ export interface BufferState {
   readonly target: Money;
   readonly cap?: Money;
   readonly status: BufferStatus;
+  readonly targetDate: string;
 }

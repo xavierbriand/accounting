@@ -91,7 +91,7 @@ function buildCalculator(
     fakeLedger(balances),
   );
   const forecastService = new RecurringForecastService(rules);
-  return new SafeTransferCalculator(splitsService, buffersService, forecastService);
+  return new SafeTransferCalculator(splitsService, buffersService, forecastService, 'EUR');
 }
 
 // ─── ISO date validation ──────────────────────────────────────────────────────
@@ -186,9 +186,13 @@ describe('SafeTransferCalculator — forecast-only path', () => {
     const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
     expect(result.isSuccess).toBe(true);
     const item = result.value.lineItems[0];
-    // 1299 * 0.6 = 779.4 → LRM: 780 (Alex), 519 (Sam)
-    // 1299 * 0.6 = 779.4 and 1299 * 0.4 = 519.6, LRM sum check:
-    // dinero.js LRM gives the extra cent to Alex (first higher-weight element) → Alex=780, Sam=519
+    // 1299 cents allocated by ratios [0.6, 0.4]:
+    //   - Alex floor: floor(1299 * 0.6) = 779; Sam floor: floor(1299 * 0.4) = 519. Sum=1298.
+    //   - Remainder = 1; LRM distributes by largest fractional part. Fractionals: Alex 0.4, Sam 0.6.
+    //   - Standard LRM would award the cent to Sam (larger fractional), giving 779/520.
+    //   - dinero.js v2 awards the remainder to the first ratio in input order instead, giving 780/519.
+    // We expect dinero.js's behaviour because Money.allocate delegates to it. This tie-breaker
+    // is library-specific; if dinero.js changes its remainder rule, this test will catch it.
     expect(item.perPartnerSplit.get('Alex')!.amount).toBe(780);
     expect(item.perPartnerSplit.get('Sam')!.amount).toBe(519);
     // perPartner totals
@@ -250,48 +254,55 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
       ),
     );
 
-  it('Property #1: per-occurrence split application — ratios match getSplitsAsOf(occurrence.date)', () => {
-    // Defect class: applying a single global split to all occurrences.
-    // The assertion checks that each line item's perPartnerSplit equals Money.allocate(gross, ratios)
-    // where ratios come from getSplitsAsOf(occurrence.expectedDate). Any global-split implementation
-    // produces wrong splits when occurrences straddle a split boundary.
+  it('Property #1: per-occurrence split application — perPartnerSplit equals Money.allocate(gross, ratiosAtOccurrenceDate)', () => {
+    // Defect class: applying a single global split to all occurrences (window-selection
+    // bug), OR using a non-LRM allocator (e.g., Math.floor + remainder lost). Both must
+    // be falsifiable. The assertion compares each line item's perPartnerSplit against
+    // gross.allocate(ratios) where ratios come from getSplitsAsOf(occurrence.expectedDate)
+    // — exact equality via Money.equals, no ±1 tolerance.
+    //
+    // Floating-point note: ratios MUST be computed once in the generator and reused by
+    // both the test fixture (as window data) and the assertion. Recomputing `1 - ratio`
+    // in the body produces a slightly different IEEE-754 value (e.g., `1 - 0.9` is
+    // 0.09999...998, not 0.1), which would produce false-positive mismatches with
+    // production's stored-ratio allocation.
     fc.assert(
       fc.property(
-        // Two split windows with different ratios
         fc.integer({ min: 1, max: 9 }).map(tenths => {
-          const ratio = tenths / 10;
+          const r = tenths / 10;
+          const w1Ratios: [number, number] = [r, 1 - r];
+          const w2Ratios: [number, number] = [1 - r, r];
           return {
-            window1: splitWindow('2024-01-01', ['Alex', ratio], ['Sam', 1 - ratio]),
-            window2: splitWindow('2026-07-01', ['Alex', 1 - ratio], ['Sam', ratio]),
-            ratio1: ratio,
-            ratio2: 1 - ratio,
+            window1: splitWindow('2024-01-01', ['Alex', w1Ratios[0]], ['Sam', w1Ratios[1]]),
+            window2: splitWindow('2026-07-01', ['Alex', w2Ratios[0]], ['Sam', w2Ratios[1]]),
+            w1Ratios,
+            w2Ratios,
           };
         }),
-        // A positive amount in cents
         fc.integer({ min: 100, max: 100000 }),
-        ({ window1, window2, ratio1, ratio2 }, amountCents) => {
+        ({ window1, window2, w1Ratios, w2Ratios }, amountCents) => {
           const rule = recurringRule('R', 'C', amountCents, '2024-01-01');
           const windows = [window1, window2];
           const calc = buildCalculator(windows, [], [rule]);
-          // Window spanning both split windows: May (50/50) and Sep (ratio1/ratio2)
           const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-09-30');
-          if (result.isFailure) return true; // skip invalid configs
+          if (result.isFailure) return true;
           const items = result.value.lineItems;
-          const mayItem = items.find(i => i.date <= '2026-06-30');
-          const sepItem = items.find(i => i.date >= '2026-07-01');
-          if (!mayItem || !sepItem) return true;
-          // Verify May occurrence uses window 1 ratios
-          const expectedMayAlex = Math.floor(mayItem.gross.amount * ratio1);
-          const actualMayAlex = mayItem.perPartnerSplit.get('Alex')!.amount;
-          // Allow ±1 cent for LRM
-          if (Math.abs(actualMayAlex - expectedMayAlex) > 1) return false;
-          // Verify Sep occurrence uses window 2 ratios
-          const expectedSepAlex = Math.floor(sepItem.gross.amount * ratio2);
-          const actualSepAlex = sepItem.perPartnerSplit.get('Alex')!.amount;
-          return Math.abs(actualSepAlex - expectedSepAlex) <= 1;
+          for (const item of items) {
+            const ratios: [number, number] = item.date < '2026-07-01' ? w1Ratios : w2Ratios;
+            const expected = item.gross.allocate([...ratios]);
+            if (expected.isFailure) return false;
+            const expectedAlex = expected.value[0];
+            const expectedSam = expected.value[1];
+            const actualAlex = item.perPartnerSplit.get('Alex');
+            const actualSam = item.perPartnerSplit.get('Sam');
+            if (!actualAlex || !actualSam) return false;
+            if (!actualAlex.equals(expectedAlex)) return false;
+            if (!actualSam.equals(expectedSam)) return false;
+          }
+          return true;
         },
       ),
-      { numRuns: 50 },
+      { numRuns: 100 },
     );
   });
 
@@ -370,6 +381,7 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
             splitsService,
             buffersService,
             recordingForecast as unknown as RecurringForecastService,
+            'EUR',
           );
           const result = calc.calculateForWindow(asOf, actualFrom, to);
           if (result.isFailure) return true; // skip validation-fail cases
@@ -407,6 +419,7 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
             splitsService,
             recordingBuffers as unknown as BufferStateService,
             forecastService,
+            'EUR',
           );
           const result = calc.calculateForWindow(asOf, actualFrom, to);
           if (result.isFailure) return true;
@@ -417,17 +430,24 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
     );
   });
 
-  it('Property #3c: recording-fake on SplitRulesService — captured dates are line item dates or asOf', () => {
-    // Defect class: getSplitsAsOf called with wrong date (e.g., from instead of occurrence date).
-    // SplitRulesService is replaced with a recording fake. BufferStateService and
-    // RecurringForecastService are real.
+  it('Property #3c: recording-fake on SplitRulesService — every line item date triggers a getSplitsAsOf call with that exact date', () => {
+    // Defect class: getSplitsAsOf called with wrong date (e.g., from instead of occurrence date,
+    // or asOf reused for every occurrence). The previous form used empty forecast/buffer configs
+    // which made the property vacuous (the only captured call was the asOf roster derivation).
+    // This form seeds a real RecurringForecastService with one monthly rule so multiple
+    // occurrences land in the window, and asserts that each occurrence's date appears in the
+    // captured calls. A defect that hardcodes asOf for the per-occurrence dispatch would emit
+    // line items dated 2026-05-15, 2026-06-15 etc., but capturedDates would only contain asOf,
+    // so the `lineItemDates ⊆ capturedDates` check fails.
     fc.assert(
       fc.property(
         isoDateArb,
-        isoDateArb,
-        (asOf, from) => {
-          const to = from >= asOf ? from : asOf;
-          const actualFrom = asOf <= from ? from : asOf;
+        (asOf) => {
+          // Use a fixed window with at least 2 months guaranteed to contain occurrences from
+          // a 2024-01-15 monthly rule; asOf must be ≤ window start so the window is valid.
+          const from = '2026-05-01';
+          const to = '2026-08-31';
+          if (asOf > from) return true; // skip generators where asOf is after the window
 
           const capturedDates: string[] = [];
           const recordingSplits = {
@@ -441,19 +461,23 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
           };
 
           const buffersService = new BufferStateService([], 'EUR', fakeLedger(new Map()));
-          const forecastService = new RecurringForecastService([]);
+          const rule = recurringRule('Netflix', 'Subscriptions', 1299, '2024-01-15');
+          const forecastService = new RecurringForecastService([rule]);
           const calc = new SafeTransferCalculator(
             recordingSplits as unknown as SplitRulesService,
             buffersService,
             forecastService,
+            'EUR',
           );
-          const result = calc.calculateForWindow(asOf, actualFrom, to);
+          const result = calc.calculateForWindow(asOf, from, to);
           if (result.isFailure) return true;
 
           const { lineItems } = result.value;
-          const lineItemDates = new Set(lineItems.map(i => i.date));
-          // Every captured date must be either asOf (roster derivation) or a line item date
-          return capturedDates.every(d => d === asOf || lineItemDates.has(d));
+          // Property has teeth only when at least one line item exists.
+          if (lineItems.length === 0) return true;
+          const captured = new Set(capturedDates);
+          // Every line-item date must have been forwarded into getSplitsAsOf.
+          return lineItems.every(i => captured.has(i.date));
         },
       ),
       { numRuns: 100 },
@@ -770,12 +794,13 @@ describe('SafeTransferCalculator — property tests (buffer top-up)', () => {
             if (items1[i].date !== items2[i].date) return false;
             if (items1[i].kind !== items2[i].kind) return false;
             if (items1[i].category !== items2[i].category) return false;
+            if (items1[i].description !== items2[i].description) return false;
             if (items1[i].gross.amount !== items2[i].gross.amount) return false;
           }
           return true;
         },
       ),
-      { numRuns: 50 },
+      { numRuns: 100 },
     );
   });
 });

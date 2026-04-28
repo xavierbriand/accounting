@@ -188,7 +188,7 @@ When(
     const buffersService = new BufferStateService(config.buffers, config.defaultCurrency, fakeLedger);
     const forecastService = new RecurringForecastService(config.recurring);
 
-    const calculator = new SafeTransferCalculator(splitsService, buffersService, forecastService);
+    const calculator = new SafeTransferCalculator(splitsService, buffersService, forecastService, config.defaultCurrency);
     state.stateResult = calculator.calculateForWindow(asOf, from, to);
   },
 );

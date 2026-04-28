@@ -112,6 +112,7 @@ export class SafeTransferCalculator {
     private readonly splitsService: SplitRulesService,
     private readonly buffersService: BufferStateService,
     private readonly forecastService: RecurringForecastService,
+    private readonly defaultCurrency: string,
   ) {}
 
   calculateForWindow(
@@ -157,7 +158,7 @@ export class SafeTransferCalculator {
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
 
-    const zeroResult = Money.fromCents(0, 'EUR');
+    const zeroResult = Money.fromCents(0, this.defaultCurrency);
     if (zeroResult.isFailure) return Result.fail(zeroResult.error);
     const zero = zeroResult.value;
 

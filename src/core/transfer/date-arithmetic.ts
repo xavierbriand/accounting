@@ -8,14 +8,12 @@ export function enumerateMonthStarts(from: string, to: string): readonly string[
 
   const result: string[] = [];
 
-  // Parse from: advance to the first day of the next month if from is not a first-of-month.
   const [fromYear, fromMonth] = from.split('-').map(Number) as [number, number];
   const fromDay = Number(from.split('-')[2]);
 
   let year = fromYear;
   let month = fromMonth;
 
-  // If from is NOT a first-of-month, advance to next month-start.
   if (fromDay !== 1) {
     month += 1;
     if (month > 12) {

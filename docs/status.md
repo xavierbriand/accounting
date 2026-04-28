@@ -24,6 +24,7 @@ Routine maint-story merges only need a status-log entry (newest first).
 
 Append-only one-line summary per merged story. Newest first.
 
+- **2026-04-28** — Story A shipping (#78, closes #73). Inline `+ Define new category…` in the ingest prompt; pure `validateNewCategoryName` 5-rule pipeline (ASCII `toLowerCase()` for locale-determinism); `RESERVED_TOKENS` exported; `@inquirer/core` declared as direct dep for `ExitPromptError`; in-batch propagation only — Stories B/C handle persistence. First real-story dogfood for `plan-reviewer` + `code-reviewer` agents (12 + 12 findings, all actionable).
 - **2026-04-26** — story-maint-15 shipping. README.md status section + Scripts table refresh (`npm run ingest` added, Documentation list points to status.md); status log catches up with maint-13 / maint-14.
 - **2026-04-26** — story-maint-14 merged (#70). `code-reviewer` sub-agent for Phase 4 retro-check + CLAUDE.md § 6.1 phase 4 wiring. Symmetric to plan-reviewer; tier-separated scan vs tag.
 - **2026-04-26** — story-maint-13 merged (#69). `plan-reviewer` sub-agent for Phase 2 critical review + CLAUDE.md § 6.1 phase 2 wiring + § 6.3 session-restart note for new custom agents. Dogfood test caught and fixed `docs/architecture.md` validity-window drift inherited from maint-12.

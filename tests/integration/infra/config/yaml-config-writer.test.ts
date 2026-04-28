@@ -206,7 +206,7 @@ describe('YamlConfigWriter — io.message sanitisation', () => {
     // Use a yamlPath that cannot be written to (read-only dir) to trigger io error
     // We test sanitisation by checking the error message does not contain the dir path
     const tmpDir = makeTmpDir();
-    const { yamlPath, mtimeNs } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
+    const { yamlPath } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
 
     // Make the file read-only and the directory read-only on POSIX to force a write error
     if (process.platform === 'win32') return; // skip on Windows
@@ -215,7 +215,6 @@ describe('YamlConfigWriter — io.message sanitisation', () => {
     fs.chmodSync(tmpDir, 0o500);
 
     try {
-      const writer = new YamlConfigWriter(yamlPath, mtimeNs);
       // Re-read mtime after chmod (mtime unchanged since we only changed permissions)
       const actualMtime = fs.statSync(yamlPath, { bigint: true }).mtimeNs;
       const writer2 = new YamlConfigWriter(yamlPath, actualMtime);

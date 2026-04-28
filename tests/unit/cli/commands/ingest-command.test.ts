@@ -591,12 +591,6 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
 //           configWriter failure does not abort with exit 5 and prevent saveBatch (guards Q1-b),
 //           configWriter is called when there are no remembered rules (wasteful write)
 
-function makeNoOpConfigWriter(): ConfigWriter {
-  return {
-    appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
-  };
-}
-
 describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => {
   function makeDepsWithWriter(
     configWriter: ConfigWriter,

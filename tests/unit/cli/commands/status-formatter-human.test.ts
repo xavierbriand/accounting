@@ -190,3 +190,32 @@ describe('formatStatusHuman — month name from window.from', () => {
     expect(output).toContain('December 2026');
   });
 });
+
+// ─── Branch coverage: edge cases ──────────────────────────────────────────────
+
+describe('formatStatusHuman — empty forecast branch', () => {
+  it('shows "(no forecast occurrences in window)" when forecast is empty', () => {
+    const report = makeFullReport();
+    const modified: StatusReport = { ...report, forecast: { ok: true, value: [] } };
+    const output = formatStatusHuman(modified);
+    expect(output).toContain('no forecast occurrences');
+  });
+});
+
+describe('formatStatusHuman — forecast error branch', () => {
+  it('shows forecast error message when forecast fails', () => {
+    const report = makeFullReport();
+    const modified: StatusReport = { ...report, forecast: { ok: false, error: 'forecast service unavailable' } };
+    const output = formatStatusHuman(modified);
+    expect(output).toContain('forecast service unavailable');
+  });
+});
+
+describe('formatStatusHuman — no buffers branch', () => {
+  it('shows "(no buffers configured)" when buffers is empty', () => {
+    const report = makeFullReport();
+    const modified: StatusReport = { ...report, buffers: [] };
+    const output = formatStatusHuman(modified);
+    expect(output).toContain('no buffers configured');
+  });
+});

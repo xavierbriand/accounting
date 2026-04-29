@@ -22,7 +22,7 @@ import { SplitRulesService } from '../../../../src/core/splits/split-rules-servi
 import { SafeTransferCalculator } from '../../../../src/core/transfer/safe-transfer-calculator.js';
 import { Money } from '../../../../src/core/shared/money.js';
 import type { BufferLedgerQuery } from '../../../../src/core/ports/buffer-ledger-query.js';
-import type { Result } from '../../../../src/core/shared/result.js';
+import { Result } from '../../../../src/core/shared/result.js';
 
 function makeMoneyEUR(cents: number): Money {
   const r = Money.fromCents(cents, 'EUR');
@@ -208,5 +208,38 @@ describe('stale-targetDate: human output', () => {
     const output = stdoutCapture.getText();
     expect(output).toContain('Car');
     expect(output).toContain('targetDate');
+  });
+});
+
+// ─── buildSuggestedAction fallback branch ──────────────────────────────────────
+
+describe('buildSuggestedAction fallback — error without buffer name', () => {
+  it('shows generic fallback when calc error has no "buffer \\"...\\""', async () => {
+    // Inject a calc that fails with a generic error (no buffer name pattern)
+    const recordingCalc = {
+      calculateForWindow(): Result<never> {
+        return Result.fail('ISO validation failed — generic error without buffer name');
+      },
+    } as unknown as SafeTransferCalculator;
+
+    const services = makeStaleServices();
+    const stdoutCapture = makeCaptureStream();
+
+    await runStatusCommand(
+      { asOf: '2026-04-29', json: false },
+      {
+        buffersService: services.buffersService,
+        forecastService: services.forecastService,
+        transferCalculator: recordingCalc,
+        clock: () => '2026-04-29',
+        stdout: stdoutCapture.stream,
+        stderr: makeCaptureStream().stream,
+      },
+    );
+
+    const output = stdoutCapture.getText();
+    expect(output).toContain('Suggested action');
+    // Fallback prose when bucket name can't be extracted from error
+    expect(output).toContain('accounting.yaml');
   });
 });

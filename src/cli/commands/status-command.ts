@@ -53,15 +53,12 @@ function buildSuggestedAction(error: string): string {
 }
 
 export function assembleStatusReport(
-  opts: StatusCommandOptions,
   asOf: string,
   from: string,
   to: string,
-  deps: Pick<StatusCommandDeps, 'buffersService' | 'forecastService' | 'transferCalculator'>,
+  buffers: readonly import('@core/buffers/buffer-state.js').BufferState[],
+  deps: Pick<StatusCommandDeps, 'forecastService' | 'transferCalculator'>,
 ): StatusReport {
-  const bufferStateResult = deps.buffersService.getStateAsOf(asOf);
-  const buffers = bufferStateResult.isFailure ? [] : [...bufferStateResult.value];
-
   const forecastResult = deps.forecastService.forecastBetween(from, to);
   const forecast = forecastResult.isFailure
     ? ({ ok: false as const, error: forecastResult.error })
@@ -134,7 +131,7 @@ export async function runStatusCommand(
   }
 
   // Assemble the full report (forecast + transfer may fail; handled inline)
-  const report = assembleStatusReport(opts, asOf, from, to, deps);
+  const report = assembleStatusReport(asOf, from, to, bufferStateResult.value, deps);
 
   // Write output
   if (opts.json) {

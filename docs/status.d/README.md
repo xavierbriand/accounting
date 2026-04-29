@@ -27,7 +27,10 @@ Required frontmatter keys: `date` (ISO 8601 date), `story` (story id, e.g. `B`, 
 `ls -r docs/status.d/`.
 
 Special sentinel for pre-status.d history: `0000-00-00-pre-history.md` (sorts to the
-bottom under `ls -r`).
+bottom under `ls -r`). The sentinel uses a different frontmatter schema — `date:
+~earlier` (free-form, not ISO 8601) and `stories: [<id>, ...]` (plural array, since
+it covers multiple pre-history entries in one file). Regular fragments must use the
+`date` + `story` (singular) keys documented above.
 
 Examples:
 - `2026-04-28-story-B.md`

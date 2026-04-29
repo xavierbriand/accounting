@@ -15,7 +15,7 @@ Active development.
 - **Epic 3 (Predictive Engine)** — in progress. Story 3.1 (Versioned Split Rules) shipped; Story 3.2 (Predictive Transfer Engine) is up next.
 - **Refactor epic (Epic M-A)** — running in parallel; 15 maintenance stories shipped, including a full BDD harness, dist-compile subprocess test infrastructure, `Result` combinators, YAML-authoritative `dbPath`, and dedicated `plan-reviewer` / `code-reviewer` sub-agents for the development loop.
 
-See [docs/epics.md](docs/epics.md) for the roadmap and [docs/status.md](docs/status.md) for the per-story log.
+See [docs/epics.md](docs/epics.md) for the roadmap, [docs/status.md](docs/status.md) for the current epic position, and [docs/status.d/](docs/status.d/) for per-story log fragments (newest first).
 
 ## Stack
 
@@ -58,7 +58,7 @@ See `accounting.example.yaml` for the full schema with inline documentation.
 
 ## Documentation
 
-- [docs/status.md](docs/status.md) — Current position and per-story merge log
+- [docs/status.md](docs/status.md) — Current epic position (per-story log fragments live in [docs/status.d/](docs/status.d/))
 - [docs/prd.md](docs/prd.md) — Product requirements & non-functional requirements
 - [docs/architecture.md](docs/architecture.md) — Architectural decisions (layering, money storage, versioning)
 - [docs/epics.md](docs/epics.md) — Epics and stories roadmap

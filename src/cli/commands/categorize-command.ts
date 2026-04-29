@@ -78,9 +78,9 @@ export async function runCategorizeCommand(
   // Step 4: scan for unmatched descriptions
   const descriptions = parseOutcome.items.map((i) => i.description);
   const scannedRows = descriptions.length;
-  const alreadyMatchedCount = descriptions.filter((d) => isAlreadyClassified(d, config.autoTagRules)).length;
+  const alreadyMatchedCount = descriptions.filter((d) => isAlreadyClassified(d, config.autoTagRules, config.accounts)).length;
 
-  const groups = scanForUnmatched(descriptions, config.autoTagRules, { minCount: opts.minCount });
+  const groups = scanForUnmatched(descriptions, config.autoTagRules, config.accounts, { minCount: opts.minCount });
 
   // Step 5: non-interactive bail if groups exist
   if (opts.nonInteractive && groups.length > 0) {

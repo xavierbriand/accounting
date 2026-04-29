@@ -76,26 +76,22 @@ export interface UnmatchedGroup {
   readonly count: number;            // number of rows with this exact description
 }
 
-export interface RankingStrategy {
-  rank(groups: ReadonlyArray<UnmatchedGroup>): ReadonlyArray<UnmatchedGroup>;
-}
-
-export const frequencyRanking: RankingStrategy;            // v1 default
-
 export function scanForUnmatched(
   descriptions: readonly string[],
   existingRules: readonly AutoTagRule[],
-  opts: { readonly minCount: number; readonly ranking: RankingStrategy },
+  opts: { readonly minCount: number },
 ): readonly UnmatchedGroup[];
 ```
 
 Pure: no I/O, no Node APIs, no `process.exit`. Steps:
-1. For each `description`, test against every `existingRules[i].pattern`. If any matches, drop. (Mirrors `TransactionBuilder.tagDescription` exactly — see § Risks.)
+1. For each `description`, classify it with the **same predicate `TransactionBuilder` uses** — i.e. drop if either:
+   - any `existingRules[i].pattern.test(description)` is true (the autotag-rule path), **or**
+   - the description matches the card-settlement pattern (`PAIEMENT CARTE X?(\d{4})…`) handled by `TransactionBuilder.tryCardSettlement`. To keep the predicate canonical, **extract the card-settlement RegExp into a shared `src/core/ingest/auto-classify.ts` constant** that both `TransactionBuilder` and the scanner import. This closes the round-trip gap flagged by the plan-reviewer (P1-E): without it, card-settlement rows would appear in `categorize` prompts but be auto-tagged as `'high'` confidence by `ingest`, breaking the determinism note.
 2. Group survivors by exact string equality, count occurrences.
 3. Filter `count >= opts.minCount`.
-4. Apply `opts.ranking.rank` and return.
+4. Sort by occurrence count desc (frequency ranking — internal to the scanner; no `RankingStrategy` interface in v1 per YAGNI).
 
-The `RankingStrategy` interface is the swap-point for the future token-grouping ranker; v1 ships only `frequencyRanking`.
+**v2 follow-up note.** Token-similarity grouping is the headline post-v1 enhancement. When v2 lands, refactor by introducing a `RankingStrategy` interface at that point (two concrete implementations = abstraction earned). v1 ships a plain function — no premature interface.
 
 ### New JSON output shape (machine contract)
 
@@ -142,25 +138,27 @@ Reusing `selectCategory` gives the user the same "Keep / Change to / Define new 
 
 ### Stable exit codes
 
-- `0` — completed (rules added or none needed)
-- `1` — config load / CSV read / parse error (mirrors ingest)
-- `2` — `--non-interactive` and at least one candidate group exists (mirrors ingest)
-- `5` — YAML write failed (mtime-race / conflict / I/O — mirrors ingest)
+Verbatim mirror of `ingest-command.ts:55–80`:
 
-No new exit code introduced.
+- `0` — completed (rules added, none needed, or user aborted mid-loop after confirming ≥0 rules)
+- `1` — config load failure / `readFile` failure / `csvParser.parse` failure
+- `2` — `pickSourceAccount` mismatch (no account configured for this filename) **or** `--non-interactive` bail when at least one candidate group exists
+- `5` — YAML write failed (mtime-race / conflict / I/O — mirrors ingest's Story-C handling)
+
+No new exit code introduced. **Abort exits `0`** — confirmed-before-abort rules are flushed to YAML and the user is informed via stderr ("Aborted; N rules already confirmed were saved to accounting.yaml").
 
 ## Behaviour
 
 1. **Resolve config** via `resolveDbPathForCommand`: reuse for `config` and `configService.getResolvedConfigPath()`. The resolved DB path is **ignored**. Exit `1` on failure.
 2. **Stat YAML** for `configMtimeNs`; construct `YamlConfigWriter`. (Same as ingest.)
-3. **Parse CSV** via the existing infra pipeline (`pickSourceAccount`, `readBpceCsv`, `NodeCsvParser`). Parse-error rows reported on stderr; valid siblings proceed (existing two-stage policy).
-4. **Scan**: extract `parseOutcome.items.map(i => i.description)`, call `scanForUnmatched(descriptions, config.autoTagRules, { minCount, ranking: frequencyRanking })`.
+3. **Parse CSV** via the existing infra pipeline (`pickSourceAccount`, `readBpceCsv`, `NodeCsvParser`). Parse-error rows reported on stderr; valid siblings proceed (existing two-stage policy). **All-malformed CSV** (every row a parse error, `parseOutcome.items` empty) flows through to step 4 with an empty descriptions array → `groups = []` → step 8 prints "0 rules added" and exits `0`. Same posture as ingest's empty-after-parse path.
+4. **Scan**: extract `parseOutcome.items.map(i => i.description)`, call `scanForUnmatched(descriptions, config.autoTagRules, { minCount })`. **All-already-matched** (every description filtered out by an existing rule) flows through with `groups = []` → step 7 skipped → step 8 prints "0 rules added" → exit `0` → YAML untouched.
 5. **Non-interactive bail**: if `opts.nonInteractive && groups.length > 0`, print `"<N> group(s) need review; re-run without --non-interactive"` to stderr, exit `2`. **No YAML write.**
-6. **Apply `--limit`** (slice `[0, limit)`). Walk groups in rank order, calling `selectCategory` then `confirmRememberRule`. Buffer `{ category, pattern }` (dedup as `category|pattern`, mirroring `runInteractiveLoop`).
+6. **Apply `--limit`** (slice `[0, limit)`). Walk groups in rank order, calling `selectCategory` then `confirmRememberRule`. Buffer `{ category, pattern }` (dedup as `category|pattern`, mirroring `runInteractiveLoop`). **On abort** (user picks "Abort" in `selectCategory`): exit the loop, proceed to step 7 with the partial buffer (confirmed-before-abort rules are user input — not lost). Print to stderr "Aborted; N rules already confirmed were saved to accounting.yaml" before step 8.
 7. **Single YAML write at end of loop** (only if buffer non-empty): `configWriter.appendAutoTagRules(buffer)`. Exit codes mirror Story C handling.
 8. **Print summary** — human-readable on stdout: `"N rules added to accounting.yaml. Re-run \`accounting ingest --file <csv>\` to apply."` Or `--json` shape above. Exit `0`.
 
-**Determinism note.** The scanner's filter (step 4) treats a description as "matched" iff **any** existing rule's `pattern.test(description)` returns true. This is the exact predicate `TransactionBuilder.tagDescription` uses, so by construction any group surviving the scanner *would* be `'low'` confidence in `ingest`. Property: running categorize-then-ingest re-prompts for nothing the user already remembered.
+**Determinism note.** The scanner uses the **same predicate** `TransactionBuilder` uses to decide a row is `'high'` confidence — both the autotag-rule path (`rules.find(r => r.pattern.test(description))`) and the card-settlement path (`tryCardSettlement`'s regex). The shared `auto-classify.ts` constant ensures both consumers stay in lockstep. Round-trip property: running categorize-then-ingest re-prompts for nothing the user already remembered, **including card-settlement rows** (P1-E fix).
 
 ## Gherkin scenarios (R6)
 
@@ -199,13 +197,26 @@ Feature: Define autotag rules from a CSV before ingest (categorize command)
     And accounting.yaml on disk is byte-identical to the input
     # fails if --non-interactive silently writes or exits 0 (guards CI mode invariant).
 
-  Scenario: --json summary shape on success
-    Given a CSV with one recurring merchant
-    When I run categorize with --json and a script that remembers one rule
+  Scenario: --json summary shape with multiple rules and a user-skipped group (R8 mock diversity)
+    Given a CSV with three distinct recurring merchants
+    When I run categorize with --json and a script that remembers two rules and skips the third group
     Then stdout is a single line of valid JSON
-    And the JSON has summary.rulesAdded == 1, summary.candidateGroups == 1
-    And the JSON's rules array contains { category, pattern } pairs
-    # fails if the JSON shape regresses (guards machine contract).
+    And the JSON has summary.candidateGroups == 3, summary.rulesAdded == 2, summary.rulesSkippedByUser == 1
+    And the JSON's rules array length is 2 with each entry exposing { category, pattern }
+    # fails if the JSON shape regresses or collapses pluralisation (guards machine contract +
+    # R8 mock-diversity invariant — non-default fixture exercises rulesSkippedByUser > 0
+    # and a multi-rule rules array).
+
+  Scenario: all descriptions already covered — no YAML write, exit 0 (P1-C edge case)
+    Given an accounting.yaml whose autoTagRules cover every description in the CSV
+    And a CSV with two recurring merchants both already matched
+    When I run categorize without --scripted-prompts
+    Then the process exits with code 0
+    And stderr contains "0 rules added"
+    And accounting.yaml on disk is byte-identical to the input
+    And the prompter is never invoked
+    # fails if categorize writes YAML when the buffer is empty, or prompts the user when
+    # there is nothing to teach (guards the all-matched short-circuit in steps 4 + 7).
 
   Scenario: --min-count default of 2 hides one-off merchants
     Given a CSV with one row for "ONE-OFF SHOP" and three rows for "RECURRING MERCHANT"
@@ -226,7 +237,8 @@ Feature: Define autotag rules from a CSV before ingest (categorize command)
 
 ## Files to change
 
-- **`src/core/ingest/categorize-scanner.ts`** *(new)* — pure scanner per § Production-code surface. Exports `UnmatchedGroup`, `RankingStrategy`, `frequencyRanking`, `scanForUnmatched`. Property-tested.
+- **`src/core/ingest/auto-classify.ts`** *(new — extracted from `transaction-builder.ts`)* — exports the shared autotag + card-settlement predicate (`isAlreadyClassified(description, rules) → boolean`) and the card-settlement RegExp constant. Imported by both `TransactionBuilder` and `categorize-scanner`. Pure Core. Closes the P1-E round-trip gap.
+- **`src/core/ingest/categorize-scanner.ts`** *(new)* — pure scanner per § Production-code surface. Exports `UnmatchedGroup`, `scanForUnmatched`. Property-tested.
 - **`src/cli/commands/categorize-command.ts`** *(new)* — orchestrator per § Production-code surface. Mirrors `runIngestCommand`. No DB deps.
 - **`src/cli/program.ts`** — register `categorize` subcommand. Reuse `resolveDbPathForCommand` (config + `configService.getResolvedConfigPath()`), `ScriptedPrompter` flag plumbing, `YamlConfigWriter` construction.
 - **`tests/unit/core/ingest/categorize-scanner.test.ts`** *(new)* — golden cases (frequency ranking, min-count filter, existing-rule filter, dedup) + fast-check property test.
@@ -263,15 +275,18 @@ Story D is mostly **new orchestration over existing pieces**:
 
 Greenfield CLI surface — slices stay coarse because each behaviour stands alone and one-test-per-commit would inflate the count past R14 without adding signal.
 
-1. `test(core/ingest): categorize-scanner — failing` *(golden cases + fast-check property test)*
-2. `feat(core/ingest): scanForUnmatched + frequencyRanking — minimal green`
-3. `test(features+integration): categorize end-to-end (scenarios 1–2 + R4 subprocess) — failing`
-4. `feat(cli): runCategorizeCommand + program.ts subcommand wiring — minimal green` *(scenarios 1, 2, 5)*
-5. `test+feat(cli): --non-interactive bail + --json summary — failing → green` *(scenarios 3, 4 — single commit, green-on-landing per R10 / Story C precedent)*
-6. `chore(docs): accounting.example.yaml note + retro check`
-7. `refactor: <pending Phase-4 classification>` — authored only after Phase-4. Omitted (R11) if no work surfaces.
+1. `refactor(core/ingest): extract auto-classify predicate from transaction-builder` *(prep slice — pure refactor, behaviour-preserving; closes the P1-E gap before the scanner exists)*
+2. `test(core/ingest): categorize-scanner — failing` *(golden cases + fast-check property test using `auto-classify`)*
+3. `feat(core/ingest): scanForUnmatched (frequency-sorted output) — minimal green`
+4. `test(features+integration): categorize end-to-end (scenarios 1, 2, 5, 6 + R4 subprocess) — failing`
+5. `feat(cli): runCategorizeCommand + program.ts subcommand wiring — minimal green`
+6. `test(cli): --non-interactive bail + --json multi-rule shape — failing` *(scenarios 3, 4)*
+7. `feat(cli): --non-interactive bail + --json summary — minimal green`
+8. `chore(docs): add accounting.example.yaml note + retro check`
 
-**Slice count target:** 5–6 in the green path; 7 only if Phase-4 produces refactor work. Compliant with R14.
+**Slice count: 8.** Slightly above R14's 5–7 target, but the P1-E refactor slice (1) is preparatory and behaviour-preserving, and slices 6+7 are the test-then-feat split mandated by P3-J (no `test+feat` combined commits). The `refactor:` slice mandated by R11 lands either inside slice 1 (preparatory — already a refactor) **or** as an empty trailing commit if Phase-4 surfaces additional work; whichever resolves R11 here is documented at retro time.
+
+**Justification for going one slice over R14:** the P1-E predicate-extraction is unavoidable for the round-trip property and would bloat slice 5 if folded in. Per CLAUDE.md § 6.6 ("split if >1 Sonnet round"), this story is still one Sonnet hand-off — one extra commit is preferable to a story split.
 
 ## Verification
 
@@ -286,11 +301,12 @@ Greenfield CLI surface — slices stay coarse because each behaviour stands alon
 
 - **Regex equality semantics.** The scanner filters using `existingRules[i].pattern.test(description)`. Two compiled `RegExp` objects with the same source aren't `===` equal, but `.test()` is what matters. Story C's YAML writer dedup uses pattern-source string-equality — the two filters compose cleanly. Flagged for awareness.
 - **Partial-buffer flush on `abort`.** When the user picks `Abort` mid-loop, the orchestrator flushes the partial buffer to YAML rather than discarding it — confirmed rules are intentional input. Alternative: discard. **Recommendation: flush on abort, document in stderr** ("Aborted; N rules already confirmed were saved to accounting.yaml"). Phase-2 review may revisit.
-- **Frequency ranking is naive.** `"ALTIMA COURTAGE 9876"` and `"ALTIMA COURTAGE 5432"` are distinct strings under exact-equality grouping; the user sees two prompts for the same merchant in a single run. The user's first-prompt regex (`altima`) makes the second occurrence auto-skip on the *next* run, but not in the same one. Mitigation: pick `Keep: Uncategorized` (skip group) on the second prompt. Token-grouping ranker is the v2 follow-up; the `RankingStrategy` interface is the swap-point.
-- **`appendAutoTagRules` doesn't return a skipped-dup count.** v1 reports `summary.rulesSkippedAsDuplicate: 0`; widening the writer's success type to `Result<{ added; skippedAsDuplicate }, …>` is logged as a maint follow-up.
-- **Multi-file / glob support.** Out of scope. Open follow-up issue: "`categorize` supports `--file <pattern>` or repeated `--file` flags to scan a year of statements at once."
-- **Token-similarity grouping (v2 ranker).** Headline follow-up to Story D — similarity threshold, leading-token canonicalisation, prompt UX showing the cluster.
-- **Option B (re-apply mid-run) follow-up.** File a separate issue at story kickoff so the literal bug from #93 is still tracked even though the workflow fix (this story) closes the user's underlying need. Issue title: *"ingest: re-classify low-confidence rows after each remembered rule (#93 Option B)"*.
+- **Frequency ranking is naive.** `"ALTIMA COURTAGE 9876"` and `"ALTIMA COURTAGE 5432"` are distinct strings under exact-equality grouping; the user sees two prompts for the same merchant in a single run. The user's first-prompt regex (`altima`) makes the second occurrence auto-skip on the *next* run, but not in the same one. Mitigation: pick `Keep: Uncategorized` (skip group) on the second prompt. Token-grouping ranker is the v2 follow-up — when it lands, introduce a `RankingStrategy` interface at that point (per YAGNI: two concrete impls = abstraction earned).
+- **`appendAutoTagRules` doesn't return a skipped-dup count** ([#104](https://github.com/xavierbriand/accounting/issues/104)). v1 reports `summary.rulesSkippedAsDuplicate: 0`; widening the writer's success type to `Result<{ added; skippedAsDuplicate }, …>` is filed as a maint follow-up.
+- **Multi-file / glob support** ([#105](https://github.com/xavierbriand/accounting/issues/105)). Out of scope for v1. Filed as follow-up: "`categorize` supports `--file <pattern>` or repeated `--file` flags to scan a year of statements at once."
+- **Token-similarity grouping (v2 ranker)** ([#106](https://github.com/xavierbriand/accounting/issues/106)). Headline follow-up — similarity threshold, leading-token canonicalisation, prompt UX showing the cluster.
+- **Option B (re-apply mid-run) follow-up** ([#103](https://github.com/xavierbriand/accounting/issues/103)). Filed at story kickoff so the literal bug from #93 is still tracked.
+- **Shared base type for `IngestCommandDeps` / `CategorizeCommandDeps`** ([#107](https://github.com/xavierbriand/accounting/issues/107)). Two callers now share `config`, `csvParser`, `pickSourceAccount`, `readFile`, `prompt`, `stdout`, `stderr`, `exitCode`, `configWriter`. Filed as a maint refactor — not adopted in this story to keep the diff small (P3-E).
 
 ## Suggestion log (Phase 2 critical review — P1/P2/P3)
 

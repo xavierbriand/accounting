@@ -105,7 +105,7 @@ export const inquirerPrompter: InteractivePrompter = {
       // answer === '__edit__'
       try {
         const edited = await input({
-          message: 'Enter a regex pattern:',
+          message: 'Enter a regex pattern (no /…/ delimiters; /i flag is applied automatically):',
           validate: (raw: string) => {
             const trimmed = raw.trim();
             if (trimmed.length === 0) return 'Pattern cannot be empty';

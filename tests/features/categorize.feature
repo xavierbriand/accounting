@@ -39,3 +39,26 @@ Feature: Define autotag rules from a CSV before ingest (categorize command)
     Then the process exits with code 0
     And the script is fully consumed without errors
     # fails if the one-off appears in the prompt sequence (guards default ranking + min-count).
+
+  Scenario: --non-interactive errors when groups need review and writes nothing
+    Given a fresh accounting.yaml with no autoTagRules entry in a temp dir
+    And a BPCE CSV with two rows for "RECURRING A" and two rows for "RECURRING B"
+    When I run categorize with --non-interactive
+    Then the process exits with code 2
+    And stderr contains "2 group(s) need review"
+    And accounting.yaml is byte-identical to the original
+    # fails if --non-interactive silently writes or exits 0 (guards CI mode invariant).
+
+  Scenario: --json summary shape with multiple rules and a user-skipped group
+    Given a fresh accounting.yaml with no autoTagRules entry in a temp dir
+    And a BPCE CSV with three distinct recurring merchants
+    When I run categorize with --json and a script that remembers two rules and skips the third
+    Then the process exits with code 0
+    And stdout is valid JSON
+    And the JSON summary.candidateGroups equals 3
+    And the JSON summary.rulesAdded equals 2
+    And the JSON summary.rulesSkippedByUser equals 1
+    And the JSON rules array has 2 entries
+    # fails if the JSON shape regresses or collapses pluralisation (guards machine contract +
+    # R8 mock-diversity invariant — non-default fixture exercises rulesSkippedByUser > 0
+    # and a multi-rule rules array).

@@ -11,6 +11,7 @@ interface CategorizeWorld {
   csvPath?: string;
   lastResult?: { status: number; stdout: string; stderr: string };
   initialYamlContent?: string;
+  originalYamlContent?: string;
 }
 
 const tmpDirs: string[] = [];
@@ -94,13 +95,24 @@ Given('a BPCE CSV with two rows for {string} and two rows for {string}', functio
     { description: desc1, count: 2 },
     { description: desc2, count: 2 },
   ]);
-  state.initialYamlContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
+  // Capture YAML content for byte-identity checks in scenarios 5/6 and 3
+  const yamlContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
+  state.initialYamlContent = yamlContent;
+  state.originalYamlContent = yamlContent;
 });
 
 Given('a BPCE CSV with one row for {string} and three rows for {string}', function (state: CategorizeWorld, desc1: string, desc2: string) {
   state.csvPath = writeCategorizeTestCsv(state.tmpDir!, [
     { description: desc1, count: 1 },
     { description: desc2, count: 3 },
+  ]);
+});
+
+Given('a BPCE CSV with three distinct recurring merchants', function (state: CategorizeWorld) {
+  state.csvPath = writeCategorizeTestCsv(state.tmpDir!, [
+    { description: 'MERCHANT ALPHA', count: 3 },
+    { description: 'MERCHANT BETA', count: 2 },
+    { description: 'MERCHANT GAMMA', count: 2 },
   ]);
 });
 
@@ -149,6 +161,29 @@ When('I run categorize with a script only for the RECURRING MERCHANT group', fun
   );
 });
 
+When('I run categorize with --non-interactive', function (state: CategorizeWorld) {
+  state.lastResult = spawnCli(
+    ['categorize', '--file', state.csvPath!, '--non-interactive'],
+    { cwd: state.tmpDir },
+  );
+});
+
+When('I run categorize with --json and a script that remembers two rules and skips the third', function (state: CategorizeWorld) {
+  // MERCHANT ALPHA (3 occurrences) → first; MERCHANT BETA (2) → second; MERCHANT GAMMA (2) → third
+  // Tie-break between BETA and GAMMA is insertion order (Map preserves order)
+  const script = JSON.stringify([
+    { type: 'selectCategory', action: 'change', category: 'Groceries' },
+    { type: 'confirmRememberRule', action: 'remember', pattern: 'alpha' },
+    { type: 'selectCategory', action: 'change', category: 'Shopping' },
+    { type: 'confirmRememberRule', action: 'remember', pattern: 'beta' },
+    { type: 'selectCategory', action: 'keep' },
+  ]);
+  state.lastResult = spawnCli(
+    ['categorize', '--file', state.csvPath!, '--json', '--scripted-prompts', script],
+    { cwd: state.tmpDir, env: { NODE_ENV: 'test' } },
+  );
+});
+
 // -------- Then steps --------
 
 Then('accounting.yaml on disk contains {string}', function (state: CategorizeWorld, needle: string) {
@@ -170,4 +205,37 @@ Then('the script is fully consumed without errors', function (state: CategorizeW
 Then('accounting.yaml is unchanged', function (state: CategorizeWorld) {
   const currentContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
   expect(currentContent).toBe(state.initialYamlContent!);
+});
+
+Then('accounting.yaml is byte-identical to the original', function (state: CategorizeWorld) {
+  const currentContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
+  expect(currentContent).toBe(state.originalYamlContent!);
+});
+
+Then('stdout is valid JSON', function (state: CategorizeWorld) {
+  expect(() => JSON.parse(state.lastResult!.stdout.trim())).not.toThrow();
+});
+
+Then('the JSON summary.candidateGroups equals {int}', function (state: CategorizeWorld, expected: number) {
+  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const summary = json['summary'] as Record<string, unknown>;
+  expect(summary['candidateGroups']).toBe(expected);
+});
+
+Then('the JSON summary.rulesAdded equals {int}', function (state: CategorizeWorld, expected: number) {
+  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const summary = json['summary'] as Record<string, unknown>;
+  expect(summary['rulesAdded']).toBe(expected);
+});
+
+Then('the JSON summary.rulesSkippedByUser equals {int}', function (state: CategorizeWorld, expected: number) {
+  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const summary = json['summary'] as Record<string, unknown>;
+  expect(summary['rulesSkippedByUser']).toBe(expected);
+});
+
+Then('the JSON rules array has {int} entries', function (state: CategorizeWorld, expected: number) {
+  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const rules = json['rules'] as unknown[];
+  expect(rules).toHaveLength(expected);
 });

@@ -91,6 +91,9 @@ recurring:
 # (max 64 chars, no ':', '/', '\', not a reserved token like Uncategorized/Asset/Income/Expense/Liability).
 # If no rule matches, the transaction is tagged Uncategorized and flagged for manual review.
 # An empty list is valid; every transaction will be Uncategorized until rules are added.
+# This section is also written by `npm run ingest` in interactive mode (Story C):
+# when you confirm the "Always tag descriptions matching /<pattern>/i?" prompt,
+# the rule is appended here atomically (comments + key order preserved).
 autoTagRules:
   - category: Transport
     patterns:

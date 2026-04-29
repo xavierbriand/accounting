@@ -275,7 +275,22 @@ So that the Status CLI (Story 3.5) and the "Conversational CFO" output can answe
 
 ### Story 3.5: Status CLI Command
 
-*Title only. Acceptance criteria deferred to Story 3.5's planning phase.*
+As a User,
+I want a single `accounting status` command that shows my current buffer state, the safe monthly transfer for next month with its breakdown, and the upcoming forecast occurrences,
+So that I can run one command on Sunday morning and answer "what's the picture?" — both for human reading at the terminal and for machine pipelines via `--json`.
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` with valid splits, buffers (with `targetDate`), and recurring rules, plus a migrated SQLite ledger,
+**When** I run `accounting status` (no flags),
+**Then** the CLI prints three labeled sections to stdout: **Buffers** (table of name/balance/target/cap/status/targetDate per bucket), **Transfer** (totalRequired + per-partner contributions + line items grouped by category, prefaced by Conversational-CFO prose), **Forecast** (date/name/category/amount per upcoming recurring occurrence in the window).
+**And** the default `asOf` is "today" derived from `Date.now()`, normalized to `YYYY-MM-DD` in the config's `timezone`; `--as-of <YYYY-MM-DD>` overrides for determinism.
+**And** the default window is the next calendar month from `asOf` — `[first-of-next-month, last-of-that-month]`. `--from <YYYY-MM-DD> --to <YYYY-MM-DD>` overrides; both must be ISO 8601 and `from <= to`.
+**And** `--json` switches output to a single-object JSON document matching the documented shape (`{ asOf, window, buffers, transfer, forecast }`); `Money` values serialize via `Money.toString()`.
+**And** when `SafeTransferCalculator.calculateForWindow` fails (stale `targetDate`, `monthsRemaining=0`, etc.), the CLI renders **Buffers** normally, prints the calc error + a Suggested-action prose line in the **Transfer** section, and exits with code 0. JSON shape: `transfer: { error, suggestedAction }` (no `totalRequired`/`perPartner`/`lineItems` keys when failed).
+**And** `accounting status` is read-only: no DB writes, no snapshot. It runs `assertMigrated` to fail fast on an unmigrated DB.
+**And** invalid CLI input (bad date format, `from > to`, missing `accounting.yaml`) exits with POSIX code 2 and a path-cited message on stderr; unrecoverable runtime errors (DB read failure, currency mismatch) exit with code 1.
+**And** the underlying upstream services remain pure: `runStatusCommand` injects `clock: () => string` (defaulting to `nodeClock`) so unit tests run without `Date.now()`.
 
 ## Epic 4: Trust, Transparency & Lifecycle
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { scanForUnmatched } from '../../../../src/core/ingest/categorize-scanner.js';
 import type { AutoTagRule } from '../../../../src/core/ingest/auto-tag-rules.js';
+import type { AccountConfig } from '../../../../src/core/config/app-config.js';
 
 // fails if: the scanner fabricates, dedups incorrectly, leaks already-matched strings,
 //   misorders by frequency, applies wrong min-count threshold, or ignores existing rules.
@@ -21,7 +22,7 @@ describe('scanForUnmatched — frequency sort', () => {
       uberId, uberId, uberId, uberId,   // 4 occurrences
       altimaId, altimaId, altimaId,     // 3 occurrences
     ];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(2);
     expect(result[0].description).toBe(uberId);
     expect(result[0].count).toBe(4);
@@ -36,20 +37,20 @@ describe('scanForUnmatched — min-count filter', () => {
       uberId, uberId, uberId,  // 3 occurrences — kept
       'ONE-OFF SHOP',           // 1 occurrence — excluded by minCount=2
     ];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(1);
     expect(result[0].description).toBe(uberId);
   });
 
   it('returns empty when all groups are below minCount', () => {
     const descriptions = ['A', 'B', 'C'];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(0);
   });
 
   it('keeps groups with count == minCount', () => {
     const descriptions = [uberId, uberId]; // exactly 2 occurrences
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(1);
     expect(result[0].count).toBe(2);
   });
@@ -62,25 +63,40 @@ describe('scanForUnmatched — existing-rule filter', () => {
       altimaId, altimaId, altimaId,
     ];
     const rules: AutoTagRule[] = [makeRule('uber')];
-    const result = scanForUnmatched(descriptions, rules, { minCount: 2 });
+    const result = scanForUnmatched(descriptions, rules, [], { minCount: 2 });
     expect(result).toHaveLength(1);
     expect(result[0].description).toBe(altimaId);
   });
 
-  it('excludes card-settlement descriptions (PAIEMENT CARTE pattern)', () => {
+  it('excludes card-settlement descriptions when the card account is configured', () => {
+    // fails if: scanner leaks card-settlement rows when a matching card account exists
+    // (the configured-card branch of the account-presence check)
+    const configuredCard: AccountConfig = { id: 'card-1234', type: 'card', filenamePrefix: 'CARD_', cardSuffix: '1234' };
     const descriptions = [
-      cardId, cardId, cardId,   // card-settlement pattern
+      cardId, cardId, cardId,   // PAIEMENT CARTE X1234 AVRIL — suffix 1234 is configured
       altimaId, altimaId,
     ];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [configuredCard], { minCount: 2 });
     expect(result).toHaveLength(1);
     expect(result[0].description).toBe(altimaId);
+  });
+
+  it('surfaces card-settlement descriptions when the card account is NOT configured (unconfigured-suffix branch)', () => {
+    // fails if: scanner hides card-settlement rows whose suffix has no configured card account.
+    // Round-trip property: ingest's tryCardSettlement would return null for an unconfigured
+    // suffix (falling back to low-confidence tagDescription), so categorize MUST surface it.
+    const descriptions = [
+      cardId, cardId, cardId,   // PAIEMENT CARTE X1234 AVRIL — suffix 1234 is NOT configured
+    ];
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
+    expect(result).toHaveLength(1);
+    expect(result[0].description).toBe(cardId);
   });
 
   it('returns empty when all descriptions are already matched', () => {
     const descriptions = [uberId, uberId, uberId];
     const rules: AutoTagRule[] = [makeRule('uber')];
-    const result = scanForUnmatched(descriptions, rules, { minCount: 2 });
+    const result = scanForUnmatched(descriptions, rules, [], { minCount: 2 });
     expect(result).toHaveLength(0);
   });
 });
@@ -88,7 +104,7 @@ describe('scanForUnmatched — existing-rule filter', () => {
 describe('scanForUnmatched — deduplication', () => {
   it('groups identical descriptions together', () => {
     const descriptions = [uberId, uberId, uberId];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(1);
     expect(result[0].description).toBe(uberId);
     expect(result[0].count).toBe(3);
@@ -99,7 +115,7 @@ describe('scanForUnmatched — deduplication', () => {
       altimaId, altimaId,
       altimaId2, altimaId2,
     ];
-    const result = scanForUnmatched(descriptions, [], { minCount: 2 });
+    const result = scanForUnmatched(descriptions, [], [], { minCount: 2 });
     expect(result).toHaveLength(2);
     const descs = result.map((g) => g.description);
     expect(descs).toContain(altimaId);
@@ -109,7 +125,7 @@ describe('scanForUnmatched — deduplication', () => {
 
 describe('scanForUnmatched — empty input', () => {
   it('returns empty array for empty descriptions', () => {
-    const result = scanForUnmatched([], [], { minCount: 2 });
+    const result = scanForUnmatched([], [], [], { minCount: 2 });
     expect(result).toHaveLength(0);
   });
 });
@@ -124,7 +140,7 @@ describe('scanForUnmatched — property test', () => {
     fc.assert(
       fc.property(descriptionsArb, minCountArb, (descriptions: string[], minCount: number) => {
         const inputSet = new Set(descriptions);
-        const result = scanForUnmatched(descriptions, [], { minCount });
+        const result = scanForUnmatched(descriptions, [], [], { minCount });
 
         // 1. Every group.description appears in the input
         for (const group of result) {
@@ -159,7 +175,7 @@ describe('scanForUnmatched — property test', () => {
     fc.assert(
       fc.property(descriptionsArb, fc.array(patternArb, { maxLength: 3 }), (descriptions: string[], patterns: string[]) => {
         const rules: AutoTagRule[] = patterns.map((p) => makeRule(p));
-        const result = scanForUnmatched(descriptions, rules, { minCount: 1 });
+        const result = scanForUnmatched(descriptions, rules, [], { minCount: 1 });
 
         for (const group of result) {
           for (const rule of rules) {

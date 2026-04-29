@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { runStatusCommand, type StatusCommandDeps, type StatusCommandOptions } from '../../../../src/cli/commands/status-command.js';
+import { runStatusCommand } from '../../../../src/cli/commands/status-command.js';
 import { BufferStateService } from '../../../../src/core/buffers/buffer-state-service.js';
 import { RecurringForecastService } from '../../../../src/core/recurring/recurring-forecast-service.js';
 import { SplitRulesService } from '../../../../src/core/splits/split-rules-service.js';
@@ -102,20 +102,6 @@ function makeRealServices(opts: {
   const transferCalculator = new SafeTransferCalculator(splitsService, buffersService, forecastService, 'EUR');
 
   return { buffersService, forecastService, transferCalculator };
-}
-
-function makeDeps(
-  services: ReturnType<typeof makeRealServices>,
-  clock: () => string = () => '2026-04-29',
-): StatusCommandDeps {
-  const { stream: stdout } = makeCaptureStream();
-  const { stream: stderr } = makeCaptureStream();
-  return {
-    ...services,
-    clock,
-    stdout,
-    stderr,
-  };
 }
 
 // ─── Structural report tests ───────────────────────────────────────────────────
@@ -490,7 +476,7 @@ describe('Property #6: exit code stays 0 when buffers succeed even if calc fails
 
   it('buffer-state service failure → exit 1', async () => {
     const failingBuffersService = {
-      getStateAsOf(_date: string): Result<readonly BufferState[]> {
+      getStateAsOf(): Result<readonly BufferState[]> {
         return Result.fail('DB unreachable');
       },
     } as unknown as BufferStateService;

@@ -16,9 +16,16 @@ import { readBpceCsv } from '../infra/fs/read-bpce-csv.js';
 import { inquirerPrompter, type InteractivePrompter } from './utils/interactive.js';
 import { ScriptedPrompter, scriptHasForceMtimeRace, type Script } from './utils/scripted-prompter.js';
 import { runIngestCommand } from './commands/ingest-command.js';
+import { runStatusCommand } from './commands/status-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
+import { SplitRulesService } from '../core/splits/split-rules-service.js';
+import { BufferStateService } from '../core/buffers/buffer-state-service.js';
+import { RecurringForecastService } from '../core/recurring/recurring-forecast-service.js';
+import { SafeTransferCalculator } from '../core/transfer/safe-transfer-calculator.js';
+import { SqliteBufferLedgerQuery } from '../infra/db/repositories/sqlite-buffer-ledger-query.js';
+import { nodeClock } from './utils/node-clock.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
 
@@ -158,6 +165,50 @@ program
         configWriter,
       },
     );
+  });
+
+program
+  .command('status')
+  .description('Show buffer state, transfer breakdown, and forecast for the next month')
+  .option('--as-of <YYYY-MM-DD>', 'Override today\'s date (determinism / past-state inspection)')
+  .option('--from <YYYY-MM-DD>', 'Override window start date')
+  .option('--to <YYYY-MM-DD>', 'Override window end date')
+  .option('--json', 'Output JSON instead of human-readable tables', false)
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { asOf?: string; from?: string; to?: string; json: boolean; dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { config, resolvedDbPath } = result.value;
+    const db = getDb(resolvedDbPath);
+
+    const migrationCheck = assertMigrated(db, resolvedDbPath);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+
+    const ledger = new SqliteBufferLedgerQuery(db);
+    const splitsService = new SplitRulesService(config.splits);
+    const buffersService = new BufferStateService(config.buffers, config.defaultCurrency, ledger);
+    const forecastService = new RecurringForecastService(config.recurring);
+    const transferCalculator = new SafeTransferCalculator(splitsService, buffersService, forecastService, config.defaultCurrency);
+
+    const exitCode = await runStatusCommand(
+      { asOf: options.asOf, from: options.from, to: options.to, json: options.json },
+      {
+        buffersService,
+        forecastService,
+        transferCalculator,
+        clock: () => nodeClock(config.timezone),
+        stdout: process.stdout,
+        stderr: process.stderr,
+      },
+    );
+
+    process.exit(exitCode);
   });
 
 program.parse(process.argv);

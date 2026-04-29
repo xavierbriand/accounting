@@ -592,6 +592,7 @@ describe('Property #7: --from > --to exits with code 2', () => {
 
   it('fast-check: whenever from > to, always exits 2', async () => {
     const isoDateArb = fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') })
+      .filter(d => !isNaN(d.getTime()))
       .map(d => d.toISOString().slice(0, 10));
 
     await fc.assert(

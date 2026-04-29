@@ -150,6 +150,15 @@ When('I run categorize without scripted prompts', function (state: CategorizeWor
   );
 });
 
+When('I run categorize with an empty scripted-prompts script', function (state: CategorizeWorld) {
+  // Empty script: any prompt invocation would throw "ScriptedPrompter: expected next entry"
+  // proving via the clean exit that the prompter was never called.
+  state.lastResult = spawnCli(
+    ['categorize', '--file', state.csvPath!, '--scripted-prompts', '[]'],
+    { cwd: state.tmpDir, env: { NODE_ENV: 'test' } },
+  );
+});
+
 When('I run categorize with a script only for the RECURRING MERCHANT group', function (state: CategorizeWorld) {
   const script = JSON.stringify([
     { type: 'selectCategory', action: 'change', category: 'Shopping' },
@@ -205,6 +214,15 @@ Then('the script is fully consumed without errors', function (state: CategorizeW
 Then('accounting.yaml is unchanged', function (state: CategorizeWorld) {
   const currentContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
   expect(currentContent).toBe(state.initialYamlContent!);
+});
+
+Then('the prompter is never invoked', function (state: CategorizeWorld) {
+  // Any prompt invocation against an empty script would produce
+  // "ScriptedPrompter: expected next entry" in stderr. Clean stderr + exit 0 proves
+  // the prompter was never reached (guards the all-matched short-circuit).
+  expect(state.lastResult!.stderr).not.toContain('ScriptedPrompter: expected next entry');
+  expect(state.lastResult!.stderr).not.toContain('ScriptedPrompter: script exhausted');
+  expect(state.lastResult!.status).toBe(0);
 });
 
 Then('accounting.yaml is byte-identical to the original', function (state: CategorizeWorld) {

@@ -25,12 +25,16 @@ Feature: Define autotag rules from a CSV before ingest (categorize command)
   Scenario: all descriptions already covered — no YAML write, exit 0
     Given an accounting.yaml whose autoTagRules cover "uber" and "altima" in a temp dir
     And a BPCE CSV with two rows for "UBER FRANCE" and two rows for "ALTIMA COURTAGE"
-    When I run categorize without scripted prompts
+    When I run categorize with an empty scripted-prompts script
     Then the process exits with code 0
     And stderr contains "0 rules added"
     And accounting.yaml is unchanged
+    And the prompter is never invoked
     # fails if categorize writes YAML when the buffer is empty, or prompts the user when
     # there is nothing to teach (guards the all-matched short-circuit in steps 4 + 7).
+    # "the prompter is never invoked" flips if the scanner fails to filter all-matched
+    # descriptions — any prompt call against the empty script throws
+    # "ScriptedPrompter: expected next entry".
 
   Scenario: --min-count default of 2 hides one-off merchants
     Given a fresh accounting.yaml with no autoTagRules entry in a temp dir

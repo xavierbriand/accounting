@@ -278,6 +278,71 @@ describe('runCategorizeCommand — pickSourceAccount failure', () => {
   });
 });
 
+// ---- --limit truncation ----
+
+describe('runCategorizeCommand — --limit truncation', () => {
+  it('prompts for exactly --limit groups and reports candidateGroups as the full set', async () => {
+    // fails if: --limit does not truncate the prompt loop (all 5 groups would be prompted
+    // without --limit, but only 2 should be prompted with --limit 2).
+    const stdout = makeCapture();
+    const stderr = makeCapture();
+    const exitCodes: number[] = [];
+
+    const fiveGroupItems = [
+      ...Array(3).fill(null).map(() => ({ sourceAccount: 'main-X', occurredAt: '2026-03-15T00:00:00+01:00', description: 'GROUP ONE', direction: 'outflow' as const, amount: EUR })),
+      ...Array(3).fill(null).map(() => ({ sourceAccount: 'main-X', occurredAt: '2026-03-15T00:00:00+01:00', description: 'GROUP TWO', direction: 'outflow' as const, amount: EUR })),
+      ...Array(2).fill(null).map(() => ({ sourceAccount: 'main-X', occurredAt: '2026-03-15T00:00:00+01:00', description: 'GROUP THREE', direction: 'outflow' as const, amount: EUR })),
+      ...Array(2).fill(null).map(() => ({ sourceAccount: 'main-X', occurredAt: '2026-03-15T00:00:00+01:00', description: 'GROUP FOUR', direction: 'outflow' as const, amount: EUR })),
+      ...Array(2).fill(null).map(() => ({ sourceAccount: 'main-X', occurredAt: '2026-03-15T00:00:00+01:00', description: 'GROUP FIVE', direction: 'outflow' as const, amount: EUR })),
+    ];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn()
+        .mockResolvedValueOnce({ action: 'change', category: 'CatA' })
+        .mockResolvedValueOnce({ action: 'change', category: 'CatB' }),
+      confirmBatch: vi.fn(),
+      confirmRememberRule: vi.fn()
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'group one' })
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'group two' }),
+    };
+
+    const configWriter = makeNoOpConfigWriter();
+
+    const deps: CategorizeCommandDeps = {
+      config: baseConfig,
+      csvParser: {
+        parse: () => Result.ok({ items: fiveGroupItems, errors: [] }),
+      },
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok(''),
+      prompt: prompter,
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      configWriter,
+    };
+
+    await runCategorizeCommand({ ...baseOpts, limit: 2, json: true }, deps);
+
+    expect(exitCodes).toContain(0);
+
+    // selectCategory called exactly twice — only 2 groups prompted (not 5)
+    expect(prompter.selectCategory).toHaveBeenCalledTimes(2);
+
+    const json = JSON.parse(stdout.captured.trim()) as Record<string, unknown>;
+    const summary = json['summary'] as Record<string, unknown>;
+
+    // candidateGroups reflects the full scan result (5), not the limited set
+    expect(summary['candidateGroups']).toBe(5);
+    expect(summary['rulesAdded']).toBe(2);
+
+    // writer called once with 2 rules
+    expect(configWriter.appendAutoTagRules).toHaveBeenCalledOnce();
+    const calledWith = (configWriter.appendAutoTagRules as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{ category: string; pattern: string }>;
+    expect(calledWith).toHaveLength(2);
+  });
+});
+
 // ---- configWriter failure (exit 5) ----
 
 describe('runCategorizeCommand — configWriter failure', () => {

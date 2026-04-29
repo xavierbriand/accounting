@@ -6,11 +6,15 @@ import type { BuildOutcome, DuplicateIngestItem, ParseOutcome } from '@core/inge
 import type { AccountConfig, AppConfig } from '@core/config/app-config.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
+import type { ConfigWriter } from '@core/ports/config-writer.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pick-source-account.js';
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
 import { formatSummaryTable } from '../utils/printer.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
+import { suggestPattern } from '@core/ingest/pattern-suggester.js';
+import { expenseAccount } from '@core/ingest/account-names.js';
+import { Transaction, type EntryDraft } from '@core/ledger/transaction.js';
 
 export interface IngestCommandOptions {
   readonly file: string;
@@ -35,6 +39,7 @@ export interface IngestCommandDeps {
   readonly transactionRepository: Pick<TransactionRepository, 'saveBatch'>;
   readonly snapshotService: SnapshotService;
   readonly dbPath: string;
+  readonly configWriter: ConfigWriter;
 }
 
 function writeln(stream: Writable, msg: string): void {
@@ -88,7 +93,7 @@ export async function runIngestCommand(
   opts: IngestCommandOptions,
   deps: IngestCommandDeps,
 ): Promise<void> {
-  const { config, idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath } = deps;
+  const { config, idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath, configWriter } = deps;
 
   const parsed = await loadAndParse(opts, deps);
   if (parsed === null) return;
@@ -126,8 +131,9 @@ export async function runIngestCommand(
     return runNonInteractive(opts, account, built, lowConfidence, duplicates, parseOutcome.errors.length, stdout, stderr, exitCode);
   }
 
-  const resolvedOutcomes = await runInteractiveLoop(built, lowConfidence, prompt, stderr, exitCode);
-  if (resolvedOutcomes === null) return;
+  const loopResult = await runInteractiveLoop(built, lowConfidence, prompt, stderr, exitCode);
+  if (loopResult === null) return;
+  const { resolved: resolvedOutcomes, rememberedRules } = loopResult;
 
   writeln(stdout, formatSummaryTable(resolvedOutcomes));
 
@@ -136,6 +142,23 @@ export async function runIngestCommand(
     writeln(stderr, 'Ingest cancelled.');
     exitCode(1);
     return;
+  }
+
+  // YAML write BEFORE DB commit (Q1-b atomicity sequence step 4)
+  if (rememberedRules.length > 0) {
+    const writeResult = await configWriter.appendAutoTagRules(rememberedRules);
+    if (writeResult.isFailure) {
+      const err = writeResult.error;
+      if (err.kind === 'mtime-race') {
+        writeln(stderr, 'Your accounting.yaml changed externally; please re-run ingest.');
+      } else if (err.kind === 'conflict') {
+        writeln(stderr, `Config conflict: pattern '${err.pattern}' already exists under category '${err.existingCategory}'. Remove or rename before adding under a new category.`);
+      } else {
+        writeln(stderr, `Config write failed: ${err.message}`);
+      }
+      exitCode(5);
+      return;
+    }
   }
 
   await commitBatch(resolvedOutcomes, { transactionRepository, snapshotService, dbPath, stderr, exitCode });
@@ -182,8 +205,10 @@ async function runInteractiveLoop(
   prompt: InteractivePrompter,
   stderr: Writable,
   exitCode: (code: number) => void,
-): Promise<BuildOutcome[] | null> {
+): Promise<{ resolved: BuildOutcome[]; rememberedRules: Array<{ category: string; pattern: string }> } | null> {
   const resolved: BuildOutcome[] = [...built];
+  // Deduplicated buffer (Q5-c): keyed by "category|pattern"
+  const rememberedMap = new Map<string, { category: string; pattern: string }>();
 
   const categories = Array.from(new Set(built.map((o) => o.category)));
   if (!categories.includes('Uncategorized')) categories.push('Uncategorized');
@@ -204,15 +229,64 @@ async function runInteractiveLoop(
     if (answer.action === 'change') {
       const idx = resolved.findIndex((o) => o === outcome);
       if (idx !== -1) {
-        resolved[idx] = { ...outcome, category: answer.category, confidence: 'high' };
+        // Rebuild the expense-side entry's account from the new category so the
+        // change is durable through saveBatch (entries[].account is what gets
+        // written to the DB; outcome.category alone is summary-only). Only the
+        // 'expense' classification has an Expense:<category> debit; income and
+        // internal-transfer don't get rewritten here. The 'low' confidence
+        // outcomes that hit this prompt are by definition 'expense' (auto-tag
+        // rules don't match income), so the rewrite is sound.
+        const newExpenseAccount = expenseAccount(answer.category);
+        const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
+          e.side === 'debit' && e.account.startsWith('Expense:')
+            ? { account: newExpenseAccount, side: e.side, amount: e.amount }
+            : { account: e.account, side: e.side, amount: e.amount },
+        );
+        const newTxResult = Transaction.create({
+          id: outcome.transaction.id,
+          occurredAt: outcome.transaction.occurredAt,
+          description: outcome.transaction.description,
+          entries: newEntries,
+        });
+        if (!newTxResult.isSuccess) {
+          // Practically unreachable: rewriting one entry's account without changing amounts
+          // can't violate the double-entry balance. But guarding the failure path keeps the
+          // remembered-rule buffer in sync with what was actually persisted to the DB —
+          // skip the rest of this iteration so we don't buffer a rule for a category the
+          // outcome wasn't tagged with. Phase-4 review surfaced the unguarded fall-through.
+          writeln(
+            stderr,
+            `Warning: could not apply category change for "${outcome.transaction.description}"; keeping the original tag and skipping the remember prompt.`,
+          );
+          continue;
+        }
+        resolved[idx] = {
+          ...outcome,
+          category: answer.category,
+          confidence: 'high',
+          transaction: newTxResult.value,
+        };
       }
       if (!categories.includes(answer.category)) {
         categories.push(answer.category);
       }
+
+      // Ask to remember the rule
+      const suggestion = suggestPattern(outcome.transaction.description);
+      const rememberResult = await prompt.confirmRememberRule(
+        outcome.transaction.description,
+        suggestion,
+        answer.category,
+      );
+
+      if (rememberResult.action === 'remember') {
+        const key = `${answer.category}|${rememberResult.pattern}`;
+        rememberedMap.set(key, { category: answer.category, pattern: rememberResult.pattern });
+      }
     }
   }
 
-  return resolved;
+  return { resolved, rememberedRules: Array.from(rememberedMap.values()) };
 }
 
 function runNonInteractive(
@@ -229,7 +303,7 @@ function runNonInteractive(
   if (lowConfidence.length > 0) {
     writeln(
       stderr,
-      `${lowConfidence.length} item(s) need manual review. Run without --non-interactive to review them, ` +
+      `${lowConfidence.length} item(s) need manual review. Run without --non-interactive to review them (you can define new categories inline), ` +
         `or re-ingest after updating accounting.yaml's auto-tag-rules.`,
     );
 

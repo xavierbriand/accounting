@@ -52,6 +52,7 @@ export class BufferStateService {
         target: bucket.target,
         cap: bucket.cap,
         status: statusResult.value,
+        targetDate: bucket.targetDate,
       });
     });
 

@@ -3,6 +3,8 @@ import type { ZodError } from 'zod';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { AppConfig, RecurringRule } from '@core/config/app-config.js';
+import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
+import { validateNewCategoryName } from '@core/categories/category-name.js';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATE_MSG = 'must be ISO 8601 date (YYYY-MM-DD)';
@@ -57,6 +59,7 @@ const BufferBucketRawSchema = z.object({
   name: z.string().min(1),
   account: z.string().min(1),
   target: z.number().nonnegative(),
+  targetDate: z.string().regex(ISO_DATE_REGEX, ISO_DATE_MSG),
   cap: z.number().nonnegative().optional(),
 });
 
@@ -136,6 +139,13 @@ const RecurringRuleRawSchema = z
       }
     }
   });
+
+const AutoTagRuleGroupSchema = z
+  .object({
+    category: z.string(),
+    patterns: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
 
 const RawConfigSchema = z
   .object({
@@ -236,6 +246,33 @@ const RawConfigSchema = z
           });
         }
       }),
+    autoTagRules: z
+      .array(AutoTagRuleGroupSchema)
+      .optional()
+      .default([])
+      .superRefine((groups, ctx) => {
+        for (let i = 0; i < groups.length; i++) {
+          const categoryResult = validateNewCategoryName(groups[i].category, []);
+          if (categoryResult.isFailure) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, 'category'],
+              message: categoryResult.error,
+            });
+          }
+          for (let j = 0; j < groups[i].patterns.length; j++) {
+            try {
+              new RegExp(groups[i].patterns[j], 'i');
+            } catch (err) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: [i, 'patterns', j],
+                message: err instanceof Error ? err.message : 'invalid regex',
+              });
+            }
+          }
+        }
+      }),
   })
   .strict();
 
@@ -256,7 +293,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
   const data = parsed.data;
   const currency = data.defaultCurrency;
 
-  const buffers: Array<{ name: string; account: string; target: Money; cap?: Money }> = [];
+  const buffers: Array<{ name: string; account: string; target: Money; targetDate: string; cap?: Money }> = [];
   for (let i = 0; i < data.buffers.length; i++) {
     const b = data.buffers[i];
     const targetResult = Money.fromDecimal(b.target, currency);
@@ -271,7 +308,7 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
       }
       cap = capResult.value;
     }
-    buffers.push({ name: b.name, account: b.account, target: targetResult.value, cap });
+    buffers.push({ name: b.name, account: b.account, target: targetResult.value, targetDate: b.targetDate, cap });
   }
 
   const recurring: RecurringRule[] = [];
@@ -301,6 +338,13 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     });
   }
 
+  const autoTagRules: AutoTagRule[] = [];
+  for (const group of data.autoTagRules) {
+    for (const pattern of group.patterns) {
+      autoTagRules.push({ pattern: new RegExp(pattern, 'i'), category: group.category });
+    }
+  }
+
   return Result.ok({
     dbPath: data.dbPath,
     defaultCurrency: currency,
@@ -309,5 +353,6 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     buffers,
     accounts: data.accounts,
     recurring,
+    autoTagRules,
   });
 }

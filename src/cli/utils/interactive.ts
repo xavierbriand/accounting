@@ -1,44 +1,16 @@
 import { select, confirm, input } from '@inquirer/prompts';
 import { ExitPromptError } from '@inquirer/core';
-import { Result } from '@core/shared/result.js';
-
-export const RESERVED_TOKENS: readonly string[] = ['uncategorized', 'asset', 'income', 'expense', 'liability'];
-
-export function validateNewCategoryName(
-  raw: string,
-  existing: readonly string[],
-): Result<string, string> {
-  const trimmed = raw.trim();
-
-  if (trimmed.length === 0) {
-    return Result.fail('Category name cannot be empty');
-  }
-
-  if (trimmed.length > 64) {
-    return Result.fail('Category name must be 64 characters or fewer');
-  }
-
-  if (/[:/\\]/.test(trimmed)) {
-    return Result.fail("Category name cannot contain ':', '/' or '\\'");
-  }
-
-  if (RESERVED_TOKENS.includes(trimmed.toLowerCase())) {
-    return Result.fail(`'${trimmed}' is reserved`);
-  }
-
-  const lowerTrimmed = trimmed.toLowerCase();
-  const match = existing.find((e) => e.toLowerCase() === lowerTrimmed);
-  if (match !== undefined) {
-    return Result.fail(`Already exists as '${match}'`);
-  }
-
-  return Result.ok(trimmed);
-}
+import { validateNewCategoryName } from '@core/categories/category-name.js';
+export { validateNewCategoryName, RESERVED_TOKENS } from '@core/categories/category-name.js';
 
 export type SelectCategoryResult =
   | { action: 'keep' }
   | { action: 'change'; category: string }
   | { action: 'abort' };
+
+export type RememberRuleResult =
+  | { action: 'skip' }
+  | { action: 'remember'; pattern: string };
 
 export interface InteractivePrompter {
   selectCategory(
@@ -48,6 +20,12 @@ export interface InteractivePrompter {
   ): Promise<SelectCategoryResult>;
 
   confirmBatch(count: number): Promise<boolean>;
+
+  confirmRememberRule(
+    description: string,
+    suggestedPattern: string | null,
+    category: string,
+  ): Promise<RememberRuleResult>;
 }
 
 export const inquirerPrompter: InteractivePrompter = {
@@ -98,5 +76,56 @@ export const inquirerPrompter: InteractivePrompter = {
       message: `Commit these ${count} transactions?`,
       default: false,
     });
+  },
+
+  async confirmRememberRule(description, suggestedPattern, category) {
+    const choices =
+      suggestedPattern !== null
+        ? [
+            { name: `[y] yes, append /${suggestedPattern}/i → ${category} to accounting.yaml`, value: '__remember__' },
+            { name: '[e] edit the regex first', value: '__edit__' },
+            { name: '[n] no, just use it for this transaction', value: '__skip__' },
+          ]
+        : [
+            { name: '[e] enter a pattern manually', value: '__edit__' },
+            { name: '[n] no, just use it for this transaction', value: '__skip__' },
+          ];
+
+    const message =
+      suggestedPattern !== null
+        ? `Always tag descriptions matching /${suggestedPattern}/i as ${category}?`
+        : `No pattern suggestion for this description. Remember as a rule?`;
+
+    while (true) {
+      const answer = await select({ message, choices });
+
+      if (answer === '__skip__') return { action: 'skip' };
+      if (answer === '__remember__') return { action: 'remember', pattern: suggestedPattern as string };
+
+      // answer === '__edit__'
+      try {
+        const edited = await input({
+          message: 'Enter a regex pattern:',
+          validate: (raw: string) => {
+            const trimmed = raw.trim();
+            if (trimmed.length === 0) return 'Pattern cannot be empty';
+            if (trimmed.length > 200) return 'Pattern must be 200 characters or fewer';
+            try {
+              const compiled = new RegExp(trimmed, 'i');
+              if (!compiled.test(description)) return 'Pattern does not match the current description';
+            } catch {
+              return 'Invalid regex: the pattern does not compile';
+            }
+            return true;
+          },
+        });
+        return { action: 'remember', pattern: edited.trim() };
+      } catch (err) {
+        if (err instanceof ExitPromptError) {
+          continue;
+        }
+        throw err;
+      }
+    }
   },
 };

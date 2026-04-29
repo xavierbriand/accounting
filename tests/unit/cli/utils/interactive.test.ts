@@ -199,6 +199,207 @@ describe('validateNewCategoryName — property test', () => {
   });
 });
 
+// ---- confirmRememberRule tests ----
+// Gherkin scenarios 4-7:
+// - offers y/e/n with suggested pattern (Gherkin 4)
+// - shows e/n (no [y]) when suggestedPattern is null (Gherkin 5)
+// - edit branch validates compile-and-match (Gherkin 6)
+// - [n] returns skip (Gherkin 7)
+// - ESC at the edit input re-shows the y/e/n menu (Gherkin 8)
+
+import type { RememberRuleResult } from '../../../../src/cli/utils/interactive.js';
+
+describe('inquirerPrompter.confirmRememberRule — y/e/n with suggestion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fails if confirmRememberRule is not exported from interactive.ts', () => {
+    // Type-level check: the function must exist on the prompter
+    expect(typeof inquirerPrompter.confirmRememberRule).toBe('function');
+  });
+
+  it('[y] returns { action: remember, pattern: suggestedPattern }', async () => {
+    // Gherkin 4: [y] returns { action: 'remember', pattern: 'courtage' }
+    const { select } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    mockSelect.mockResolvedValueOnce('__remember__');
+
+    const result = await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(result).toEqual({ action: 'remember', pattern: 'courtage' } satisfies RememberRuleResult);
+    expect(mockSelect).toHaveBeenCalledOnce();
+    // Verify the menu shows 3 labelled choices (y/e/n)
+    const callArg = mockSelect.mock.calls[0][0] as unknown as { choices: Array<{ name: string; value: string }> };
+    const values = callArg.choices.map((c) => c.value);
+    expect(values).toContain('__remember__');
+    expect(values).toContain('__edit__');
+    expect(values).toContain('__skip__');
+  });
+
+  it('[n] returns { action: skip }', async () => {
+    // Gherkin 7: [n] returns { action: 'skip' }
+    const { select } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    mockSelect.mockResolvedValueOnce('__skip__');
+
+    const result = await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(result).toEqual({ action: 'skip' } satisfies RememberRuleResult);
+  });
+
+  it('[e] opens input and returns { action: remember, pattern: edited } on valid input', async () => {
+    // Gherkin 6: user picks [e], submits "altima" which matches description
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    mockInput.mockResolvedValueOnce('altima');
+
+    const result = await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(mockInput).toHaveBeenCalledOnce();
+    expect(result).toEqual({ action: 'remember', pattern: 'altima' } satisfies RememberRuleResult);
+  });
+
+  it('[e] validate rejects empty/whitespace pattern', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    // Capture the validate function and test it directly
+    let capturedValidate: ((v: string) => Promise<string | boolean> | string | boolean) | undefined;
+    mockInput.mockImplementationOnce(async (opts: { validate?: (v: string) => Promise<string | boolean> | string | boolean }) => {
+      capturedValidate = opts.validate;
+      return 'altima';
+    });
+
+    await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(capturedValidate!('  ')).toBe('Pattern cannot be empty');
+  });
+
+  it('[e] validate rejects pattern over 200 chars (ReDoS guard)', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    let capturedValidate: ((v: string) => Promise<string | boolean> | string | boolean) | undefined;
+    mockInput.mockImplementationOnce(async (opts: { validate?: (v: string) => Promise<string | boolean> | string | boolean }) => {
+      capturedValidate = opts.validate;
+      return 'altima';
+    });
+
+    await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(capturedValidate!('a'.repeat(201))).toBe('Pattern must be 200 characters or fewer');
+  });
+
+  it('[e] validate rejects invalid regex', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    let capturedValidate: ((v: string) => Promise<string | boolean> | string | boolean) | undefined;
+    mockInput.mockImplementationOnce(async (opts: { validate?: (v: string) => Promise<string | boolean> | string | boolean }) => {
+      capturedValidate = opts.validate;
+      return 'altima';
+    });
+
+    await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    // Invalid regex: unmatched bracket
+    expect(capturedValidate!('[invalid')).toContain('Invalid regex');
+  });
+
+  it('[e] validate rejects pattern that does not match description (Gherkin 6: altimar ≠ ALTIMA COURTAGE)', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    let capturedValidate: ((v: string) => Promise<string | boolean> | string | boolean) | undefined;
+    mockInput.mockImplementationOnce(async (opts: { validate?: (v: string) => Promise<string | boolean> | string | boolean }) => {
+      capturedValidate = opts.validate;
+      return 'altima';
+    });
+
+    await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    // "altimar" does not match "ALTIMA COURTAGE" (no trailing 'r')
+    expect(capturedValidate!('altimar')).toBe('Pattern does not match the current description');
+    // "altima" matches
+    expect(capturedValidate!('altima')).toBe(true);
+  });
+
+  it('ESC at input re-shows the y/e/n select (Gherkin 8)', async () => {
+    const { ExitPromptError } = await import('@inquirer/core');
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    // First loop: user picks edit, then ESC; second loop: user picks skip
+    mockSelect
+      .mockResolvedValueOnce('__edit__')
+      .mockResolvedValueOnce('__skip__');
+
+    mockInput.mockRejectedValueOnce(new ExitPromptError());
+
+    const result = await inquirerPrompter.confirmRememberRule('ALTIMA COURTAGE', 'courtage', 'AutoInsurance');
+
+    expect(mockSelect).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ action: 'skip' } satisfies RememberRuleResult);
+  });
+});
+
+describe('inquirerPrompter.confirmRememberRule — null suggestion (e/n only)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows two-option menu (e/n) when suggestedPattern is null', async () => {
+    // Gherkin 5: two-option select when suggestion is null
+    const { select } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    mockSelect.mockResolvedValueOnce('__skip__');
+
+    await inquirerPrompter.confirmRememberRule('CB 12345', null, 'SomeCategory');
+
+    expect(mockSelect).toHaveBeenCalledOnce();
+    const callArg = mockSelect.mock.calls[0][0] as unknown as { choices: Array<{ name: string; value: string }> };
+    const values = callArg.choices.map((c) => c.value);
+    // Only e and n — no __remember__
+    expect(values).not.toContain('__remember__');
+    expect(values).toContain('__edit__');
+    expect(values).toContain('__skip__');
+  });
+
+  it('[n] when null suggestion returns { action: skip }', async () => {
+    const { select } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    mockSelect.mockResolvedValueOnce('__skip__');
+
+    const result = await inquirerPrompter.confirmRememberRule('CB 12345', null, 'SomeCategory');
+    expect(result).toEqual({ action: 'skip' } satisfies RememberRuleResult);
+  });
+
+  it('[e] when null suggestion opens input and returns remembered pattern', async () => {
+    const { select, input } = await import('@inquirer/prompts');
+    const mockSelect = vi.mocked(select);
+    const mockInput = vi.mocked(input);
+
+    mockSelect.mockResolvedValueOnce('__edit__');
+    mockInput.mockResolvedValueOnce('mypattern');
+
+    const result = await inquirerPrompter.confirmRememberRule('CB 12345 mypattern', null, 'SomeCategory');
+    expect(result).toEqual({ action: 'remember', pattern: 'mypattern' } satisfies RememberRuleResult);
+  });
+});
+
 // ---- selectCategory: + Define new category… branch and ESC re-show ----
 // fails if: '+ Define new category…' choice is not offered (user can't define a new category),
 //           input() is not called when '__new__' is selected (no prompt shown),

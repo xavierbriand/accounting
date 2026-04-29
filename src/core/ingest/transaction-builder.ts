@@ -2,7 +2,6 @@ import type { AccountConfig } from '@core/config/app-config.js';
 import type { UuidGen } from '@core/ports/uuid-gen.js';
 import type { IngestItem, FreshIngestItem, BuildOutcome, BuildBatchOutcome, Classification, Confidence } from './types.js';
 import type { AutoTagRule } from './auto-tag-rules.js';
-import { DEFAULT_RULES } from './auto-tag-rules.js';
 import { bankAccount, cardAccount, expenseAccount, incomeAccount } from './account-names.js';
 import { Transaction } from '@core/ledger/transaction.js';
 import { Result } from '@core/shared/result.js';
@@ -76,7 +75,7 @@ function makeOutcome(
 export class TransactionBuilder {
   constructor(
     private readonly accounts: readonly AccountConfig[],
-    private readonly rules: readonly AutoTagRule[] = DEFAULT_RULES,
+    private readonly rules: readonly AutoTagRule[],
     private readonly idGen: UuidGen = defaultUuidGen,
   ) {}
 

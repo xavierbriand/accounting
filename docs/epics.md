@@ -256,11 +256,41 @@ So that the Safe Monthly Transfer Calculator (Story 3.4) can pre-fund the joint 
 
 ### Story 3.4: Safe Monthly Transfer Calculator
 
-*Title only. Acceptance criteria deferred to Story 3.4's planning phase.*
+As a System,
+I want to compute the gross transfer required from each partner over a given window — combining recurring-cost forecasts with date-driven buffer top-ups, applying split ratios per occurrence date — and return both an aggregate per partner and a flat list of line items,
+So that the Status CLI (Story 3.5) and the "Conversational CFO" output can answer "how much should I transfer this month, and why?" with full traceability.
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` config with valid splits (3.1), buffers with `targetDate` (3.2 + this story), and recurring rules (3.3),
+**When** I call `SafeTransferCalculator.calculateForWindow(asOf, from, to)` with three ISO 8601 dates and `from <= to`,
+**Then** it returns `Result.ok({ totalRequired, perPartner, lineItems })` where `lineItems` is a sorted-ascending-by-date list of `{ kind: 'forecast' | 'buffer-topup', date, category, description, gross: Money, perPartnerSplit: Map<string, Money> }`.
+**And** for each `ForecastOccurrence` returned by `forecastBetween(from, to)`: a `'forecast'` line item is emitted with `gross.allocate(getSplitsAsOf(occurrence.expectedDate).rules.map(r => r.ratio))` providing the per-partner split (Largest Remainder Method ensures `sum(perPartnerSplit) === gross`).
+**And** for each buffer with `balance < target` as of `asOf`: if `asOf >= targetDate`, the calculation fails with a path-cited error citing the bucket name, its targetDate, and instructing the user to set a new targetDate; otherwise `(target - balance)` is allocated across `monthsBetween(asOf, targetDate)` equal monthly fills, and one `'buffer-topup'` line item is emitted per first-of-month date in `[from, to]` (up to the targetDate cutoff), each split per its month's `getSplitsAsOf` ratios.
+**And** `balance >= target` for a buffer produces no line items regardless of `targetDate` state.
+**And** `totalRequired = sum(lineItem.gross)` and `perPartner.get(p) = sum(lineItem.perPartnerSplit.get(p))`; every partner declared in the splits roster appears in `perPartner` even with zero contribution.
+**And** the YAML is rejected at parse with a path-cited Zod error if any `BufferBucket` is missing `targetDate` or the value is not ISO 8601 `YYYY-MM-DD`.
+**And** if `from`, `to`, or `asOf` is not ISO 8601 `YYYY-MM-DD`, or `from > to`, the calculator returns `Result.fail` with a clear message.
+**And** `calculateForWindow` is pure: it never reads the system clock — re-running with the same inputs yields byte-identical output regardless of `Date.now()`.
 
 ### Story 3.5: Status CLI Command
 
-*Title only. Acceptance criteria deferred to Story 3.5's planning phase.*
+As a User,
+I want a single `accounting status` command that shows my current buffer state, the safe monthly transfer for next month with its breakdown, and the upcoming forecast occurrences,
+So that I can run one command on Sunday morning and answer "what's the picture?" — both for human reading at the terminal and for machine pipelines via `--json`.
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` with valid splits, buffers (with `targetDate`), and recurring rules, plus a migrated SQLite ledger,
+**When** I run `accounting status` (no flags),
+**Then** the CLI prints three labeled sections to stdout: **Buffers** (table of name/balance/target/cap/status/targetDate per bucket), **Transfer** (totalRequired + per-partner contributions + line items grouped by category, prefaced by Conversational-CFO prose), **Forecast** (date/name/category/amount per upcoming recurring occurrence in the window).
+**And** the default `asOf` is "today" derived from `Date.now()`, normalized to `YYYY-MM-DD` in the config's `timezone`; `--as-of <YYYY-MM-DD>` overrides for determinism.
+**And** the default window is the next calendar month from `asOf` — `[first-of-next-month, last-of-that-month]`. `--from <YYYY-MM-DD> --to <YYYY-MM-DD>` overrides; both must be ISO 8601 and `from <= to`.
+**And** `--json` switches output to a single-object JSON document matching the documented shape (`{ asOf, window, buffers, transfer, forecast }`); `Money` values serialize via `Money.toString()`.
+**And** when `SafeTransferCalculator.calculateForWindow` fails (stale `targetDate`, `monthsRemaining=0`, etc.), the CLI renders **Buffers** normally, prints the calc error + a Suggested-action prose line in the **Transfer** section, and exits with code 0. JSON shape: `transfer: { error, suggestedAction }` (no `totalRequired`/`perPartner`/`lineItems` keys when failed).
+**And** `accounting status` is read-only: no DB writes, no snapshot. It runs `assertMigrated` to fail fast on an unmigrated DB.
+**And** invalid CLI input (bad date format, `from > to`, missing `accounting.yaml`) exits with POSIX code 2 and a path-cited message on stderr; unrecoverable runtime errors (DB read failure, currency mismatch) exit with code 1.
+**And** the underlying upstream services remain pure: `runStatusCommand` injects `clock: () => string` (defaulting to `nodeClock`) so unit tests run without `Date.now()`.
 
 ## Epic 4: Trust, Transparency & Lifecycle
 

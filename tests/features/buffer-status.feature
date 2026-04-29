@@ -2,10 +2,10 @@ Feature: Buffer state reader (Story 3.2)
 
   Scenario: balances classify across below / on-target / above-cap
     Given a config with three buffers:
-      | name  | account            | target | cap   |
-      | Car   | assets:buffer:car  | 1000   |       |
-      | House | assets:buffer:hous | 5000   | 10000 |
-      | Vac   | assets:buffer:vac  | 500    | 1500  |
+      | name  | account            | target | targetDate | cap   |
+      | Car   | assets:buffer:car  | 1000   | 2099-12-31 |       |
+      | House | assets:buffer:hous | 5000   | 2099-12-31 | 10000 |
+      | Vac   | assets:buffer:vac  | 500    | 2099-12-31 | 1500  |
     And the ledger contains as of "2026-04-26":
       | account            | side   | amount |
       | assets:buffer:car  | debit  | 800    |

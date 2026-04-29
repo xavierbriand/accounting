@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
+export interface AutoTagRuleOverride {
+  readonly category: string;
+  readonly patterns: string[];
+}
+
 export interface InlineConfigOverrides {
   readonly dbPath?: string;
   readonly defaultCurrency?: string;
@@ -10,6 +15,7 @@ export interface InlineConfigOverrides {
   readonly splitValidFrom?: string;
   readonly partner1?: string;
   readonly partner2?: string;
+  readonly autoTagRules?: readonly AutoTagRuleOverride[];
 }
 
 /**
@@ -17,6 +23,7 @@ export interface InlineConfigOverrides {
  * The single-arg form uses sensible defaults: EUR, Europe/Paris, one BPCE
  * bank account matching "bpce-valid_" prefix, two-partner 50/50 split, no buffers.
  * Partner names use fictional non-PII values ("Alice" and "Bob").
+ * Pass autoTagRules to emit a YAML autoTagRules section; omit for empty rules (default []).
  */
 export function writeStubYaml(tmpDir: string, overrides?: InlineConfigOverrides): void {
   const cfg = {
@@ -29,6 +36,19 @@ export function writeStubYaml(tmpDir: string, overrides?: InlineConfigOverrides)
     partner1: overrides?.partner1 ?? 'Alice',
     partner2: overrides?.partner2 ?? 'Bob',
   };
+
+  let autoTagRulesYaml = '';
+  if (overrides?.autoTagRules !== undefined && overrides.autoTagRules.length > 0) {
+    const lines = ['autoTagRules:'];
+    for (const rule of overrides.autoTagRules) {
+      lines.push(`  - category: ${rule.category}`);
+      lines.push('    patterns:');
+      for (const pattern of rule.patterns) {
+        lines.push(`      - "${pattern}"`);
+      }
+    }
+    autoTagRulesYaml = '\n' + lines.join('\n') + '\n';
+  }
 
   const yaml = `\
 dbPath: ${cfg.dbPath}
@@ -43,8 +63,7 @@ splits:
     rules:
       - { partner: ${cfg.partner1}, ratio: 0.5 }
       - { partner: ${cfg.partner2}, ratio: 0.5 }
-buffers: []
-`;
+buffers: []${autoTagRulesYaml}`;
 
   fs.writeFileSync(path.join(tmpDir, 'accounting.yaml'), yaml, 'utf8');
 }

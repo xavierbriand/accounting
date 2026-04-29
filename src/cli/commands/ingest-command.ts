@@ -13,6 +13,8 @@ import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.
 import { formatSummaryTable } from '../utils/printer.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { suggestPattern } from '@core/ingest/pattern-suggester.js';
+import { expenseAccount } from '@core/ingest/account-names.js';
+import { Transaction, type EntryDraft } from '@core/ledger/transaction.js';
 
 export interface IngestCommandOptions {
   readonly file: string;
@@ -227,7 +229,33 @@ async function runInteractiveLoop(
     if (answer.action === 'change') {
       const idx = resolved.findIndex((o) => o === outcome);
       if (idx !== -1) {
-        resolved[idx] = { ...outcome, category: answer.category, confidence: 'high' };
+        // Rebuild the expense-side entry's account from the new category so the
+        // change is durable through saveBatch (entries[].account is what gets
+        // written to the DB; outcome.category alone is summary-only). Only the
+        // 'expense' classification has an Expense:<category> debit; income and
+        // internal-transfer don't get rewritten here. The 'low' confidence
+        // outcomes that hit this prompt are by definition 'expense' (auto-tag
+        // rules don't match income), so the rewrite is sound.
+        const newExpenseAccount = expenseAccount(answer.category);
+        const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
+          e.side === 'debit' && e.account.startsWith('Expense:')
+            ? { account: newExpenseAccount, side: e.side, amount: e.amount }
+            : { account: e.account, side: e.side, amount: e.amount },
+        );
+        const newTxResult = Transaction.create({
+          id: outcome.transaction.id,
+          occurredAt: outcome.transaction.occurredAt,
+          description: outcome.transaction.description,
+          entries: newEntries,
+        });
+        if (newTxResult.isSuccess) {
+          resolved[idx] = {
+            ...outcome,
+            category: answer.category,
+            confidence: 'high',
+            transaction: newTxResult.value,
+          };
+        }
       }
       if (!categories.includes(answer.category)) {
         categories.push(answer.category);

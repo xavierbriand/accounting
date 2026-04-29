@@ -13,7 +13,8 @@ import { nodeHashFn } from '../infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../infra/crypto/node-uuid-gen.js';
 import { pickSourceAccount } from '../infra/fs/pick-source-account.js';
 import { readBpceCsv } from '../infra/fs/read-bpce-csv.js';
-import { inquirerPrompter } from './utils/interactive.js';
+import { inquirerPrompter, type InteractivePrompter } from './utils/interactive.js';
+import { ScriptedPrompter, scriptHasForceMtimeRace, type Script } from './utils/scripted-prompter.js';
 import { runIngestCommand } from './commands/ingest-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
@@ -85,7 +86,8 @@ program
   .option('--non-interactive', 'Fail if any item needs review (CI mode)', false)
   .option('--json', 'Output JSON instead of a table', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
-  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string }) => {
+  .option('--scripted-prompts <json>', '(test only) JSON array of canned prompt answers; gated by NODE_ENV=test')
+  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string; scriptedPrompts?: string }) => {
     const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
     if (result.isFailure) {
       process.stderr.write(`error: ${result.error.message}\n`);
@@ -101,7 +103,32 @@ program
     }
 
     const configPath = configService.getResolvedConfigPath();
-    const configMtimeNs = fs.statSync(configPath, { bigint: true }).mtimeNs;
+
+    // Parse the test-only scripted-prompts flag (gated by NODE_ENV=test) before
+    // constructing the writer; a `__forceMtimeRace__` entry in the script makes
+    // us pass BigInt(0) as the expected mtime, simulating a mid-session edit.
+    let scriptedPrompter: InteractivePrompter | null = null;
+    let forceMtimeRace = false;
+    if (options.scriptedPrompts !== undefined) {
+      if (process.env['NODE_ENV'] !== 'test') {
+        process.stderr.write('error: --scripted-prompts is only available with NODE_ENV=test\n');
+        process.exit(1);
+      }
+      let script: readonly Script[];
+      try {
+        script = JSON.parse(options.scriptedPrompts) as readonly Script[];
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`error: --scripted-prompts JSON parse failed: ${msg}\n`);
+        process.exit(1);
+      }
+      scriptedPrompter = new ScriptedPrompter(script);
+      forceMtimeRace = scriptHasForceMtimeRace(script);
+    }
+
+    const configMtimeNs = forceMtimeRace
+      ? BigInt(0)
+      : fs.statSync(configPath, { bigint: true }).mtimeNs;
     const configWriter = new YamlConfigWriter(configPath, configMtimeNs);
 
     const csvParser = new NodeCsvParser();
@@ -121,7 +148,7 @@ program
         transactionBuilder,
         pickSourceAccount,
         readFile: readBpceCsv,
-        prompt: inquirerPrompter,
+        prompt: scriptedPrompter ?? inquirerPrompter,
         stdout: process.stdout,
         stderr: process.stderr,
         exitCode: (code) => process.exit(code),

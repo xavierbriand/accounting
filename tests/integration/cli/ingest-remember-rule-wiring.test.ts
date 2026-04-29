@@ -53,26 +53,20 @@ function writeSingleRowCsv(dir: string, filename: string): string {
 }
 
 /**
- * Encodes a scripted-prompts JSON payload for:
- *   1. selectCategory: change → AutoInsurance (action: 'change', category: 'AutoInsurance')
- *   2. confirmBatch: true
- *   3. confirmRememberRule: remember with pattern 'courtage'
+ * Encodes a scripted-prompts JSON payload in the order the ingest CLI actually
+ * invokes them (per src/cli/commands/ingest-command.ts: the interactive loop
+ * fires selectCategory → confirmRememberRule per low-confidence outcome,
+ * then confirmBatch once after the loop):
+ *   1. selectCategory: change → AutoInsurance
+ *   2. confirmRememberRule: remember with pattern 'courtage'
+ *   3. confirmBatch: true
  */
 function makeScriptedPromptsHappyPath(): string {
   return JSON.stringify([
     { type: 'selectCategory', action: 'change', category: 'AutoInsurance' },
-    { type: 'confirmBatch', confirm: true },
     { type: 'confirmRememberRule', action: 'remember', pattern: 'courtage' },
+    { type: 'confirmBatch', confirm: true },
   ]);
-}
-
-/**
- * Encodes a scripted-prompts payload where the user confirms remember, but
- * we will touch the YAML between process start and flush to trigger mtime drift.
- * Same answers as happy path; the drift is injected externally.
- */
-function makeScriptedPromptsRememberThenFlush(): string {
-  return makeScriptedPromptsHappyPath();
 }
 
 describe('ingest-remember-rule-wiring (R4 subprocess — Story C)', () => {
@@ -107,12 +101,15 @@ describe('ingest-remember-rule-wiring (R4 subprocess — Story C)', () => {
       expect(yamlContent).toContain('AutoInsurance');
       expect(yamlContent).toContain('courtage');
 
-      // DB should contain the new transaction tagged as AutoInsurance
+      // DB should contain the new transaction with a debit entry to Expense:AutoInsurance.
+      // Categories are encoded as the leaf of the account path, not a column on transactions.
       const db = new Database(dbPath);
-      const row = db.prepare("SELECT category FROM transactions LIMIT 1").get() as { category: string } | undefined;
+      const entry = db
+        .prepare("SELECT account FROM transaction_entries WHERE side = 'debit' LIMIT 1")
+        .get() as { account: string } | undefined;
       db.close();
-      expect(row).toBeDefined();
-      expect(row!.category).toBe('Expense:AutoInsurance');
+      expect(entry).toBeDefined();
+      expect(entry!.account).toBe('Expense:AutoInsurance');
     },
   );
 
@@ -129,7 +126,6 @@ describe('ingest-remember-rule-wiring (R4 subprocess — Story C)', () => {
       spawnCli(['migrate'], { cwd: tmpDir });
 
       const csvPath = writeSingleRowCsv(tmpDir, 'bpce-valid_2026.csv');
-      const yamlPath = path.join(tmpDir, 'accounting.yaml');
 
       // Touch the YAML *after* the process reads it (simulated via a hook)
       // Since we can't inject a mid-run touch into the subprocess, we modify the
@@ -143,8 +139,8 @@ describe('ingest-remember-rule-wiring (R4 subprocess — Story C)', () => {
       // expectedMtimeNs instead of the real statSync value.
       const scriptedWithRace = JSON.stringify([
         { type: 'selectCategory', action: 'change', category: 'AutoInsurance' },
-        { type: 'confirmBatch', confirm: true },
         { type: 'confirmRememberRule', action: 'remember', pattern: 'courtage' },
+        { type: 'confirmBatch', confirm: true },
         { type: '__forceMtimeRace__' },
       ]);
 

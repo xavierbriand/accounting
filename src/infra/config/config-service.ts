@@ -15,9 +15,21 @@ interface FileConfigServiceOptions {
 
 export class FileConfigService implements ConfigService {
   private readonly opts: FileConfigServiceOptions;
+  #resolvedPath: string | undefined;
 
   constructor(opts: FileConfigServiceOptions) {
     this.opts = opts;
+  }
+
+  /**
+   * Returns the filesystem path that load() actually read.
+   * Throws if called before a successful load().
+   */
+  public getResolvedConfigPath(): string {
+    if (this.#resolvedPath === undefined) {
+      throw new Error('getResolvedConfigPath() called before a successful load()');
+    }
+    return this.#resolvedPath;
   }
 
   public load(): Result<AppConfig> {
@@ -35,8 +47,10 @@ export class FileConfigService implements ConfigService {
 
     if (fs.existsSync(projectPath)) {
       rawContent = fs.readFileSync(projectPath, 'utf8');
+      this.#resolvedPath = projectPath;
     } else if (fs.existsSync(xdgPath)) {
       rawContent = fs.readFileSync(xdgPath, 'utf8');
+      this.#resolvedPath = xdgPath;
     } else {
       return Result.fail(
         `No config file found. Searched:\n  - ${projectPath}\n  - ${xdgPath}\n` +

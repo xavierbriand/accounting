@@ -35,6 +35,11 @@ import { Result } from '@core/shared/result.js';
 import type { AppConfig } from '@core/config/app-config.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { BatchWriteOutcome } from '@core/ports/transaction-repository.js';
+import type { ConfigWriter } from '@core/ports/config-writer.js';
+
+function makeNoOpConfigWriter(): ConfigWriter {
+  return { appendAutoTagRules: async () => Result.ok() };
+}
 
 const FIXTURE_CSV = path.join(
   path.dirname(new URL(import.meta.url).pathname),
@@ -102,6 +107,7 @@ function makeRealDeps(
     prompt: {
       selectCategory: () => Promise.resolve({ action: 'keep' }),
       confirmBatch: () => Promise.resolve(true),
+      confirmRememberRule: () => Promise.resolve({ action: 'skip' }),
     },
     stdout: stdout as Writable,
     stderr: stderr as Writable,
@@ -109,6 +115,7 @@ function makeRealDeps(
     transactionRepository,
     snapshotService,
     dbPath,
+    configWriter: makeNoOpConfigWriter(),
   };
 
   return { deps, stdout, stderr, exitCodes };

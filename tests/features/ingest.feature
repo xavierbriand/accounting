@@ -66,3 +66,18 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     And stderr contains "--db-path-override is set"
     # fails if: --db-path-override is silently honoured (no warn), or the rename
     # didn't propagate (CLI parses old --db-path), or YAML dbPath wins over the override.
+
+  Scenario: Define-new + remember + re-ingest auto-tags (Story C round-trip — closes Story A retro carry-over)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a single-row CSV at "bpce-valid_first.csv" with description "ALTIMA COURTAGE"
+    When I run scripted ingest with category "AutoInsurance" and remembered pattern "altima" on "bpce-valid_first.csv"
+    Then the process exits with code 0
+    And the accounting.yaml on disk contains "AutoInsurance"
+    And the accounting.yaml on disk contains "altima"
+    When I run a fresh ingest with "--non-interactive --json" on a single-row CSV at "bpce-valid_second.csv" with description "ALTIMA SOLO 2026"
+    Then the process exits with code 0
+    And stderr contains "Found 1 new transactions — 1 auto-tagged"
+    # fails if: the YAML write doesn't persist the appended rule across processes,
+    # or the next ingest doesn't reload autoTagRules from YAML, or the rule-match
+    # against "ALTIMA SOLO 2026" doesn't reach high-confidence (would exit 2).
+    # Closes Story A retro carry-over: end-to-end define-new + auto-tag interaction.

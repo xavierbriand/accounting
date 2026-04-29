@@ -40,6 +40,7 @@ import { nodeUuidGen } from '../../src/infra/crypto/node-uuid-gen.js';
 import { pickSourceAccount } from '../../src/infra/fs/pick-source-account.js';
 import { readBpceCsv } from '../../src/infra/fs/read-bpce-csv.js';
 import type { AppConfig } from '@core/config/app-config.js';
+import { Result } from '../../src/core/shared/result.js';
 
 // Perf test threshold: 3000 ms (2000 ms local target + 1.5× CI headroom)
 // Local measurement: document here after first green run.
@@ -158,6 +159,7 @@ describe('ingest-throughput (perf)', () => {
         prompt: {
           selectCategory: () => Promise.resolve({ action: 'keep' }),
           confirmBatch: () => Promise.resolve(true),
+          confirmRememberRule: () => Promise.resolve({ action: 'skip' as const }),
         },
         stdout: stdout as Writable,
         stderr: stderr as Writable,
@@ -165,6 +167,7 @@ describe('ingest-throughput (perf)', () => {
         transactionRepository,
         snapshotService,
         dbPath,
+        configWriter: { appendAutoTagRules: async () => Result.ok() },
       };
 
       const start = performance.now();

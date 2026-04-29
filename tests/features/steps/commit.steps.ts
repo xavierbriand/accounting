@@ -84,6 +84,7 @@ async function runIngestInProcess(
       prompt: {
         selectCategory: () => Promise.resolve({ action: 'keep' }),
         confirmBatch: () => Promise.resolve(true),
+        confirmRememberRule: () => Promise.resolve({ action: 'skip' as const }),
       },
       stdout: stdoutSink,
       stderr: stderrCapture,
@@ -91,6 +92,7 @@ async function runIngestInProcess(
       transactionRepository,
       snapshotService,
       dbPath: state.dbPath!,
+      configWriter: { appendAutoTagRules: async () => Result.ok() },
     },
   );
 

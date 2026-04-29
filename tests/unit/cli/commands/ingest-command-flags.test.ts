@@ -9,6 +9,7 @@ import type { BuildOutcome } from '@core/ingest/types.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import { Money } from '@core/shared/money.js';
+import type { ConfigWriter } from '@core/ports/config-writer.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
@@ -70,6 +71,12 @@ function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
   };
 }
 
+function makeNoOpConfigWriterStub(): ConfigWriter {
+  return { appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()) };
+}
+
+const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
+
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
   function makeCapture(): Writable & { captured: string } {
     const buf: string[] = [];
@@ -86,7 +93,7 @@ describe('--non-interactive mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn() };
+    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -102,6 +109,7 @@ describe('--non-interactive mode', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -115,7 +123,7 @@ describe('--non-interactive mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn() };
+    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -131,6 +139,7 @@ describe('--non-interactive mode', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -156,13 +165,14 @@ describe('--json mode', () => {
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
       pickSourceAccount: () => Result.ok(makeAccount('acct-42', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -200,13 +210,14 @@ describe('--json mode', () => {
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
       pickSourceAccount: () => Result.ok(makeAccount('acct-77', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -239,13 +250,14 @@ describe('--json mode', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn() },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
     };
 
     await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: false }, deps);

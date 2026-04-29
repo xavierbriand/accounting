@@ -248,14 +248,24 @@ async function runInteractiveLoop(
           description: outcome.transaction.description,
           entries: newEntries,
         });
-        if (newTxResult.isSuccess) {
-          resolved[idx] = {
-            ...outcome,
-            category: answer.category,
-            confidence: 'high',
-            transaction: newTxResult.value,
-          };
+        if (!newTxResult.isSuccess) {
+          // Practically unreachable: rewriting one entry's account without changing amounts
+          // can't violate the double-entry balance. But guarding the failure path keeps the
+          // remembered-rule buffer in sync with what was actually persisted to the DB —
+          // skip the rest of this iteration so we don't buffer a rule for a category the
+          // outcome wasn't tagged with. Phase-4 review surfaced the unguarded fall-through.
+          writeln(
+            stderr,
+            `Warning: could not apply category change for "${outcome.transaction.description}"; keeping the original tag and skipping the remember prompt.`,
+          );
+          continue;
         }
+        resolved[idx] = {
+          ...outcome,
+          category: answer.category,
+          confidence: 'high',
+          transaction: newTxResult.value,
+        };
       }
       if (!categories.includes(answer.category)) {
         categories.push(answer.category);

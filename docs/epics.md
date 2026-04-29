@@ -256,7 +256,22 @@ So that the Safe Monthly Transfer Calculator (Story 3.4) can pre-fund the joint 
 
 ### Story 3.4: Safe Monthly Transfer Calculator
 
-*Title only. Acceptance criteria deferred to Story 3.4's planning phase.*
+As a System,
+I want to compute the gross transfer required from each partner over a given window — combining recurring-cost forecasts with date-driven buffer top-ups, applying split ratios per occurrence date — and return both an aggregate per partner and a flat list of line items,
+So that the Status CLI (Story 3.5) and the "Conversational CFO" output can answer "how much should I transfer this month, and why?" with full traceability.
+
+**Acceptance Criteria:**
+
+**Given** an `accounting.yaml` config with valid splits (3.1), buffers with `targetDate` (3.2 + this story), and recurring rules (3.3),
+**When** I call `SafeTransferCalculator.calculateForWindow(asOf, from, to)` with three ISO 8601 dates and `from <= to`,
+**Then** it returns `Result.ok({ totalRequired, perPartner, lineItems })` where `lineItems` is a sorted-ascending-by-date list of `{ kind: 'forecast' | 'buffer-topup', date, category, description, gross: Money, perPartnerSplit: Map<string, Money> }`.
+**And** for each `ForecastOccurrence` returned by `forecastBetween(from, to)`: a `'forecast'` line item is emitted with `gross.allocate(getSplitsAsOf(occurrence.expectedDate).rules.map(r => r.ratio))` providing the per-partner split (Largest Remainder Method ensures `sum(perPartnerSplit) === gross`).
+**And** for each buffer with `balance < target` as of `asOf`: if `asOf >= targetDate`, the calculation fails with a path-cited error citing the bucket name, its targetDate, and instructing the user to set a new targetDate; otherwise `(target - balance)` is allocated across `monthsBetween(asOf, targetDate)` equal monthly fills, and one `'buffer-topup'` line item is emitted per first-of-month date in `[from, to]` (up to the targetDate cutoff), each split per its month's `getSplitsAsOf` ratios.
+**And** `balance >= target` for a buffer produces no line items regardless of `targetDate` state.
+**And** `totalRequired = sum(lineItem.gross)` and `perPartner.get(p) = sum(lineItem.perPartnerSplit.get(p))`; every partner declared in the splits roster appears in `perPartner` even with zero contribution.
+**And** the YAML is rejected at parse with a path-cited Zod error if any `BufferBucket` is missing `targetDate` or the value is not ISO 8601 `YYYY-MM-DD`.
+**And** if `from`, `to`, or `asOf` is not ISO 8601 `YYYY-MM-DD`, or `from > to`, the calculator returns `Result.fail` with a clear message.
+**And** `calculateForWindow` is pure: it never reads the system clock — re-running with the same inputs yields byte-identical output regardless of `Date.now()`.
 
 ### Story 3.5: Status CLI Command
 

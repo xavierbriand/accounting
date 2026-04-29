@@ -15,6 +15,7 @@ export interface BufferBucket {
   readonly name: string;
   readonly account: string;
   readonly target: Money;
+  readonly targetDate: string;  // Required since Story 3.4 — ISO 8601 YYYY-MM-DD
   readonly cap?: Money;
 }
 

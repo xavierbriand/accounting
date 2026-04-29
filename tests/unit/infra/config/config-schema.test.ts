@@ -112,7 +112,7 @@ describe('parseRawConfig', () => {
   it('rejects buffer with cap < target', () => {
     const raw = {
       ...minimalValid,
-      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 200, cap: 100 }],
+      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 200, cap: 100, targetDate: '2099-12-31' }],
     };
     // fails if parseRawConfig does not enforce cap >= target for buffers
     const result = parseRawConfig(raw);
@@ -124,8 +124,8 @@ describe('parseRawConfig', () => {
     const raw = {
       ...minimalValid,
       buffers: [
-        { name: 'Car', account: 'assets:buffer:car', target: 1000 },
-        { name: 'Car', account: 'assets:buffer:car2', target: 2000 },
+        { name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2099-12-31' },
+        { name: 'Car', account: 'assets:buffer:car2', target: 2000, targetDate: '2099-12-31' },
       ],
     };
     // fails if parseRawConfig does not detect duplicate bucket names
@@ -147,7 +147,7 @@ describe('parseRawConfig', () => {
   it('maps decimal targets/caps to Money with defaultCurrency', () => {
     const raw = {
       ...minimalValid,
-      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000.5, cap: 2000 }],
+      buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000.5, cap: 2000, targetDate: '2099-12-31' }],
     };
     // fails if parseRawConfig does not convert decimal amounts to Money using defaultCurrency
     const result = parseRawConfig(raw);
@@ -621,9 +621,9 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'X', account: 'assets:buffer:x1', target: 100 },
-          { name: 'X', account: 'assets:buffer:x2', target: 200 },
-          { name: 'X', account: 'assets:buffer:x3', target: 300 },
+          { name: 'X', account: 'assets:buffer:x1', target: 100, targetDate: '2099-12-31' },
+          { name: 'X', account: 'assets:buffer:x2', target: 200, targetDate: '2099-12-31' },
+          { name: 'X', account: 'assets:buffer:x3', target: 300, targetDate: '2099-12-31' },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -635,9 +635,9 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'Alpha', account: 'assets:buffer:alpha', target: 100 },
-          { name: 'Beta', account: 'assets:buffer:beta', target: 200 },
-          { name: 'Alpha', account: 'assets:buffer:alpha2', target: 300 },
+          { name: 'Alpha', account: 'assets:buffer:alpha', target: 100, targetDate: '2099-12-31' },
+          { name: 'Beta', account: 'assets:buffer:beta', target: 200, targetDate: '2099-12-31' },
+          { name: 'Alpha', account: 'assets:buffer:alpha2', target: 300, targetDate: '2099-12-31' },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -651,10 +651,10 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'First', account: 'assets:buffer:first', target: 100 },
-          { name: 'Second', account: 'assets:buffer:second', target: 200 },
-          { name: 'Third', account: 'assets:buffer:third', target: 300 },
-          { name: 'First', account: 'assets:buffer:first2', target: 400 },
+          { name: 'First', account: 'assets:buffer:first', target: 100, targetDate: '2099-12-31' },
+          { name: 'Second', account: 'assets:buffer:second', target: 200, targetDate: '2099-12-31' },
+          { name: 'Third', account: 'assets:buffer:third', target: 300, targetDate: '2099-12-31' },
+          { name: 'First', account: 'assets:buffer:first2', target: 400, targetDate: '2099-12-31' },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -688,7 +688,7 @@ describe('parseRawConfig', () => {
       // fails if parseRawConfig rejects a buffer with a valid account string
       const result = parseRawConfig({
         ...minimalValid,
-        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000 }],
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2099-12-31' }],
       });
       expect(result.isSuccess).toBe(true);
       expect(result.value.buffers[0].account).toBe('assets:buffer:car');
@@ -699,8 +699,8 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'Car', account: 'assets:buffer:shared', target: 1000 },
-          { name: 'House', account: 'assets:buffer:shared', target: 5000 },
+          { name: 'Car', account: 'assets:buffer:shared', target: 1000, targetDate: '2099-12-31' },
+          { name: 'House', account: 'assets:buffer:shared', target: 5000, targetDate: '2099-12-31' },
         ],
       });
       expect(result.isFailure).toBe(true);
@@ -713,13 +713,85 @@ describe('parseRawConfig', () => {
       const result = parseRawConfig({
         ...minimalValid,
         buffers: [
-          { name: 'Car', account: 'assets:buffer:car', target: 1000 },
-          { name: 'House', account: 'assets:buffer:house', target: 5000 },
-          { name: 'Vac', account: 'assets:buffer:car', target: 500 },
+          { name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2099-12-31' },
+          { name: 'House', account: 'assets:buffer:house', target: 5000, targetDate: '2099-12-31' },
+          { name: 'Vac', account: 'assets:buffer:car', target: 500, targetDate: '2099-12-31' },
         ],
       });
       expect(result.isFailure).toBe(true);
       expect(result.error).toContain('buffers.2.account');
+    });
+  });
+
+  describe('buffer targetDate field (Story 3.4)', () => {
+    it('rejects a buffer entry missing the targetDate field', () => {
+      // fails if parseRawConfig accepts a buffer without a targetDate field
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000 }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with targetDate that is not ISO 8601 YYYY-MM-DD', () => {
+      // fails if parseRawConfig accepts an invalid targetDate format (e.g. DD/MM/YYYY)
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '01/12/2026' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with targetDate as a datetime string', () => {
+      // fails if parseRawConfig accepts ISO datetime instead of date-only for targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2026-12-01T00:00:00Z' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('rejects a buffer with an empty targetDate string', () => {
+      // fails if parseRawConfig accepts an empty targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '' }],
+      });
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toContain('targetDate');
+    });
+
+    it('accepts a buffer with a valid ISO 8601 targetDate', () => {
+      // fails if parseRawConfig rejects a valid targetDate
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2026-12-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].targetDate).toBe('2026-12-01');
+    });
+
+    it('passes targetDate through to the domain type unchanged', () => {
+      // fails if targetDate is not threaded through from schema to AppConfig
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Vacation', account: 'assets:buffer:vacation', target: 1200, targetDate: '2026-12-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.buffers[0].targetDate).toBe('2026-12-01');
+    });
+
+    it('allows targetDate that has already passed (runtime concern, not parser concern)', () => {
+      // fails if parseRawConfig rejects a past targetDate — past dates are valid at parse
+      // time; the SafeTransferCalculator checks at calc time whether the buffer is stale.
+      const result = parseRawConfig({
+        ...minimalValid,
+        buffers: [{ name: 'Car', account: 'assets:buffer:car', target: 1000, targetDate: '2020-01-01' }],
+      });
+      expect(result.isSuccess).toBe(true);
     });
   });
 });

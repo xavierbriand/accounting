@@ -21,11 +21,13 @@ function makeBucket(
   account: string,
   targetCents: number,
   capCents?: number,
+  targetDate: string = '2099-12-31',
 ): BufferBucket {
   return {
     name,
     account,
     target: makeEur(targetCents),
+    targetDate,
     cap: capCents !== undefined ? makeEur(capCents) : undefined,
   };
 }

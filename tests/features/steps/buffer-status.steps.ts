@@ -56,6 +56,7 @@ interface DataTableRow {
   name: string;
   account: string;
   target: string;
+  targetDate: string;
   cap: string;
 }
 
@@ -73,6 +74,7 @@ Given(
       name: r.name.trim(),
       account: r.account.trim(),
       target: Number(r.target),
+      targetDate: r.targetDate.trim() !== '' ? r.targetDate.trim() : '2099-12-31',
       cap: r.cap.trim() !== '' ? Number(r.cap) : undefined,
     }));
     const result = parseRawConfig(baseRaw(raw));
@@ -138,7 +140,7 @@ Then(
 Given(
   'a config with one buffer {string} mapped to {string} target {int}',
   function (state: World, name: string, account: string, target: number) {
-    const result = parseRawConfig(baseRaw([{ name, account, target }]));
+    const result = parseRawConfig(baseRaw([{ name, account, target, targetDate: '2099-12-31' }]));
     if (result.isFailure) throw new Error(result.error);
     state.buffers = result.value.buffers;
     state.db = new Database(':memory:');
@@ -178,8 +180,8 @@ Given(
   'a config where two buffers share the account {string}',
   function (state: World, account: string) {
     const raw = baseRaw([
-      { name: 'Car', account, target: 1000 },
-      { name: 'House', account, target: 5000 },
+      { name: 'Car', account, target: 1000, targetDate: '2099-12-31' },
+      { name: 'House', account, target: 5000, targetDate: '2099-12-31' },
     ]);
     state.parseResult = parseRawConfig(raw);
   },
@@ -204,7 +206,7 @@ Then(
 Given(
   'a config with default currency EUR and buffer {string} on {string}',
   function (state: World, name: string, account: string) {
-    const result = parseRawConfig(baseRaw([{ name, account, target: 1000 }]));
+    const result = parseRawConfig(baseRaw([{ name, account, target: 1000, targetDate: '2099-12-31' }]));
     if (result.isFailure) throw new Error(result.error);
     state.buffers = result.value.buffers;
     state.db = new Database(':memory:');

@@ -16,6 +16,7 @@ import { readBpceCsv } from '../infra/fs/read-bpce-csv.js';
 import { inquirerPrompter, type InteractivePrompter } from './utils/interactive.js';
 import { ScriptedPrompter, scriptHasForceMtimeRace, type Script } from './utils/scripted-prompter.js';
 import { runIngestCommand } from './commands/ingest-command.js';
+import { runCategorizeCommand } from './commands/categorize-command.js';
 import { runStatusCommand } from './commands/status-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
@@ -209,6 +210,73 @@ program
     );
 
     process.exit(exitCode);
+  });
+
+program
+  .command('categorize')
+  .description('Scan a CSV for unmatched descriptions and warm accounting.yaml autotag rules (no DB writes)')
+  .requiredOption('-f, --file <path>', 'Path to the bank CSV file')
+  .option('--non-interactive', 'Fail if any group would require a prompt (CI mode)', false)
+  .option('--json', 'Output JSON summary instead of human-readable text', false)
+  .option('--limit <n>', 'Stop after reviewing N groups (default: unbounded)', (v) => Number.parseInt(v, 10))
+  .option('--min-count <n>', 'Skip groups with fewer than N occurrences (default: 2)', (v) => Number.parseInt(v, 10), 2)
+  .option('--scripted-prompts <json>', '(test only) JSON array of canned prompt answers; gated by NODE_ENV=test')
+  .action(async (options: { file: string; nonInteractive: boolean; json: boolean; limit?: number; minCount: number; scriptedPrompts?: string }) => {
+    const result = resolveDbPathForCommand({}, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { config, configService } = result.value;
+
+    const configPath = configService.getResolvedConfigPath();
+
+    let scriptedPrompter: InteractivePrompter | null = null;
+    let forceMtimeRace = false;
+    if (options.scriptedPrompts !== undefined) {
+      if (process.env['NODE_ENV'] !== 'test') {
+        process.stderr.write('error: --scripted-prompts is only available with NODE_ENV=test\n');
+        process.exit(1);
+      }
+      let script: readonly Script[];
+      try {
+        script = JSON.parse(options.scriptedPrompts) as readonly Script[];
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`error: --scripted-prompts JSON parse failed: ${msg}\n`);
+        process.exit(1);
+      }
+      scriptedPrompter = new ScriptedPrompter(script);
+      forceMtimeRace = scriptHasForceMtimeRace(script);
+    }
+
+    const configMtimeNs = forceMtimeRace
+      ? BigInt(0)
+      : fs.statSync(configPath, { bigint: true }).mtimeNs;
+    const configWriter = new YamlConfigWriter(configPath, configMtimeNs);
+
+    const csvParser = new NodeCsvParser();
+
+    await runCategorizeCommand(
+      {
+        file: options.file,
+        nonInteractive: options.nonInteractive,
+        json: options.json,
+        limit: options.limit,
+        minCount: options.minCount,
+      },
+      {
+        config,
+        csvParser,
+        pickSourceAccount,
+        readFile: readBpceCsv,
+        prompt: scriptedPrompter ?? inquirerPrompter,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        exitCode: (code) => process.exit(code),
+        configWriter,
+      },
+    );
   });
 
 program.parse(process.argv);

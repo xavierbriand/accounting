@@ -117,12 +117,12 @@ describe('scanForUnmatched — empty input', () => {
 describe('scanForUnmatched — property test', () => {
   // Scenario (property test, fast-check): scanner output is a permutation/subset of the input
   it('output groups are a subset of input descriptions, pairwise distinct, all count >= minCount, no rule-matched', () => {
-    const descriptionArb = fc.stringOf(fc.alphaNumericChar(), { minLength: 1, maxLength: 20 });
+    const descriptionArb = fc.stringMatching(/^[a-zA-Z0-9 ]{1,20}$/);
     const descriptionsArb = fc.array(descriptionArb, { minLength: 0, maxLength: 30 });
     const minCountArb = fc.integer({ min: 1, max: 5 });
 
     fc.assert(
-      fc.property(descriptionsArb, minCountArb, (descriptions, minCount) => {
+      fc.property(descriptionsArb, minCountArb, (descriptions: string[], minCount: number) => {
         const inputSet = new Set(descriptions);
         const result = scanForUnmatched(descriptions, [], { minCount });
 
@@ -157,7 +157,7 @@ describe('scanForUnmatched — property test', () => {
     const patternArb = fc.constantFrom('uber', 'altima', 'carrefour', 'amazon');
 
     fc.assert(
-      fc.property(descriptionsArb, fc.array(patternArb, { maxLength: 3 }), (descriptions, patterns) => {
+      fc.property(descriptionsArb, fc.array(patternArb, { maxLength: 3 }), (descriptions: string[], patterns: string[]) => {
         const rules: AutoTagRule[] = patterns.map((p) => makeRule(p));
         const result = scanForUnmatched(descriptions, rules, { minCount: 1 });
 

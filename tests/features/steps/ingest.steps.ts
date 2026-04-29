@@ -235,3 +235,42 @@ Then('no file exists at {string}', function (state: IngestWorld, relativePath: s
   const fullPath = path.join(state.tmpDir!, relativePath);
   expect(fs.existsSync(fullPath)).toBe(false);
 });
+
+// Story C — define-new + remember + re-ingest round-trip (closes Story A retro carry-over)
+
+function writeSingleRowCsvForBdd(tmpDir: string, filename: string, description: string): string {
+  const csvPath = path.join(tmpDir, filename);
+  const header = 'Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation';
+  const safeDesc = description.replace(/;/g, ',');
+  const row = `15/03/2026;${safeDesc};${safeDesc};REF001;;Carte;Loisirs;Abonnements;-42,00;;15/03/2026;15/03/2026;0`;
+  fs.writeFileSync(csvPath, `${header}\n${row}\n`, 'latin1');
+  return csvPath;
+}
+
+Given('a single-row CSV at {string} with description {string}', function (state: IngestWorld, filename: string, description: string) {
+  state.csvPath = writeSingleRowCsvForBdd(state.tmpDir!, filename, description);
+});
+
+When('I run scripted ingest with category {string} and remembered pattern {string} on {string}', function (state: IngestWorld, category: string, pattern: string, filename: string) {
+  const csvPath = path.join(state.tmpDir!, filename);
+  const script = JSON.stringify([
+    { type: 'selectCategory', action: 'change', category },
+    { type: 'confirmRememberRule', action: 'remember', pattern },
+    { type: 'confirmBatch', confirm: true },
+  ]);
+  state.lastResult = spawnCli(
+    ['ingest', '--file', csvPath, '--scripted-prompts', script],
+    { cwd: state.tmpDir, env: { NODE_ENV: 'test' } },
+  );
+});
+
+Then('the accounting.yaml on disk contains {string}', function (state: IngestWorld, needle: string) {
+  const yamlContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
+  expect(yamlContent).toContain(needle);
+});
+
+When('I run a fresh ingest with {string} on a single-row CSV at {string} with description {string}', function (state: IngestWorld, flagsStr: string, filename: string, description: string) {
+  const csvPath = writeSingleRowCsvForBdd(state.tmpDir!, filename, description);
+  const flags = flagsStr.trim().split(/\s+/);
+  state.lastResult = spawnCli(['ingest', '--file', csvPath, ...flags], { cwd: state.tmpDir });
+});

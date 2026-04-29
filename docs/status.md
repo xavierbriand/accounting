@@ -10,6 +10,10 @@ Authoritative source for "where we are." [CLAUDE.md § 1](../CLAUDE.md) points h
 - **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-16 shipped.
 - **Next:** Epic 4 planning (Trust, Transparency & Lifecycle — soft edits, audit trail, dissolution; see [epics.md](epics.md)).
 
+### Non-product initiatives
+
+- **Harness engineering curriculum** — skill-development track on agentic engineering, sequenced cheapest-first across 6 modules. Tracked separately from product epics. See [docs/learning/harness-engineering.md](learning/harness-engineering.md).
+
 ## Refresh trigger
 
 Update this file in the same commit as the retrospective for any story that:

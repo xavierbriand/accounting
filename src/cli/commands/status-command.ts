@@ -19,6 +19,10 @@ export interface StatusCommandOptions {
   readonly json: boolean;
 }
 
+export function nextCalendarMonth(_asOf: string): { from: string; to: string } {
+  throw new Error('nextCalendarMonth not implemented');
+}
+
 export async function runStatusCommand(
   _opts: StatusCommandOptions,
   _deps: StatusCommandDeps,

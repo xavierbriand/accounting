@@ -136,6 +136,46 @@ describe('formatStatusHuman — buffer table', () => {
     // Target is 1200.00
     expect(output).toContain('1200.00');
   });
+
+  it('renders cap value when defined (R8 mock-diversity: non-default cap branch)', () => {
+    // fails if formatStatusHuman emits "-" for a defined cap (which would happen if the
+    // formatter's `cap !== undefined` branch is wrong) instead of the formatted Money.
+    const report = makeFullReport();
+    const withCap: StatusReport = {
+      ...report,
+      buffers: [{
+        name: 'House',
+        balance: makeMoneyEUR(700_00),
+        target: makeMoneyEUR(500_00),
+        cap: makeMoneyEUR(1000_00),
+        status: 'on-target',
+        targetDate: '2026-12-01',
+      }],
+    };
+    const output = formatStatusHuman(withCap);
+    expect(output).toContain('1000.00'); // cap rendered
+    expect(output).toContain('on-target'); // R8 mock-diversity: non-default status branch
+  });
+
+  it('renders above-cap status (R8 mock-diversity: third status branch)', () => {
+    // fails if statusColor's above-cap branch never executes (it's unreachable in the
+    // happy-path fixture, leaving production code uncovered).
+    const report = makeFullReport();
+    const aboveCapReport: StatusReport = {
+      ...report,
+      buffers: [{
+        name: 'Emergency',
+        balance: makeMoneyEUR(2000_00),
+        target: makeMoneyEUR(500_00),
+        cap: makeMoneyEUR(1000_00),
+        status: 'above-cap',
+        targetDate: '2026-12-01',
+      }],
+    };
+    const output = formatStatusHuman(aboveCapReport);
+    expect(output).toContain('above-cap');
+    expect(output).toContain('Emergency');
+  });
 });
 
 // ─── Transfer prose ───────────────────────────────────────────────────────────

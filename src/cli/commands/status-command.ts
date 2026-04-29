@@ -1,4 +1,5 @@
 import type { BufferStateService } from '@core/buffers/buffer-state-service.js';
+import type { BufferState } from '@core/buffers/buffer-state.js';
 import type { RecurringForecastService } from '@core/recurring/recurring-forecast-service.js';
 import type { SafeTransferCalculator } from '@core/transfer/safe-transfer-calculator.js';
 import type { StatusReport } from './status-report.js';
@@ -56,7 +57,7 @@ export function assembleStatusReport(
   asOf: string,
   from: string,
   to: string,
-  buffers: readonly import('@core/buffers/buffer-state.js').BufferState[],
+  buffers: readonly BufferState[],
   deps: Pick<StatusCommandDeps, 'forecastService' | 'transferCalculator'>,
 ): StatusReport {
   const forecastResult = deps.forecastService.forecastBetween(from, to);
@@ -88,13 +89,10 @@ export async function runStatusCommand(
 ): Promise<number> {
   const { stdout, stderr, clock } = deps;
 
-  // Validate --as-of if provided
   if (opts.asOf !== undefined && !ISO_DATE.test(opts.asOf)) {
     stderr.write(`error: --as-of must be ISO 8601 date (YYYY-MM-DD), got "${opts.asOf}"\n`);
     return 2;
   }
-
-  // Validate --from / --to if provided
   if (opts.from !== undefined && !ISO_DATE.test(opts.from)) {
     stderr.write(`error: --from must be ISO 8601 date (YYYY-MM-DD), got "${opts.from}"\n`);
     return 2;
@@ -106,10 +104,8 @@ export async function runStatusCommand(
 
   const asOf = opts.asOf ?? clock();
 
-  // Compute or accept window
   let from: string;
   let to: string;
-
   if (opts.from !== undefined && opts.to !== undefined) {
     if (opts.from > opts.to) {
       stderr.write(`error: --from must be <= --to, got from="${opts.from}", to="${opts.to}"\n`);
@@ -123,17 +119,16 @@ export async function runStatusCommand(
     to = defaultWindow.to;
   }
 
-  // Get buffer state — if this fails, exit 1 (unrecoverable)
+  // Buffer-state failure is unrecoverable (DB-level, currency mismatch). Exit 1 — distinct
+  // from the calc-failure path below, which is informational and exits 0 (buffers rendered).
   const bufferStateResult = deps.buffersService.getStateAsOf(asOf);
   if (bufferStateResult.isFailure) {
     stderr.write(`error: ${bufferStateResult.error}\n`);
     return 1;
   }
 
-  // Assemble the full report (forecast + transfer may fail; handled inline)
   const report = assembleStatusReport(asOf, from, to, bufferStateResult.value, deps);
 
-  // Write output
   if (opts.json) {
     stdout.write(formatStatusJson(report));
   } else {

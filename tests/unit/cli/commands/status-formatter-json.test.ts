@@ -120,6 +120,25 @@ describe('Property #1: JSON output shape stability', () => {
     expect(parsed.buffers[0].balance).toMatch(/^EUR/);
   });
 
+  it('cap field serializes as Money.toString() when defined (R8 mock-diversity, non-default cap branch)', () => {
+    // fails if formatStatusJson omits the cap key when defined, or returns null when
+    // a Money was supplied. The branch `b.cap !== undefined ? b.cap.toString() : null`
+    // is otherwise only exercised on the null side.
+    const report = makeSuccessfulReport();
+    const withCap: StatusReport = {
+      ...report,
+      buffers: [{
+        ...report.buffers[0],
+        cap: makeMoneyEUR(1000_00),
+        status: 'on-target',
+      }],
+    };
+    const json = formatStatusJson(withCap);
+    const parsed = JSON.parse(json) as { buffers: Array<{ cap: string | null; status: string }> };
+    expect(parsed.buffers[0].cap).toBe('EUR 1000.00');
+    expect(parsed.buffers[0].status).toBe('on-target');
+  });
+
   it('transfer.perPartner is a plain object with non-empty values (not {} from Map)', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
@@ -231,23 +250,17 @@ describe('Property #2: JSON ↔ human total agreement', () => {
 
         const humanStr = formatStatusHuman(report);
 
-        // Extract numeric cents from JSON: "EUR 500.00" → strip non-digits and decimal to get cents
-        const jsonMoneyStr = parsed.transfer.totalRequired; // e.g. "EUR 500.00"
-        const [, jsonDecimal] = jsonMoneyStr.split(' ') as [string, string];
-        const jsonCents = Math.round(parseFloat(jsonDecimal) * 100);
+        // Per plan: parse cents via integer-string strip, NOT parseFloat × 100 (which has
+        // floating-point round-trip risk for values like 1234.575 → 123457.49999... → 123457).
+        const jsonMoneyStr = parsed.transfer.totalRequired;
+        const jsonCents = parseInt(jsonMoneyStr.replace(/\D/g, ''), 10);
 
-        // Extract numeric cents from human output: find the "Total transfer for" line
         const totalLine = humanStr.split('\n').find(line => line.includes('Total transfer for'));
-        if (!totalLine) {
-          // Human formatter not yet implemented fully — skip property comparison in Slice 4
-          return;
-        }
+        if (!totalLine) return;
 
-        // Find a money string in the line "EUR X.XX"
-        const moneyMatch = /EUR ([\d.]+)/.exec(totalLine);
+        const moneyMatch = /EUR\s+\d[\d.]*/.exec(totalLine);
         if (!moneyMatch) return;
-
-        const humanCents = Math.round(parseFloat(moneyMatch[1]) * 100);
+        const humanCents = parseInt(moneyMatch[0].replace(/\D/g, ''), 10);
 
         expect(jsonCents).toBe(humanCents);
         expect(jsonCents).toBe(totalCents);

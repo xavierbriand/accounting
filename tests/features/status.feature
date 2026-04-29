@@ -27,7 +27,7 @@ Feature: accounting status CLI command (Story 3.5)
     When I run the status command with --json --as-of 2026-04-29
     And I run the status command with --json --as-of 2026-04-29 again
     Then both invocations produce byte-identical stdout
-    # fails if the CLI reads Date.now() despite --as-of being set.
+    # Byte-identity necessarily holds if `clock` is bypassed; the deeper guard ("CLI does not call clock when --as-of is set") is Property #3 (recording-fake) in tests/unit/cli/commands/status-command.test.ts. This scenario alone wouldn't catch a clock that returns the same string every time.
 
   Scenario: --from / --to override the default window
     Given a status config with splits Alex 0.6 Sam 0.4, buffer Vacation target 1200 balance 600 targetDate "2026-12-01", recurring Netflix monthly 12.99 EUR validFrom "2026-01-15"

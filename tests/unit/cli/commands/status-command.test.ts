@@ -439,6 +439,24 @@ describe('Property #5: nextCalendarMonth purity', () => {
       expect(result1).toEqual(result2);
     }
   });
+
+  it('source files in src/cli/commands/status-*.ts contain no parameterless new Date() or Date.now or performance.now', async () => {
+    // fails if a future edit silently introduces a system-clock read into the
+    // CLI command layer (the only legitimate touchpoint is node-clock.ts, which
+    // is exempt — it's the single boundary surface).
+    const fs = await import('node:fs');
+    const pathMod = await import('node:path');
+    const url = await import('node:url');
+    const here = pathMod.dirname(url.fileURLToPath(import.meta.url));
+    const dir = pathMod.resolve(here, '../../../../src/cli/commands');
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('status-') && f.endsWith('.ts'));
+    expect(files.length).toBeGreaterThan(0);
+    const forbidden = /\bDate\.now\b|\bperformance\.now\b|\bnew\s+Date\s*\(\s*\)/;
+    for (const file of files) {
+      const content = fs.readFileSync(pathMod.join(dir, file), 'utf8');
+      expect(content, `forbidden clock pattern in src/cli/commands/${file}`).not.toMatch(forbidden);
+    }
+  });
 });
 
 // ─── Property #6: exit-0 for buffer-state success regardless of calc failure ──
@@ -456,7 +474,10 @@ describe('Property #6: exit code stays 0 when buffers succeed even if calc fails
     expect(exitCode).toBe(0);
   });
 
-  it('from>to calc input-validation fail + empty buffers → exit 0', async () => {
+  it('from>to is intercepted at the CLI level and exits 2 (not exit 0; calc never reached)', async () => {
+    // This case clarifies the boundary between CLI-level input validation (exit 2)
+    // and calc-level Result.fail (exit 0). The plan's Property #6 "all four cases
+    // exit 0" assumed all four reached the calculator; from>to never does.
     const splitsService = new SplitRulesService([{
       validFrom: '2024-01-01',
       rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Sam', ratio: 0.4 }],
@@ -470,8 +491,61 @@ describe('Property #6: exit code stays 0 when buffers succeed even if calc fails
       { buffersService, forecastService, transferCalculator, clock: () => '2026-04-29', stdout: makeCaptureStream().stream, stderr: makeCaptureStream().stream },
     );
 
-    // Note: from>to is validated at the CLI level (exit 2), not via calc failure (exit 0)
     expect(exitCode).toBe(2);
+  });
+
+  it('stale targetDate calc-fail + empty buffers → exit 0 (no buckets but buffer-state succeeded)', async () => {
+    // Plan-spec gap closer: when buffers config has zero buckets AND the calculator
+    // returns a stale-targetDate-style failure (here engineered via a calc that
+    // rejects the empty roster), exit code stays 0 because BufferStateService
+    // succeeded. Exit 1 is reserved for getStateAsOf failure only.
+    const splitsService = new SplitRulesService([{
+      validFrom: '2024-01-01',
+      rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Sam', ratio: 0.4 }],
+    }]);
+    const buffersService = new BufferStateService([], 'EUR', makeZeroLedger());
+    const forecastService = new RecurringForecastService([]);
+    // Inject a transferCalculator stub that returns Result.fail to simulate stale-targetDate
+    // even with zero buckets in config. The CLI must still exit 0 because buffers rendered.
+    const failingCalc = {
+      calculateForWindow(): Result<never> {
+        return Result.fail('buffer "Synthetic" is below target and its targetDate (2026-04-01) has passed — set a new targetDate');
+      },
+    } as unknown as SafeTransferCalculator;
+
+    const exitCode = await runStatusCommand(
+      { asOf: '2026-04-29', json: false },
+      { buffersService, forecastService, transferCalculator: failingCalc, clock: () => '2026-04-29', stdout: makeCaptureStream().stream, stderr: makeCaptureStream().stream },
+    );
+
+    expect(exitCode).toBe(0);
+    // splitsService is referenced to satisfy the closure tests' real-services pattern
+    expect(splitsService).toBeDefined();
+  });
+
+  it('calc returns Result.fail with an ISO-validation-style message → exit 0 (via buildSuggestedAction fallback)', async () => {
+    // Exercises the buildSuggestedAction fallback branch (no `buffer "name"` substring
+    // in the calc error). Plan-spec gap closer for the "ISO calc input-validation"
+    // case in Property #6.
+    const splitsService = new SplitRulesService([{
+      validFrom: '2024-01-01',
+      rules: [{ partner: 'Alex', ratio: 0.6 }, { partner: 'Sam', ratio: 0.4 }],
+    }]);
+    const buffersService = new BufferStateService([], 'EUR', makeZeroLedger());
+    const forecastService = new RecurringForecastService([]);
+    const isoFailingCalc = {
+      calculateForWindow(): Result<never> {
+        return Result.fail('asOf, from, and to must be ISO 8601 dates (YYYY-MM-DD): got asOf="bad", from="2026-05-01", to="2026-05-31"');
+      },
+    } as unknown as SafeTransferCalculator;
+
+    const exitCode = await runStatusCommand(
+      { asOf: '2026-04-29', json: false },
+      { buffersService, forecastService, transferCalculator: isoFailingCalc, clock: () => '2026-04-29', stdout: makeCaptureStream().stream, stderr: makeCaptureStream().stream },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(splitsService).toBeDefined();
   });
 
   it('buffer-state service failure → exit 1', async () => {

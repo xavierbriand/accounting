@@ -5,12 +5,7 @@ import type { AutoTagRule } from './auto-tag-rules.js';
 import { bankAccount, cardAccount, expenseAccount, incomeAccount } from './account-names.js';
 import { Transaction } from '@core/ledger/transaction.js';
 import { Result } from '@core/shared/result.js';
-
-// Matches French bank descriptions like:
-//   "PAIEMENT CARTE X1234 AVRIL"
-//   "PAIEMENT CARTE 1234"
-// Capture group 1 is the 4-digit suffix.
-const CARD_SETTLEMENT_RE = /^PAIEMENT\s+CARTE\s+X?(\d{4})(?:\s.*)?$/i;
+import { CARD_SETTLEMENT_RE } from './auto-classify.js';
 
 // Replaced at the CLI assembly point (Story 2.4). Core has no access to node:crypto.
 const defaultUuidGen: UuidGen = (): string => {

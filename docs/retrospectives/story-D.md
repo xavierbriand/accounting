@@ -1,6 +1,6 @@
 # Story D retrospective
 
-**PR:** [accounting#102](https://github.com/xavierbriand/accounting/pull/102)  **Closed:** 2026-04-29 (pending merge)
+**PR:** [accounting#102](https://github.com/xavierbriand/accounting/pull/102) (merged 2026-04-30) · **Addendum PR:** [accounting#114](https://github.com/xavierbriand/accounting/pull/114) (npm-script gap)
 
 ## Keep
 
@@ -62,3 +62,25 @@
 | New refactor-brief sub-rule: explicit Phase-4 touch budget | next process-touching PR | open |
 | New R20: empty `feat:` slices retitle to `chore(workflow): empty slice` | next process-touching PR | open |
 | Forwarded carry-overs from Stories A/B/C (3 process rules + R16 codification) | next process-touching PR | open |
+| Addendum: missing `npm run categorize` script alias (post-merge gap) | [PR #114](https://github.com/xavierbriand/accounting/pull/114) | open |
+| New CLI-subcommand sub-rule: when adding a new top-level subcommand, audit `package.json` scripts and add a sibling alias if `migrate`/`ingest` have one | next process-touching PR | open |
+
+## Addendum (2026-04-30, post-merge)
+
+Within an hour of merging Story D, the user ran `npm run categorize -- --file <csv>` and got `Missing script: "categorize"`. The subcommand was wired into `commander` (`src/cli/program.ts`), the test suite covered it via `spawnCli` invocations of the dist build, and the documentation (`accounting.example.yaml`, plan, retrospective) all referenced it — but the **npm-script alias was never added to `package.json`**. `migrate` and `ingest` both have one (`tsx src/cli/program.ts <subcommand>`); `categorize` did not.
+
+### What both review agents missed
+
+- **plan-reviewer** read the production-code surface section, audited dependencies (R3), and compared exit codes against ingest's mapping. It did not look at `package.json` scripts because the plan's reuse map didn't surface it as a touched file.
+- **code-reviewer** walked the diff against `origin/main`, checked layer boundaries, ran the Gherkin-to-test mapping (R5), checked R3 (`package.json` diff was 0 lines and confirmed empty). The 0-line `package.json` diff was an *expected* outcome from R3's perspective (no new deps) but was *also* a missed signal: a user-facing CLI surface change should typically extend `scripts`.
+
+The gap is structural: both agents were checking that nothing was added that *shouldn't* be — neither was checking that everything was added that *should* be. The npm-script alias is a cross-file invariant (`scripts` parallels the `commander` registrations), and neither agent's R-rule queue covered it.
+
+### Try (added, codifying as new sub-rule)
+
+- **CLI-subcommand sub-rule:** when a story adds a new top-level CLI subcommand, the planner must explicitly state in the production-code surface section whether a sibling `package.json` script alias is required, and the code-reviewer must verify the alias exists if `migrate`/`ingest` (or their analogues) have one. Forwarded to the next process-touching PR.
+- **Plan-reviewer prompt extension:** add `package.json` scripts to the routine read-list when the plan introduces a new CLI subcommand. Right now the plan-reviewer reads source files named in the plan; it does not proactively check sibling files for parallel patterns.
+
+### Why a separate small PR ([#114](https://github.com/xavierbriand/accounting/pull/114))
+
+Story D's branch was squash-merged before the gap was discovered. Reopening that branch would have meant rebasing 18 already-merged commits against a `main` that already contained their content (each one would conflict as "both added"). Cleanest path: reset to `origin/main`, apply the one-line `package.json` change as a fresh commit, open a small follow-up PR. Documented in this addendum so the trail is visible from the retrospective.

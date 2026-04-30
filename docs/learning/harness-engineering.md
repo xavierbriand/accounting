@@ -3,6 +3,8 @@
 > **Non-product initiative.** Skill development on agentic engineering and Claude Code harness craft, treated separately from the product roadmap.
 >
 > Tracking issue: see GitHub issue with label `scope: harness-engineering` and title "Harness engineering curriculum (umbrella)". Sub-issues: one per module.
+>
+> **See also:** [spdd-comparison.md](spdd-comparison.md) — comparison of this loop against Structured Prompt-Driven Development (Fowler/Zhang), with curriculum-delta proposals folded into module sub-issues.
 
 ## How to use this doc
 

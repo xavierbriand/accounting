@@ -32,6 +32,10 @@ FR20: Epic 4 - JSON Output (Global Requirement, primarily exposed here)
 FR21: Epic 4 - Graceful Dissolution
 FR22: Epic 3 - Deterministic Math
 FR23: Epic 4 - Audit Trail
+FR24: Epic 5 - Year-in-Review Analyzer
+FR25: Epic 5 - Plan-File Iteration Loop
+FR26: Epic 5 - Recurring Drift Detection
+FR27: Epic 5 - Config Diff & Apply
 
 ## Epic List
 
@@ -54,6 +58,11 @@ FR23: Epic 4 - Audit Trail
 **Goal:** Solidify trust with human-readable explanations ("Conversational CFO"), allow for error correction (Soft Edits), and provide data portability/lifecycle management.
 **User Value:** "I understand *why* the numbers are what they are, I can fix my mistakes, and I own my data."
 **FRs covered:** FR14, FR19, FR20, FR21, FR23
+
+### Epic 5: Year-in-Review & Annual Planner
+**Goal:** Close the bootstrap gap in FR2 — turn "guess your buffer targets in YAML" into "derive them from a year of evidence." Once a year (typically December), Alex runs the **annual prediction-tuning ritual**: review last year's spend + recurring patterns, iterate on a plan file with life-event and inflation knobs, classify last year's depletion events as Model Failure vs User Spending, and apply the agreed plan to `accounting.yaml` via a snapshotted, audit-trailed diff. Primary tuning lever for the **Predictive Pre-Funding** innovation pattern (PRD § Detected Innovation Areas).
+**User Value:** "In December I sit with a year of data, run a few rounds of plan/revise with the tool, and end up with a config that's been tuned by evidence — not guessed."
+**FRs covered:** FR24, FR25, FR26, FR27
 
 ## Epic 1: Foundation & Core Ledger
 
@@ -298,3 +307,110 @@ So that I can run one command on Sunday morning and answer "what's the picture?"
 **FRs covered:** FR14, FR19, FR20, FR21, FR23
 
 *Detailed stories to be defined during implementation.*
+
+## Epic 5: Year-in-Review & Annual Planner
+
+**Goal:** Close the bootstrap gap in FR2 (define buffers via YAML): turn "guess your buffer targets" into "derive them from a year of evidence." Once a year (typically December), Alex runs the **annual prediction-tuning ritual** — review last year's spend and recurring patterns, iterate on a plan file with life-event and inflation knobs, classify last year's depletion events as Model Failure vs User Spending, then apply the agreed plan to `accounting.yaml` via a snapshot-and-confirm diff. Primary tuning lever for the **Predictive Pre-Funding** innovation pattern (PRD § Detected Innovation Areas) and direct service of the **Buffer Utilization > 90%** and **Fixed Cost Prediction < 5% variance** success criteria.
+**FRs covered:** FR24, FR25, FR26, FR27
+
+**Scope guard — annual ritual for established users.** Requires ≥12 months of ledger data; not part of the < 7-day Time-to-Trust onboarding metric (PRD § Measurable Outcomes).
+
+**Currency scope.** Single-currency MVP throughout, mirroring Epic 3 (3.2, 3.4, 3.5). Forex deferred.
+
+**Sequencing.** Story 5.4 (`--apply`) writes to `accounting.yaml` and emits an audit-trail entry — therefore depends on **FR23 (Audit Trail)** shipping in Epic 4. Stories 5.1, 5.2a, 5.2b, 5.3 are read-only on the live config and can ship before Epic 4 completes.
+
+**CLI surface.** A new subcommand under the existing `config` verb (preserves PRD § CLI Tool Specific Requirements verb count): `accounting config plan --review` · `--revise <plan-file>` · `--apply <plan-file>`. All output supports `--json` and `--non-interactive` per PRD § Dual Output and § Mode Separation.
+
+### Story 5.1: Year-in-Review Analyzer (read-only)
+
+As **Alex (CFO Partner)**,
+I want to run `accounting config plan --review` against the last 12 months of ledger data,
+So that I get a Conversational-CFO report proposing candidate buckets, target sizes, and fill cadence — sourced from history, not invention — plus a scratch plan file ready for revision.
+
+**Acceptance Criteria:**
+
+**Given** a single-currency ledger with ≥12 months of data and a current `accounting.yaml`,
+**When** I run `accounting config plan --review` (no flags),
+**Then** the analyzer reads the trailing-12-months window (overridable via `--from --to` or `--window 18m`), excludes occurrences already covered by an active `recurring:` rule via the Story 2.2 idempotency-hash matcher, and proposes for each candidate bucket: `name`, `proposedTarget` (90th-percentile monthly spend), `worstCaseTarget` (max-month × 1.2, shown for informed override), `proposedCap`, `proposedFillMonths`, `firstExpectedOccurrence` (basis for `targetDate`).
+**And** every depletion event in the window is classified as **Model Failure** ("I undersized this — propose increase") or **User Spending** ("one-off behaviour — flag, don't auto-resize"), with wording in Conversational-CFO Mea-Culpa voice (PRD Innovation #1, Journey 3) — directly serving the "System correctly identifies Model Failure vs User Spending in 100% of buffer depletion events" technical-success criterion.
+**And** the report contains five labeled sections: **Window summary** · **Existing buffers — size-change recs** (with Model Failure vs User Spending tags) · **New bucket candidates** · **One-offs flagged for review** (no default; decision deferred to revise round) · **Annual split contribution** (per-bucket + grand total per partner, using `getSplitsAsOf(today)`).
+**And** the analyzer side-emits `plan-<year>.yaml` containing every proposal under `proposed:` plus empty `userOverrides:` / `lifeEvents:` / `inflation:` / `oneOffDecisions:` / `recurringProposals:` blocks ready for revision.
+**And** `--json` produces a single-object document `{ window, existingBuffers, newCandidates, oneOffs, splitContribution, planFilePath }` matching the report shape; `Money` values via `Money.toString()`.
+**And** `--non-interactive` suppresses TTY-only prompts/spinners and writes deterministic output to stdout.
+**And** if any ledger entry has `currency != defaultCurrency`, the read returns `Result.fail` citing the offending account and currency (single-currency MVP).
+**And** the analyzer is read-only on the ledger and on the live config; only the scratch plan file is written.
+**And** `runReviewCommand` is pure under clock injection — same inputs yield byte-identical output regardless of `Date.now()`.
+**And** invalid window inputs exit POSIX 2 with a path-cited message; runtime errors exit 1.
+**And** the grouping heuristic that maps ledger categories to candidate buckets is **defined as a research spike at Story 5.1's Phase 1** — initial draft proposed in the per-story plan file, then converged with the user before implementation.
+
+### Story 5.2a: Plan-File Schema & Parser
+
+As **Alex**,
+I want a strictly-typed schema for the scratch plan file,
+So that my edits (overrides, life events, inflation, one-off decisions, recurring acceptances) are parsed with clear error messages, not silent drops.
+
+**Acceptance Criteria:**
+
+**Given** a `plan-<year>.yaml` emitted by Story 5.1 and edited by hand,
+**When** the parser loads it,
+**Then** it validates a Zod schema covering: `proposed:` (read-only echo of the analyzer's output, ignored on revise), `userOverrides:` (per-bucket: `target` / `cap` / `rename` / `drop` / `add`), `lifeEvents:` (per-bucket: `multiplier` ∈ [0.1, 10], optional `fromMonth` ∈ [1, 12], free-text `note`), `inflation:` (global percentage ∈ [0%, 50%] **or** per-bucket map of the same), `oneOffDecisions:` (per flagged spike: enum `dedicate-buffer | exclude | recurring`), `recurringProposals:` (per item: `accepted: bool`).
+**And** unrecognized keys at any depth fail at parse with a path-cited Zod error; no PII echoed.
+**And** type/range violations (negative target, multiplier out of range, malformed date, unknown bucket reference) fail at parse with the same path-cited convention used by `accounting.yaml` loading.
+**And** an empty plan file (only `proposed:`, all override blocks empty) parses successfully and produces a no-op plan.
+**And** the parser is pure: no side effects, no DB read, no clock read.
+
+### Story 5.2b: Revise Loop & Validation
+
+As **Alex**,
+I want to run `accounting config plan --revise plan-<year>.yaml` to recompute and validate my plan,
+So that I converge on a config I trust over a few rounds without ever touching the ledger or live config.
+
+**Acceptance Criteria:**
+
+**Given** a parsed plan file (from 5.2a) and the same ledger window as the original `--review`,
+**When** I run `accounting config plan --revise plan-<year>.yaml`,
+**Then** the tool re-runs the analyzer with overrides + life events + inflation applied, recomputes every proposal, and emits a fresh report with `previous: → current:` deltas per bucket plus an updated scratch file.
+**And** life-event multipliers and inflation compound deterministically: per-bucket effective target = `proposedTarget × inflation × lifeEvent.multiplier`, applied in that order; user override (if present) replaces the result.
+**And** validation flags overrides that violate stated floor/ceiling rules in Conversational-CFO voice — e.g. *"Heads-up: your override on Car (€800) is below last year's worst single month (€950). I'll go with your number, but here's what I saw."* Cases: target below worst-case month, cap below target, `targetDate` later than `firstExpectedOccurrence`, `lifeEvents.fromMonth` out of range, life-event window with no spend in the affected category.
+**And** validation produces warnings, never errors — the loop never gets stuck.
+**And** `--revise` is idempotent: running on an unchanged plan file produces a report with all-zero deltas.
+**And** `--json` emits `{ window, deltas, warnings, currentReport, planFilePath }`; `--non-interactive` parity preserved.
+**And** read-only on the ledger and live config; pure under clock injection.
+
+### Story 5.3: Recurring Challenger
+
+As **Alex**,
+I want the planner to challenge my `recurring:` rules against the ledger,
+So that drift (price changes, dropped subscriptions, missed amendments) and unrecorded patterns surface alongside the buffer plan — directly serving the **Fixed Cost Prediction < 5% variance** success criterion.
+
+**Acceptance Criteria:**
+
+**Given** a config with `recurring:` rules and a ledger covering the analysis window,
+**When** I run `accounting config plan --review` (or `--revise`),
+**Then** the report includes a **Recurring drift** section with three sub-blocks: **Amend** (rule charged a different amount than its latest amount/amendment for ≥2 consecutive occurrences → propose new amendment with `validFrom`); **Remove** (rule had zero matching ledger entries for ≥3 consecutive cadence steps → propose `validTo` set to last-seen month); **Add** (ledger pattern matches monthly/quarterly/annual cadence within `±1 day` and `±5%` amount for ≥6 occurrences and is *not* covered by an existing rule → propose a new rule).
+**And** every proposal carries a confidence score ∈ [0, 1] and inline supporting evidence (occurrence dates + amounts).
+**And** all proposals land in the plan file's `recurringProposals:` block, where the user accepts/rejects per item via the next `--revise` round.
+**And** the "covered by an existing rule" matcher reuses the Story 2.2 idempotency-hash logic — single source of truth.
+**And** `--json` includes a `recurringDrift: { amend, remove, add }` key; `--non-interactive` parity preserved.
+**And** read-only; pure under clock injection.
+
+### Story 5.4: Apply Diff to Config
+
+As **Alex**,
+I want to apply the agreed plan to `accounting.yaml` via a previewed, snapshotted, audit-trailed diff,
+So that my live config reflects the plan with surgical precision (no comment loss, no untouched-section drift) and I can answer "why did the config change?" months later via the audit trail.
+
+**Dependencies:** **FR23 (Audit Trail)** from Epic 4 must ship first — the audit-trail port is the consumer of this story's mutation events.
+
+**Acceptance Criteria:**
+
+**Given** a converged `plan-<year>.yaml` with `accepted: true` flags on the `userOverrides` / `oneOffDecisions` / `recurringProposals` items the user wants applied,
+**When** I run `accounting config plan --apply plan-<year>.yaml`,
+**Then** the tool prints a unified diff scoped to `buffers:` and `recurring:` sections only — every other section byte-identical — in Conversational-CFO voice: *"I'll update your config as follows. The previous version will be saved as `accounting.yaml.bak.<ISO-timestamp>`."*
+**And** confirmation: `y` apply / `n` abort / `--yes` skip prompt for non-interactive use; `--non-interactive` without `--yes` exits POSIX 2 with a path-cited message.
+**And** on confirm: snapshot `accounting.yaml` → `accounting.yaml.bak.<ISO-timestamp>` (immutable, never overwritten — mirrors the append-only product principle), then patch via a comment-preserving round-trip YAML editor so untouched-section bytes are byte-identical and comments survive.
+**And** every new buffer's `targetDate` is set to its `firstExpectedOccurrence` derived from the most recent ledger observation of that category; for genuinely-new buckets driven by a life event with no ledger trace, default to plan-year `12-31` and flag in the report as "user-supplied baseline."
+**And** post-write, the tool re-loads `accounting.yaml` end-to-end (Zod + validity windows + buffer constraints); on validation failure, restore from snapshot and exit non-zero — live config never left invalid.
+**And** an audit-trail entry is emitted via the FR23 port for every successful `--apply` run: `{ when, planFilePath, snapshotPath, diffHash, acceptedItemCount }` — bucket names follow the same redaction policy as the rest of the system (PRD § Compliance & Data Privacy).
+**And** `--apply` is the only command in Epic 5 that mutates the live config; never touches the ledger.
+**And** `--json` emits `{ snapshotPath, diff, auditEntryId, applied: true }` (or `applied: false, reason` on abort); errors render in Conversational-CFO voice (PRD § Error Recovery).

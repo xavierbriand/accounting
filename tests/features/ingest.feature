@@ -79,6 +79,18 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # the entire batch (sqlite-transaction-repo.ts:64-91); a rolled-back batch leaves the
     # DB empty so the subsequent re-ingest sees all 4 rows as fresh instead of 0.
 
+  Scenario: Re-ingest of a CSV with in-batch hash duplicates is a no-op (story-maint-17)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a BPCE CSV copied to that temp dir as "bpce-in-batch-dups.csv"
+    And the CSV has been committed interactively
+    When I run ingest with "--non-interactive --json"
+    Then the process exits with code 0
+    And stderr contains "Found 0 new transactions"
+    And stderr contains "4 duplicate(s) skipped"
+    # fails if: the sequence tie-breaker is non-deterministic — re-running with the
+    # same CSV would assign different seq numbers, causing the 2nd-and-later occurrences
+    # to be treated as fresh and re-inserted (violates AC3 / FR7).
+
   Scenario: Define-new + remember + re-ingest auto-tags (Story C round-trip — closes Story A retro carry-over)
     Given a fresh migrated DB and accounting.yaml at a temp dir
     And a single-row CSV at "bpce-valid_first.csv" with description "ALTIMA COURTAGE"

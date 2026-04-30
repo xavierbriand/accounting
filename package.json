@@ -10,7 +10,8 @@
     "build": "tsc && tsc-alias && tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json && cp -R src/infra/db/migrations dist/infra/db/",
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "migrate": "tsx src/cli/program.ts migrate",
-    "ingest": "tsx src/cli/program.ts ingest"
+    "ingest": "tsx src/cli/program.ts ingest",
+    "categorize": "tsx src/cli/program.ts categorize"
   },
   "repository": {
     "type": "git",

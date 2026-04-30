@@ -16,7 +16,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import fc from 'fast-check';
 import { IdempotencyService } from '../../../../src/core/ingest/idempotency-service.js';
-import { canonicalize } from '../../../../src/core/ingest/canonicalize.js';
+import { canonicalize, US } from '../../../../src/core/ingest/canonicalize.js';
 import type { HashFn } from '../../../../src/core/ports/hash-fn.js';
 import type { HashRepository } from '../../../../src/core/ports/hash-repository.js';
 import type { IngestItem } from '../../../../src/core/ingest/types.js';
@@ -234,9 +234,12 @@ describe('IdempotencyService.filterNew', () => {
     });
 
     it('[A, A, A] against DB that knows seq=1 and seq=2 of A: first two duplicates, third fresh as seq=3', () => {
-      // fails if: seq=3 is not assigned or collides with prior hashes.
+      // fails if: filterNew (idempotency-service.ts) does not assign seq=3 to the third
+      // occurrence, or assigns a hash that collides with the seq=1 / seq=2 hashes already
+      // in the DB — would either re-classify the third row as duplicate (data loss) or
+      // emit two fresh entries with the same hash, crashing saveBatch on the UNIQUE
+      // index (sqlite-transaction-repo.ts:64-91).
       const A = makeItem(1);
-      const US = '';
       const seq1Hash = canonicalize(A).value;
       const seq2Hash = `${canonicalize(A).value}${US}#2`;
       const knownHashes = new Set([seq1Hash, seq2Hash]);
@@ -309,7 +312,7 @@ describe('IdempotencyService.filterNew', () => {
           (items) => {
             const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
             const result = service.filterNew(items);
-            if (result.isFailure) return true;
+            if (!result.isSuccess) return false;
             const { fresh, duplicates } = result.value;
 
             // (b) partition is complete

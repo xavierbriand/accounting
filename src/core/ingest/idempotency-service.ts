@@ -2,7 +2,7 @@ import type { IngestItem, FreshIngestItem, DuplicateIngestItem, IdempotencyOutco
 import type { HashFn } from '@core/ports/hash-fn.js';
 import type { HashRepository } from '@core/ports/hash-repository.js';
 import { Result } from '@core/shared/result.js';
-import { canonicalize } from './canonicalize.js';
+import { canonicalize, US } from './canonicalize.js';
 
 export class IdempotencyService {
   constructor(
@@ -25,7 +25,6 @@ export class IdempotencyService {
     // Limitation: if a future ingest reorders or splits the same logical rows across
     // batches, sequence assignment may differ — the engine will then treat 2nd-and-later
     // occurrences as fresh. Not a regression (the old code could not commit them at all).
-    const US = '';
     const hashes: string[] = [];
     const seqByCanon = new Map<string, number>();
     for (const item of items) {

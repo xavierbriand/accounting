@@ -67,19 +67,7 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # fails if: --db-path-override is silently honoured (no warn), or the rename
     # didn't propagate (CLI parses old --db-path), or YAML dbPath wins over the override.
 
-  Scenario: Ingest commits a CSV that contains in-batch hash duplicates (story-maint-17)
-    Given a fresh migrated DB and accounting.yaml at a temp dir
-    And a BPCE CSV copied to that temp dir as "bpce-in-batch-dups.csv"
-    And the CSV has been committed interactively
-    When I run ingest with "--non-interactive --json"
-    Then the process exits with code 0
-    And stderr contains "Found 0 new transactions"
-    # fails if: filterNew emits two fresh items with the same idempotencyHash, causing
-    # saveBatch to trip the UNIQUE index on transactions.idempotency_hash and roll back
-    # the entire batch (sqlite-transaction-repo.ts:64-91); a rolled-back batch leaves the
-    # DB empty so the subsequent re-ingest sees all 4 rows as fresh instead of 0.
-
-  Scenario: Re-ingest of a CSV with in-batch hash duplicates is a no-op (story-maint-17)
+  Scenario: Ingest commits a CSV with in-batch hash duplicates and re-ingest is a no-op (story-maint-17)
     Given a fresh migrated DB and accounting.yaml at a temp dir
     And a BPCE CSV copied to that temp dir as "bpce-in-batch-dups.csv"
     And the CSV has been committed interactively
@@ -87,9 +75,18 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     Then the process exits with code 0
     And stderr contains "Found 0 new transactions"
     And stderr contains "4 duplicate(s) skipped"
-    # fails if: the sequence tie-breaker is non-deterministic — re-running with the
-    # same CSV would assign different seq numbers, causing the 2nd-and-later occurrences
-    # to be treated as fresh and re-inserted (violates AC3 / FR7).
+    # fails if: filterNew (idempotency-service.ts) emits two fresh items with the same
+    # idempotencyHash, causing saveBatch to trip the UNIQUE index on
+    # transactions.idempotency_hash and roll back the first interactive commit
+    # (sqlite-transaction-repo.ts:64-91) — the empty DB would then cause re-ingest
+    # to see all 4 rows as fresh instead of skipping them; or the sequence tie-breaker
+    # is non-deterministic — re-running with the same CSV would assign different seq
+    # numbers, causing 2nd-and-later occurrences to be re-inserted (violates AC3 / FR7).
+    #
+    # Phase-4 retro: scenarios "commit succeeds" and "re-ingest is a no-op" were merged
+    # into one — the "Found 0 new transactions" + "4 duplicate(s) skipped" assertions
+    # already imply that the first commit landed all 4 rows. Two separate scenarios
+    # under this Given/When skeleton were strictly subsumed.
 
   Scenario: Define-new + remember + re-ingest auto-tags (Story C round-trip — closes Story A retro carry-over)
     Given a fresh migrated DB and accounting.yaml at a temp dir

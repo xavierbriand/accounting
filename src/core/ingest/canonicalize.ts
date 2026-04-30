@@ -1,7 +1,7 @@
 import type { IngestItem } from './types.js';
 import { Result } from '@core/shared/result.js';
 
-const US = '\u001F';
+export const US = '\u001F';
 
 function normalizeDescription(raw: string): string {
   // NFC normalization unifies decomposed accents (NFD) with composed forms (NFC).

@@ -71,6 +71,31 @@ describe('extractRetroTags', () => {
     const tags = extractRetroTags('# Story retro\n\nNothing here.\n');
     expect(tags.size).toBe(0);
   });
+
+  it('suppresses tags with *(pending)* marker', () => {
+    const retro = '# Story\n\nR20 *(pending)*\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+  });
+
+  it('suppresses tags with _(pending)_ marker', () => {
+    const retro = '# Story\n\nR20 _(pending)_\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+  });
+
+  it('suppresses tags with (Pending) case variant', () => {
+    const retro = '# Story\n\nR20 (Pending)\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+  });
+
+  it('does not suppress a different tag that appears without a pending marker', () => {
+    const retro = '# Story\n\nR20 *(pending)*\nR5 is applied.\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+    expect(tags.has('R5')).toBe(true);
+  });
 });
 
 describe('composeDrift', () => {

@@ -60,7 +60,7 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 | Property | colocated with unit | `fast-check` for financial invariants |
 | Integration | `tests/integration/` | Real SQLite/FS |
 
-- **100% branch coverage** on `src/core/`. Infra/CLI lower.
+- **100% branch coverage** on `src/core/`. Infra/CLI lower. Coverage targets apply to `src/`; `harness/` is exempt — harness code is tooling, not domain logic.
 - **TDD rhythm (outside-in):** failing acceptance → failing unit → minimal green → acceptance green → refactor. See § 6.4 for commits.
 - **Batch ingestion — two stages.** *Parse:* malformed rows skipped, reported individually; valid siblings proceed. *Commit:* valid rows in one SQL transaction — all-or-nothing. Authoritative policy in [docs/prd.md](docs/prd.md) and [docs/quality-assurance.md](docs/quality-assurance.md).
 
@@ -140,7 +140,7 @@ Runs **at the start of each new planning session**, treating the check as a read
 
 ## 8. Rule provenance
 
-New retro rules MUST add a row here in the same PR; prose references the tag. Drift scan (see [retrospectives/README.md](docs/retrospectives/README.md)) catches misses.
+New retro rules MUST add a row here in the same PR; prose references the tag. Drift scan (`npx tsx harness/drift-scan/drift-scan.ts` — see [harness/drift-scan/README.md](harness/drift-scan/README.md)) catches misses automatically at write time and in CI.
 
 | Tag | Rule (one-line) | Originating retro |
 | --- | --- | --- |
@@ -163,3 +163,5 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R17 | Status log fragmented into `docs/status.d/` per-story files; `docs/status.md` keeps only Current position + Refresh trigger + pointer | [story-maint-16](docs/retrospectives/story-maint-16.md) |
 | R18 | Worktree push protocol: one agent per branch, never push `main`, fetch+rebase+propose-resolutions-on-conflict before push | [story-maint-16](docs/retrospectives/story-maint-16.md) |
 | R19 | Maintenance sub-loop checks open/draft PRs **and** issues for sibling-work overlap before opening a new plan | [story-maint-16](docs/retrospectives/story-maint-16.md) |
+| R20 | Empty `feat:` slices retitle to `chore(workflow): empty slice — TDD rhythm note <reason>` (R11 covers `refactor:` only) | [story-D](docs/retrospectives/story-D.md) |
+| R21 | Drift-scan enforces CLAUDE.md § 8 ↔ retro and plan ↔ source consistency at write/CI time; opt-out via `*(pending)*` marker | [story-h1](docs/retrospectives/story-h1.md) |

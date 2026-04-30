@@ -271,6 +271,13 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 - FR20: **System** can output all command results in **JSON Format** to support external dashboards or piping.
 - FR23: **System** can generate an **Immutable Audit Trail** of all user actions (ingests, edits, config changes) to ensure transparency and accountability.
 
+### Annual Planning
+
+- FR24: **Alex (CFO)** can run a **Year-in-Review Analyzer** that proposes candidate buffer buckets, target sizes (90th-percentile model with worst-case shown alongside), fill cadence, and `firstExpectedOccurrence` from a trailing ledger window — classifying past depletion events as **Model Failure** vs **User Spending** in Conversational-CFO voice. Read-only on ledger and live config; emits a scratch `plan-<year>.yaml` for revision.
+- FR25: **Alex** can iterate via a **Plan-File Loop** with overrides, life-event multipliers, inflation knobs (global or per-bucket), and one-off decisions — recomputing and validating against floor/ceiling rules over multiple rounds without touching the ledger or live config. Validation surfaces warnings, never blocks.
+- FR26: **System** can challenge existing **Recurring Rules** against the ledger — proposing **Amend** / **Remove** / **Add** with confidence scores and inline evidence — directly serving the Fixed Cost Prediction < 5% variance success criterion. Coverage matcher reuses the FR7 idempotency hash.
+- FR27: **Alex** can apply the converged plan to `accounting.yaml` via a **previewed, snapshotted, audit-trailed diff** scoped to `buffers:` and `recurring:` sections only — comment-preserving round-trip patching, immutable timestamped snapshots (`accounting.yaml.bak.<ISO-timestamp>`), post-write re-validation with restore-on-failure. Emits an audit-trail entry via FR23.
+
 ## Non-Functional Requirements
 
 ### Performance

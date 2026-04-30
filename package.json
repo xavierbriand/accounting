@@ -11,7 +11,9 @@
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "migrate": "tsx src/cli/program.ts migrate",
     "ingest": "tsx src/cli/program.ts ingest",
-    "categorize": "tsx src/cli/program.ts categorize"
+    "categorize": "tsx src/cli/program.ts categorize",
+    "test:harness": "vitest run --config vitest.harness.config.ts",
+    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit"
   },
   "repository": {
     "type": "git",

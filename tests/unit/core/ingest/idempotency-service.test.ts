@@ -184,6 +184,147 @@ describe('IdempotencyService.filterNew', () => {
     });
   });
 
+  // story-maint-17: in-batch sequence tie-breaker tests
+
+  describe('in-batch duplicates produce distinct hashes (story-maint-17)', () => {
+    it('input [A, A, A, B] yields 4 fresh items with 4 distinct hashes; first-A hash equals single-A hash', () => {
+      // fails if: filterNew emits two fresh[] entries with the same idempotencyHash,
+      // which would cause saveBatch to trip the UNIQUE index on transactions.idempotency_hash
+      // (sqlite-transaction-repo.ts:64-91) and roll back the entire batch.
+      const A = makeItem(1);
+      const B = makeItem(2);
+      const items = [A, A, A, B];
+      const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+
+      const result = service.filterNew(items);
+      expect(result.isSuccess).toBe(true);
+      const { fresh, duplicates } = result.value;
+
+      expect(fresh).toHaveLength(4);
+      expect(duplicates).toHaveLength(0);
+
+      // All four hashes must be distinct
+      const hashes = fresh.map((f) => f.idempotencyHash);
+      expect(new Set(hashes).size).toBe(4);
+
+      // First occurrence of A hashes exactly as a lone single-A input (legacy compat)
+      const singleA = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+      const singleAResult = singleA.filterNew([A]);
+      expect(singleAResult.isSuccess).toBe(true);
+      expect(fresh[0].idempotencyHash).toBe(singleAResult.value.fresh[0].idempotencyHash);
+    });
+  });
+
+  describe('in-batch + DB duplicate mixed with new occurrences (story-maint-17)', () => {
+    it('[A, A] against DB that knows seq=1 of A: first goes to duplicates, second is fresh as seq=2', () => {
+      // fails if: second occurrence is classified as duplicate (data loss) or
+      // two fresh entries share a hash (saveBatch UNIQUE crash).
+      const A = makeItem(1);
+      const seq1Hash = canonicalize(A).value; // identityHashFn → canonical = hash
+      const knownHashes = new Set([seq1Hash]);
+      const service = new IdempotencyService(identityHashFn, makeRepo(knownHashes));
+
+      const result = service.filterNew([A, A]);
+      expect(result.isSuccess).toBe(true);
+      const { fresh, duplicates } = result.value;
+
+      expect(duplicates).toHaveLength(1);
+      expect(fresh).toHaveLength(1);
+      expect(fresh[0].idempotencyHash).not.toBe(seq1Hash);
+    });
+
+    it('[A, A, A] against DB that knows seq=1 and seq=2 of A: first two duplicates, third fresh as seq=3', () => {
+      // fails if: seq=3 is not assigned or collides with prior hashes.
+      const A = makeItem(1);
+      const US = '';
+      const seq1Hash = canonicalize(A).value;
+      const seq2Hash = `${canonicalize(A).value}${US}#2`;
+      const knownHashes = new Set([seq1Hash, seq2Hash]);
+      const service = new IdempotencyService(identityHashFn, makeRepo(knownHashes));
+
+      const result = service.filterNew([A, A, A]);
+      expect(result.isSuccess).toBe(true);
+      const { fresh, duplicates } = result.value;
+
+      expect(duplicates).toHaveLength(2);
+      expect(fresh).toHaveLength(1);
+      expect(fresh[0].idempotencyHash).not.toBe(seq1Hash);
+      expect(fresh[0].idempotencyHash).not.toBe(seq2Hash);
+    });
+  });
+
+  describe('re-ingest idempotency under tie-breaker (story-maint-17)', () => {
+    it('same input [A, A, B] committed then re-ingested produces 3 duplicates and 0 fresh', () => {
+      // fails if: sequence assignment is non-deterministic — repeated `accounting ingest <file>`
+      // would commit duplicates to the ledger, violating AC3 / FR7.
+      const A = makeItem(1);
+      const B = makeItem(2);
+      const items = [A, A, B];
+
+      // First run: capture hashes assigned by filterNew
+      const firstService = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+      const firstResult = firstService.filterNew(items);
+      expect(firstResult.isSuccess).toBe(true);
+      const committedHashes = new Set(firstResult.value.fresh.map((f) => f.idempotencyHash));
+      expect(committedHashes.size).toBe(3);
+
+      // Second run: all captured hashes are now "known" in the DB
+      const secondService = new IdempotencyService(identityHashFn, makeRepo(committedHashes));
+      const secondResult = secondService.filterNew(items);
+      expect(secondResult.isSuccess).toBe(true);
+      expect(secondResult.value.fresh).toHaveLength(0);
+      expect(secondResult.value.duplicates).toHaveLength(3);
+    });
+  });
+
+  describe('order independence for non-colliding multiset (story-maint-17 regression guard)', () => {
+    it('non-colliding input hashes match legacy single-pass output', () => {
+      // fails if: the sequence-aware path corrupts hashes for rows whose canonical
+      // never repeats — would invalidate all previously-committed rows' hashes.
+      const items = [makeItem(10), makeItem(11), makeItem(12)];
+      const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+      const result = service.filterNew(items);
+      expect(result.isSuccess).toBe(true);
+      const { fresh } = result.value;
+      expect(fresh).toHaveLength(3);
+
+      // Each item appears exactly once → seq=1 → hash equals unmodified canonical
+      for (let i = 0; i < items.length; i++) {
+        const expectedHash = canonicalize(items[i]).value;
+        expect(fresh[i].idempotencyHash).toBe(expectedHash);
+      }
+    });
+  });
+
+  describe('property: all fresh hashes distinct and partition is complete (story-maint-17)', () => {
+    it('batches with controlled duplicates never emit two fresh items sharing a hash', () => {
+      // fails if: the saveBatch UNIQUE-index invariant is violated by filterNew's output,
+      // or the partition no longer accounts for every input item (sqlite-transaction-repo.ts:64-91).
+      fc.assert(
+        fc.property(
+          fc.array(fc.constantFrom(makeItem(1), makeItem(2), makeItem(3)), {
+            minLength: 2,
+            maxLength: 12,
+          }),
+          (items) => {
+            const service = new IdempotencyService(identityHashFn, makeRepo(new Set()));
+            const result = service.filterNew(items);
+            if (result.isFailure) return true;
+            const { fresh, duplicates } = result.value;
+
+            // (b) partition is complete
+            if (fresh.length + duplicates.length !== items.length) return false;
+
+            // (a) all fresh hashes are distinct
+            const hashSet = new Set(fresh.map((f) => f.idempotencyHash));
+            return hashSet.size === fresh.length;
+          },
+        ),
+        { numRuns: 200 },
+      );
+    });
+  });
+
   describe('order preservation property', () => {
     it('fresh and duplicates preserve relative input order for arbitrary splits', () => {
       // fails if: a Set-based implementation silently reorders,

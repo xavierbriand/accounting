@@ -179,6 +179,41 @@ Some text.
     const plan = '# Plan\n\n## Context\n\nNo surface section here.\n';
     expect(extractPlanSurfacePaths(plan)).toHaveLength(0);
   });
+
+  it('skips paths annotated with *(removed)*', () => {
+    const plan = `
+## Production-code surface (R2)
+
+| \`src/core/deleted.ts\` *(removed)* | removed |
+| \`src/core/kept.ts\` | modified |
+`;
+    const paths = extractPlanSurfacePaths(plan);
+    expect(paths).not.toContain('src/core/deleted.ts');
+    expect(paths).toContain('src/core/kept.ts');
+  });
+
+  it('follows *(renamed → <newpath>)* redirects', () => {
+    const plan = `
+## Production-code surface (R2)
+
+| \`src/core/old.ts\` *(renamed → src/core/new.ts)* | renamed |
+`;
+    const paths = extractPlanSurfacePaths(plan);
+    expect(paths).not.toContain('src/core/old.ts');
+    expect(paths).toContain('src/core/new.ts');
+  });
+
+  it('rejects paths with leading dots (traversal guard)', () => {
+    const plan = `
+## Production-code surface
+
+\`../etc/passwd\` is a bad path.
+\`src/core/good.ts\` is fine.
+`;
+    const paths = extractPlanSurfacePaths(plan);
+    expect(paths).not.toContain('../etc/passwd');
+    expect(paths).toContain('src/core/good.ts');
+  });
 });
 
 describe('formatJsonReport', () => {

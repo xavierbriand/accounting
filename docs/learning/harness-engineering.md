@@ -241,6 +241,7 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 - **Eval design:** Inspect Evals docs (Anthropic-affiliated). Skim only — borrow vocabulary, don't adopt the framework yet at this scale.
 - **Lightweight eval tooling for solo scale:** promptfoo README, just enough to know what isn't being used.
 - **Prompt engineering for Anthropic models:** Anthropic docs → Prompt engineering guide. The XML-tag and example-shaped-output sections are the load-bearing parts.
+- **Vision / strategic context:** Malte Ubl, *"The New Application Layer"* (AI Engineer Europe 2026, [YouTube `XKup1pj-34M`](https://www.youtube.com/watch?v=XKup1pj-34M)). Read the comparison [application-layer-comparison.md](application-layer-comparison.md) — names where this curriculum aligns, where it's silent (durable execution, agent-legible product), and what changes if we take the talk seriously.
 
 Skip until later: agent-framework / LangChain / LangGraph / CrewAI. Out of scope by design, and the abstractions hurt before they help at this scale.
 

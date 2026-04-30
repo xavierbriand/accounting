@@ -21,8 +21,10 @@ npx tsx harness/drift-scan/drift-scan.ts --json
 
 ## Exit codes
 
-- `0` — no drift found.
-- `1` — one or more drift findings.
+- `0` — no **hard** findings.
+- `1` — one or more hard findings.
+
+A finding is **hard** (contributes to exit 1) when it represents drift between artefacts that should already be in sync: `retro-only` (a retro mentions an R-tag with no § 8 row) and `missing-path` (a plan names a file that no longer exists). A finding is **soft** (informational, does not affect exit code) for `table-only` (a § 8 row with no retro reference yet — common during the slice between codifying a new rule and authoring its retro). Soft findings are reported on stderr in human mode and included in the `--json` array, but do not gate CI.
 
 ## Output
 

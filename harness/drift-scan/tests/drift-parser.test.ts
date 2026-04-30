@@ -60,6 +60,8 @@ describe('extractSectionEightTags', () => {
 });
 
 describe('extractRetroTags', () => {
+  // fails if the parser misses R-tags inside list items, headings, or prose
+  // (Gherkin scenario 2: retro references an undocumented rule — parser side).
   it('extracts R-tags referenced in a retro', () => {
     const tags = extractRetroTags(RETRO_FIXTURE_BASIC);
     expect(tags).toContain('R5');
@@ -72,6 +74,9 @@ describe('extractRetroTags', () => {
     expect(tags.size).toBe(0);
   });
 
+  // fails if the pending-marker regex in extractRetroTags is too narrow (misses
+  // *(pending)* / _(pending)_ / case variants) or too wide (suppresses tags
+  // without an actual marker) (Gherkin scenario 3: pending marker — parser side).
   it('suppresses tags with *(pending)* marker', () => {
     const retro = '# Story\n\nR20 *(pending)*\n';
     const tags = extractRetroTags(retro);
@@ -148,6 +153,10 @@ describe('composeDrift', () => {
 });
 
 describe('extractPlanSurfacePaths', () => {
+  // fails if extractPlanSurfacePaths skips a path token, picks up a non-path
+  // token, or honours a stale alias instead of *(renamed → <newpath>)* — these
+  // would let plan-vs-source drift slip past Check B (Gherkin scenarios 4-6:
+  // plan path scan — parser side).
   it('extracts file path tokens from the Production-code surface section', () => {
     const plan = `
 # Plan
@@ -217,6 +226,10 @@ Some text.
 });
 
 describe('formatJsonReport', () => {
+  // fails if formatJsonReport emits a different shape than the documented
+  // contract { findings: [{ kind, tag?, path?, file }] } — would silently
+  // break any hook/consumer that parses --json output (R8 mock-diversity;
+  // Gherkin scenario 7: --json output shape — parser side).
   it('emits round-trippable JSON with the expected shape', () => {
     const findings = [
       { kind: 'retro-only' as const, tag: 'R97', file: 'docs/retrospectives/foo.md' },

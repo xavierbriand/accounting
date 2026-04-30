@@ -187,13 +187,13 @@ Note: "production-code surface" here is read literally as "non-doc, non-config c
 | Path | New/Modified | Layer | Purpose |
 | --- | --- | --- | --- |
 | `harness/drift-scan/drift-scan.ts` *(new)* | new | harness | CLI entrypoint + composed checks (Check A + Check B). |
-| `harness/drift-scan/lib/drift-parser.ts` *(new)* | new | harness | Pure parser exports: `extractSectionEightTags`, `extractRetroTags`, `extractPlanSurfacePaths`, `composeDrift`. No fs/process imports. |
+| `harness/drift-scan/lib/drift-parser.ts` *(new)* | new | harness | Pure parser exports: `extractSectionEightTags`, `extractRetroTags`, `extractPlanSurfacePaths`, `composeDrift`, `formatJsonReport` (Phase 4 correction — plan originally placed the JSON formatter in `drift-scan.ts`; lifting it into the pure parser keeps it unit-testable without subprocess overhead). No fs/process imports. |
 | `harness/drift-scan/tests/drift-parser.test.ts` *(new)* | new | harness | Unit + 1 property test on the parser. |
 | `harness/drift-scan/tests/drift-scan.integration.test.ts` *(new)* | new | harness | Subprocess test against real fs + git. |
 | `harness/drift-scan/README.md` *(new)* | new | harness | Per-tool invocation reference. |
 | `harness/README.md` *(new)* | new | harness | Top-level harness/ explainer. |
 | `vitest.harness.config.ts` *(new)* | new | harness | Isolated harness test config. |
-| `tsconfig.harness.json` *(new)* | new | harness | Harness typecheck config. |
+| `tsconfig.harness.json` *(new)* | new | harness | Harness typecheck config. Inherits `strict: true`; declares `types: ["node"]` (Phase 4 correction — needed for `node:fs`, `node:path`, `node:child_process`; no new dep, `@types/node` already in devDependencies). |
 | `vitest.config.ts` | modified | product | Adds `harness/**` to `exclude`. |
 | `tsconfig.json` | modified | product | Adds `harness` to `exclude`. |
 | `package.json` | modified | both | Adds `test:harness`, `typecheck:harness` scripts. |
@@ -339,3 +339,25 @@ Phase 2 (P1 / P2 / P3) by `plan-reviewer` sub-agent on 2026-04-30 — 19 finding
 | — | R1, R2, R4, R5 (Phase 4-only), R9–R11, R14, R15 — factual confirmations or N/A. | (no action) | Reviewer-confirmed correct. |
 
 **Tally:** 8 adopted/clarified · 6 acknowledged · 0 rejected · 0 deferred. Every adopted item has been folded into the plan above. **DoR gate met.**
+
+## Phase 4 retro-check
+
+Phase 4 (P1 / P2 / P3 retro-check) by `code-reviewer` sub-agent on 2026-04-30 — 10 findings (6 P1, 1 P2, 3 P3 soft). Refactor commit folds adopted fixes; deferred items become GitHub issues.
+
+| Phase | Finding | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 | R6 — `// fails if …` comments missing from both test files. | fix-now | Added per-test `// fails if …` comments to `drift-parser.test.ts` (3 describe blocks) and `drift-scan.integration.test.ts` (5 tests). Each comment names the production path it guards. |
+| P1 | R5 — Gherkin scenario 4 (plan deleted file, default scope) has no backing test. | defer-issue | Filed [#119](https://github.com/xavierbriand/accounting/issues/119). Default-scope diff-filter test requires temp-git-repo scaffolding; out of scope for this PR. |
+| P1 | R5 — Gherkin scenario 5 (frozen historical, default scope) has no backing test. | defer-issue | Subsumed by [#119](https://github.com/xavierbriand/accounting/issues/119) (same root cause: untested `getPlanFiles` exclusion branch). |
+| P1 | R7 — `getPlanFiles` diff-scope filter has no test at the subprocess tier. | defer-issue | Subsumed by [#119](https://github.com/xavierbriand/accounting/issues/119). |
+| P1 | R2 — `formatJsonReport` placement divergence (in `drift-parser.ts`, not `drift-scan.ts` per plan). | acknowledged | Lifting the JSON formatter into the pure parser is *better* than the plan (unit-testable without subprocess overhead). Plan's Production-code surface table corrected to enumerate `formatJsonReport` as a parser export. |
+| P1 | R2 — output contract divergence (`hardFindings` filter; `table-only` does not exit 1). | fix-now (partial) + defer-issue | Documented in `harness/drift-scan/README.md` (§ Exit codes — soft/hard distinction). Promoting `table-only` to exit-1 deferred to [#120](https://github.com/xavierbriand/accounting/issues/120) (chicken-and-egg with R21 retro authoring at Phase 5). |
+| P2 | R8 — `--json` integration test doesn't validate every entry's shape (`table-only` shape unasserted). | fix-now | Strengthened `--json` integration test to iterate every finding and assert the discriminated-union shape per `kind`. Throws on unexpected kinds. |
+| P3 (soft) | Clean-repo test asserts only `status === 0`; doesn't pin stderr. | fix-now | Added `expect(result.stderr).not.toContain('retro-only:')` and `'missing-path:'` to the clean-repo test. Allows informational `table-only` lines but blocks hard-finding regressions. |
+| P3 (soft) | Dead `tempPlan` variable in integration test. | fix-now | Removed; `fakePlan` was the operative variable. Dropped unused `node:os` import. |
+| P3 (soft) | `runScanner` return type `ReturnType<typeof spawnSync>` requires `as string` cast. | fix-now | Narrowed return type to `SpawnSyncReturns<string>` (matches the runtime overload selected by `encoding: 'utf8'`). Cast removed. |
+| — | R3 import audit, R10/R12 commit subjects, security walks, function sizes — all compliant. | (no action) | Reviewer-confirmed correct. |
+| — | R13 envelope at upper bound (10 body slices). | acknowledged | Justification pre-approved in the plan; no reduction. |
+| — | `types: ["node"]` config addition not in plan's R3 audit. | acknowledged | Plan's Production-code surface table corrected (Phase 4 note appended). No supply-chain delta — `@types/node` already in devDependencies. |
+
+**Tally:** 5 fix-now · 3 defer-issue (2 unique tickets, [#119](https://github.com/xavierbriand/accounting/issues/119) + [#120](https://github.com/xavierbriand/accounting/issues/120)) · 3 acknowledged · 0 rejected. **DoD gates 8 + 9 ready** pending retro authoring.

@@ -44,12 +44,27 @@ export function extractSectionEightTags(claudeMd: string): Set<string> {
   return tags;
 }
 
+const PENDING_MARKER_SUFFIX = /\s*(?:\*\(pending\)\*|_\(pending\)_|\(pending\))/i;
+
 export function extractRetroTags(retroContent: string): Set<string> {
+  const pendingTags = new Set<string>();
+  const pendingPattern = new RegExp(
+    `(\\bR\\d+\\b)${PENDING_MARKER_SUFFIX.source}`,
+    'gi',
+  );
+  let pendingMatch: RegExpExecArray | null;
+  while ((pendingMatch = pendingPattern.exec(retroContent)) !== null) {
+    pendingTags.add(pendingMatch[1]);
+  }
+
   const tags = new Set<string>();
   const allTagPattern = new RegExp(R_TAG_PATTERN.source, 'g');
   let match: RegExpExecArray | null;
   while ((match = allTagPattern.exec(retroContent)) !== null) {
-    tags.add(match[0]);
+    const tag = match[0];
+    if (!pendingTags.has(tag)) {
+      tags.add(tag);
+    }
   }
   return tags;
 }

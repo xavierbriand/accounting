@@ -199,3 +199,16 @@ Phase 2 (P1 / P2 / P3) by `plan-reviewer` sub-agent on 2026-05-11 — 11 finding
 | — | R1, R2, R3, R7, R8, R11 — factual confirmations. | (no action) | Reviewer-confirmed compliant. |
 
 **Tally:** 7 adopted/clarified · 2 acknowledged · 0 rejected · 0 deferred. **DoR gate met.**
+
+## Phase 4 retro-check
+
+Phase 4 (P1 / P2 / P3 retro-check) by `code-reviewer` sub-agent on 2026-05-11 — 3 findings (0 P1, 0 P2, 3 P3 soft).
+
+| Phase | Finding | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P3 (soft) | R98 retro-only test's `fails if` comment uses the deleted identifier `hardFindings` as a label (`main() ignores a non-empty hard-findings list`). | fix-now | Renamed to `non-empty findings list` (Phase-4 refactor `2cecd75`). |
+| P3 (soft) | New `table-only` test missing `(Gherkin scenario N: …)` label for parity with the five pre-existing tests. | fix-now | Added `(Gherkin scenario h2-1: orphan § 8 row exits 1)`; tightened `fails if` phrasing to name the exit-code gate directly (Phase-4 refactor `2cecd75`). |
+| P3 (soft) | Clean-repo test description retains `(slice 10)` — a story-h1 internal slice reference. | acknowledged | Historically accurate — slice 10 of story-h1 is when R21 was codified. Renaming it would lose that pin. |
+| — | R1, R2, R3, R5, R6, R7, R8, R10, R12, R13, R21 — factual confirmations. | (no action) | Reviewer-confirmed compliant. |
+
+**Tally:** 2 fix-now · 1 acknowledged · 0 defer-issue · 0 rejected. **DoD gates 8 + 9 ready** pending retro authoring.

@@ -37,7 +37,7 @@ afterEach(() => {
 
 describe('drift-scan integration', () => {
   // fails if extractRetroTags skips the unbacked tag, or composeDrift fails to
-  // surface a retro-only set member, or main() ignores a non-empty hard-findings
+  // surface a retro-only set member, or main() ignores a non-empty findings
   // list (Gherkin scenario 2: retro references an undocumented rule).
   it('exits 1 and names R98 when a retro references R98 without a marker', () => {
     const retroFile = tempRetroPath('story-test-r98.md');
@@ -138,11 +138,11 @@ describe('drift-scan integration', () => {
     expect(r97Finding?.['kind']).toBe('retro-only');
   });
 
-  // fails if the hardFindings filter (or its successor) in drift-scan.ts
-  // excludes table-only from the exit-1 gate. Mutates CLAUDE.md in place
-  // and restores it via afterEach — if a hard crash leaks the mutation,
-  // run `git checkout CLAUDE.md` to recover (the appended R96 row is
-  // the only diff).
+  // fails if the exit-code gate in drift-scan.ts excludes table-only from
+  // the exit-1 condition. Mutates CLAUDE.md in place and restores it via
+  // afterEach — if a hard crash leaks the mutation, run
+  // `git checkout CLAUDE.md` to recover (the appended R96 row is the only
+  // diff). (Gherkin scenario h2-1: orphan § 8 row exits 1.)
   it('table-only finding contributes to exit 1', () => {
     const claudeMdPath = path.join(REPO_ROOT, 'CLAUDE.md');
     CLAUDE_MD_SNAPSHOT = fs.readFileSync(claudeMdPath, 'utf8');

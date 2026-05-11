@@ -2,17 +2,14 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
-    "rootDir": "./src",
+    "rootDir": "./harness",
     "moduleResolution": "nodenext",
-    "outDir": "./dist",
+    "outDir": "./dist-harness",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "paths": {
-      "@core/*": ["./src/core/*"]
-    }
+    "types": ["node"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["harness"]
+  "include": ["harness/**/*"]
 }

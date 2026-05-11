@@ -26,7 +26,22 @@
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)",
       "Bash(ls)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run typecheck:harness)",
+      "Bash(npx tsx harness/drift-scan/drift-scan.ts:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_FILE_PATHS\" | grep -qE '(docs/(retrospectives|plans)/.*\\.md|^CLAUDE\\.md)'; then npx tsx harness/drift-scan/drift-scan.ts || true; fi"
+          }
+        ]
+      }
     ]
   }
 }

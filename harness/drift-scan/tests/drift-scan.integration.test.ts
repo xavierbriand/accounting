@@ -18,12 +18,20 @@ function tempRetroPath(name: string): string {
 }
 
 const TEMP_RETRO_FILES: string[] = [];
+let CLAUDE_MD_SNAPSHOT: string | null = null;
 
 afterEach(() => {
   for (const f of TEMP_RETRO_FILES.splice(0)) {
     if (fs.existsSync(f)) {
       fs.unlinkSync(f);
     }
+  }
+});
+
+afterEach(() => {
+  if (CLAUDE_MD_SNAPSHOT !== null) {
+    fs.writeFileSync(path.join(REPO_ROOT, 'CLAUDE.md'), CLAUDE_MD_SNAPSHOT, 'utf8');
+    CLAUDE_MD_SNAPSHOT = null;
   }
 });
 
@@ -126,5 +134,25 @@ describe('drift-scan integration', () => {
     );
     expect(r97Finding).toBeDefined();
     expect(r97Finding?.['kind']).toBe('retro-only');
+  });
+
+  // fails if the hardFindings filter (or its successor) in drift-scan.ts
+  // excludes table-only from the exit-1 gate. Mutates CLAUDE.md in place
+  // and restores it via afterEach — if a hard crash leaks the mutation,
+  // run `git checkout CLAUDE.md` to recover (the appended R96 row is
+  // the only diff).
+  it('table-only finding contributes to exit 1', () => {
+    const claudeMdPath = path.join(REPO_ROOT, 'CLAUDE.md');
+    CLAUDE_MD_SNAPSHOT = fs.readFileSync(claudeMdPath, 'utf8');
+    fs.writeFileSync(
+      claudeMdPath,
+      CLAUDE_MD_SNAPSHOT + '\n| R96 | drift-scan test orphan | [none](docs/retrospectives/none.md) |\n',
+      'utf8',
+    );
+
+    const result = runScanner();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('R96');
+    expect(result.stderr).toContain('table-only:');
   });
 });

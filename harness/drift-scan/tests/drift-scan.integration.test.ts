@@ -18,6 +18,7 @@ function tempRetroPath(name: string): string {
 }
 
 const TEMP_RETRO_FILES: string[] = [];
+let CLAUDE_MD_SNAPSHOT: string | null = null;
 
 afterEach(() => {
   for (const f of TEMP_RETRO_FILES.splice(0)) {
@@ -27,9 +28,16 @@ afterEach(() => {
   }
 });
 
+afterEach(() => {
+  if (CLAUDE_MD_SNAPSHOT !== null) {
+    fs.writeFileSync(path.join(REPO_ROOT, 'CLAUDE.md'), CLAUDE_MD_SNAPSHOT, 'utf8');
+    CLAUDE_MD_SNAPSHOT = null;
+  }
+});
+
 describe('drift-scan integration', () => {
   // fails if extractRetroTags skips the unbacked tag, or composeDrift fails to
-  // surface a retro-only set member, or main() ignores a non-empty hard-findings
+  // surface a retro-only set member, or main() ignores a non-empty findings
   // list (Gherkin scenario 2: retro references an undocumented rule).
   it('exits 1 and names R98 when a retro references R98 without a marker', () => {
     const retroFile = tempRetroPath('story-test-r98.md');
@@ -55,15 +63,17 @@ describe('drift-scan integration', () => {
   });
 
   // fails if Check A or Check B mistakenly classify a clean state as drift
-  // (false positive in composeDrift's hard-findings filter or scanPlanPaths's
-  // fs probe). Stderr is allowed to carry table-only informational findings
-  // (R21 today) but must not contain retro-only/missing-path lines.
+  // (false positive in the exit-code gate in drift-scan.ts or composeDrift
+  // in drift-parser.ts). A clean repo has no drift of any kind on stderr
+  // (retro-only, missing-path, or table-only — every § 8 row has an
+  // originating retro reference on main).
   // (Gherkin scenario 1: clean repo passes.)
   it('clean repo exits 0 — passes after R20 and R21 are codified (slice 10)', () => {
     const result = runScanner();
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('retro-only:');
     expect(result.stderr).not.toContain('missing-path:');
+    expect(result.stderr).not.toContain('table-only:');
   });
 
   // fails if --all flag handling in main() does not bypass the diff-scope
@@ -126,5 +136,25 @@ describe('drift-scan integration', () => {
     );
     expect(r97Finding).toBeDefined();
     expect(r97Finding?.['kind']).toBe('retro-only');
+  });
+
+  // fails if the exit-code gate in drift-scan.ts excludes table-only from
+  // the exit-1 condition. Mutates CLAUDE.md in place and restores it via
+  // afterEach — if a hard crash leaks the mutation, run
+  // `git checkout CLAUDE.md` to recover (the appended R96 row is the only
+  // diff). (Gherkin scenario h2-1: orphan § 8 row exits 1.)
+  it('table-only finding contributes to exit 1', () => {
+    const claudeMdPath = path.join(REPO_ROOT, 'CLAUDE.md');
+    CLAUDE_MD_SNAPSHOT = fs.readFileSync(claudeMdPath, 'utf8');
+    fs.writeFileSync(
+      claudeMdPath,
+      CLAUDE_MD_SNAPSHOT + '\n| R96 | drift-scan test orphan | [none](docs/retrospectives/none.md) |\n',
+      'utf8',
+    );
+
+    const result = runScanner();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('R96');
+    expect(result.stderr).toContain('table-only:');
   });
 });

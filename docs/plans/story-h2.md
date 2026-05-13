@@ -357,3 +357,25 @@ R16 collapses to 4 commits for "zero-behaviour-change" stories (process refresh,
 **Phase 2 — sibling-overlap audit (parallel, 2026-05-12)**
 
 No sibling overlap detected. All 5 open PRs are Dependabot patch/minor bumps. 25 open issues include harness curriculum modules #94–#100 but none conflict with story-h2's specific primitive implementations.
+
+---
+
+## Statusline config note
+
+The statusline is configured via the interactive `/statusline` command inside a running Claude Code session. It is **not** a committed project file — the configuration is written to the user-level settings at `~/.claude/settings.json` under a key such as `statusCommand` (exact key name may vary by Claude Code version; inspect the diff to `~/.claude/settings.json` after running `/statusline` to confirm).
+
+**To configure:** start Claude Code in the story worktree and run:
+```
+/statusline
+```
+Then enter the desired statusline script. The target script for this project:
+```bash
+branch=$(git branch --show-current 2>/dev/null || echo "no-branch")
+lint=$(cat .claude/.last-lint-result 2>/dev/null || echo "lint: -")
+story_id=$(echo "$branch" | sed 's/^story-//')
+echo "$branch · $lint · $story_id"
+```
+
+This produces output like: `story-h2 · lint: pass · h2`
+
+**Config location confirmed (story-h2 implementation):** user-level `~/.claude/settings.json`. Project-level `.claude/settings.json` does not support `statusCommand`. The statusline is per-developer, not per-repo — this is expected and acceptable for a harness primitive. Future harness stories that touch statusline should document this distinction upfront.

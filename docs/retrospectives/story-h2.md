@@ -27,7 +27,7 @@
 
 ## Try
 
-- **R22: Parallel Phase 2 as the default pattern.** The first parallel Phase 2 demonstration (story-h2) went smoothly. Evaluate after 2–3 more stories whether to codify this as a rule (R22): "Phase 2 always launches plan-reviewer and sibling-overlap in a single message." Defer to next planning session.
+- **R22 *(pending)*: Parallel Phase 2 as the default pattern.** The first parallel Phase 2 demonstration (story-h2) went smoothly. Evaluate after 2–3 more stories whether to codify this as a rule (R22): "Phase 2 always launches plan-reviewer and sibling-overlap in a single message." Defer to next planning session.
 
 - **Pin `npx -y` MCP versions.** `npx -y @modelcontextprotocol/server-github` is unlocked (no version pin). Supply-chain risk is low for a curriculum primitive, but a future maintenance story should add version pinning to `.mcp.json`. Track via GitHub issue post-merge.
 

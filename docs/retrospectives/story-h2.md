@@ -37,8 +37,26 @@
 
 ## Loop metrics
 
-- **Commits:** 9 (1 preparatory P0 + 8 change-body). Target: 6–10 (R13). Within budget.
+- **Commits:** 10 (1 preparatory P0 + 8 change-body + 1 drift-scan fixup for *(pending)* marker). Target: 6–10 (R13). Within budget.
 - **Files new:** 7 (`.claude/commands/story-status.md`, `.claude/commands/new-story-preflight.md`, `.claude/agents/sibling-overlap.md`, `.mcp.json`, `.claude/.last-lint-result` [gitignored], `docs/plans/story-h2.md`, `docs/status.d/2026-05-13-story-h2.md`)
 - **Files modified:** 5 (`.claude/settings.json`, `.gitignore`, `CLAUDE.md`, `docs/learning/harness-engineering.md`, `docs/templates/maintenance-sub-loop.md`)
 - **Parallel Phase 2:** yes — plan-reviewer + sibling-overlap in single message, 2026-05-12.
 - **No `src/` changes:** confirmed. `grep -r "from.*harness" src/ tests/` → empty.
+
+---
+
+## Code-review findings (Phase 4, 2026-05-13)
+
+9 findings total (3 P1, 1 P2, 5 P3 of which 3 soft).
+
+| Finding | Classification | Resolution |
+|---------|---------------|------------|
+| P1: R2 `.gitignore` missing from modified-files table | ACKNOWLEDGE | Planning artifact; correct implementation |
+| P1: R2 status fragment date mismatch (`2026-05-12` in plan, `2026-05-13` actual) | ACKNOWLEDGE | Implementation ran next day; committed file is correct |
+| P1: C4 commit labeled `feat:` but docs-only content | ACKNOWLEDGE | Not an empty slice per R20; mislabel is minor |
+| P2: two DEFER entries lacked GitHub issue links | FIX-NOW | Created #131 (version pin) and #132 (R3 scope); plan suggestion log updated |
+| P3: retro loop-metrics undercount (said 9, actual 10) | FIX-NOW | Corrected to 10 in this retro |
+| P3: R22 tag collision between h1 and h2 retros (latent) | ACKNOWLEDGE | Resolves when one candidate is codified; the other gets the next available tag |
+| P3 soft: post-retro drift-scan fixup commit pattern | ACKNOWLEDGE | Workflow note: run drift-scan before committing retro next time |
+| P3 soft: sibling-overlap spec uses broad Bash tool | ACKNOWLEDGE | Prompt-level constraint adequate; tighten in future if needed |
+| P3 soft: new-story-preflight relies on convention not enforcement | ACKNOWLEDGE | Curriculum-appropriate limitation |

@@ -341,7 +341,7 @@ R16 collapses to 4 commits for "zero-behaviour-change" stories (process refresh,
 |---|---------|-----|------------|
 | P1-1 | R1: plan at `~/.claude/plans/` not `docs/plans/story-h2.md` | ACKNOWLEDGE | Session file is working artifact; `docs/plans/story-h2.md` created in preparatory commit P0 |
 | P1-2 | R2: "Modified files (3)" header lists 4 rows | ADOPT | Fixed to "(4)" in this plan |
-| P1-3 | R3: no import audit for `@modelcontextprotocol/server-github` via `npx` | DEFER | R3 targets `package.json` deps; ephemeral `npx` MCP server never enters lock file. Retro will clarify R3 scope for MCP packages. |
+| P1-3 | R3: no import audit for `@modelcontextprotocol/server-github` via `npx` | DEFER | R3 targets `package.json` deps; ephemeral `npx` MCP server never enters lock file. → #132 |
 | P1-4 | R6/R7: all `fails if` clauses present and correctly scoped | ACKNOWLEDGE | Pass |
 | P1-5 | Scenario E Given references file not yet existing at Phase 2 | ACKNOWLEDGE | Scenario E is a workflow observation, not an automated test invariant; forward-looking Given is acceptable |
 | P2-1 | `.claude/.last-lint-result` gitignore not specified | ADOPT | Added to risks + C3 description |
@@ -349,7 +349,7 @@ R16 collapses to 4 commits for "zero-behaviour-change" stories (process refresh,
 | P2-3 | `${GITHUB_TOKEN}` syntax not verified | ADOPT | Added to risks; verify during C6 implementation |
 | P3-1 | R13 vs R16 — no explicit rationale | ADOPT | Added "R13 vs R16" section to plan |
 | P3-2 | Stop hook multi-stage form has shell injection risk | ADOPT | Dropped multi-stage form; plan specifies `npm run lint` wrapper only |
-| P3-3 | `npx -y` MCP invocation is unlocked (supply chain) | DEFER | File GitHub issue post-story to pin version |
+| P3-3 | `npx -y` MCP invocation is unlocked (supply chain) | DEFER | → #131 |
 | P3-4 | C4 statusline file location TBD | ACKNOWLEDGE | Implementation-time decision; retro documents exact path |
 | P3-5 | R21: no new R-tag proposed for parallel Phase 2 pattern | ACKNOWLEDGE | Evaluate in retro whether pattern warrants R22 |
 | P3-6 | Skill/slash-command substrate note | ACKNOWLEDGE | Design choice; niche distinction is conceptual and documented |

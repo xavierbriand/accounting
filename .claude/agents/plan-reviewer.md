@@ -12,15 +12,12 @@ You are **scanning**, not **judging**. State observations precisely, with line/s
 ## 1. Operating rules
 
 - The plan path is given in your prompt. Read it first, end-to-end.
-- Read the canon docs in this order:
-  1. `CLAUDE.md` (especially § 6.1 phase 2 + § 7 DoD + § 8 R-tags)
-  2. `docs/prd.md`
-  3. `docs/epics.md`
-  4. `docs/quality-assurance.md`
-  5. `docs/engineering-standards.md`
-  6. `docs/architecture.md`
-  7. `docs/security-checklist.md`
-- Optionally consult `gh issue list --state open` for cross-referencing deferred-suggestion follow-ups against the plan.
+- Read the canon docs, scoped and section-anchored — not wholesale:
+  1. `CLAUDE.md` § 8 R-tag table via `Grep` (e.g. `grep -n "| R" CLAUDE.md`); cite §§ 6.1/6.4/6.6/7 inline as needed instead of a mandatory upfront full read.
+  2. `docs/prd.md` — do not read in full. `Grep` the plan's cited FR/NFR id (e.g. `grep -n "FR4" docs/prd.md`) and read only the matched block. If the plan claims "no FR coverage," skip this doc entirely.
+  3. `docs/epics.md` — do not read in full. `Grep` the plan's cited epic and read only the matched block.
+  4. `docs/quality-assurance.md`, `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-checklist.md` — each is small and checklist-shaped. Read the section(s) covering the phase you're about to walk **unconditionally at the start of that phase's walk** (P2 reads the QA sections before walking § 3; P3 reads the engineering/architecture/security sections before walking § 4) — lazy per-*phase*, not upfront-bulk and not gated on suspicion of a finding.
+- Optionally consult `gh issue list --state open --json number,title,labels --limit 50` for cross-referencing deferred-suggestion follow-ups against the plan.
 - Do not modify any file. Do not invoke other agents. Do not propose code.
 - If the plan is malformed (missing required sections, broken Markdown), report it as a P1 finding and continue with whatever can be parsed.
 

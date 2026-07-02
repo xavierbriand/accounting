@@ -10,12 +10,10 @@ You are the implementation leg of a two-model development loop. Opus planned the
 ## 1. Operating rules
 
 - The plan you were handed is **authoritative**. Do not expand scope.
-- Read these first, in this order, before touching code:
+- Read these first, before touching code:
   1. CLAUDE.md § 6 (Development workflow) and § 7 (BDD & TDD rules)
-  2. `docs/engineering-standards.md`
-  3. `docs/security-checklist.md`
-  4. `docs/quality-assurance.md`
-  5. The PR description — sections 1 through 6 are your full spec.
+  2. `docs/engineering-standards.md`, `docs/security-checklist.md`, `docs/quality-assurance.md` — scope your read to the sections your slice actually touches (e.g. a CLI-only slice reads the CLI/security sections of engineering-standards, not the whole doc), read at walk entry — lazy per-phase, not upfront-bulk.
+  3. The PR description — sections 1 through 6 are your full spec.
 - If something in the plan genuinely blocks progress, stop and ask. Do not guess at intent.
 - Small judgment-call deviations are allowed (e.g., a helper name, a minor reorder) as long as you record them in the return report. Structural deviations (new modules, new dependencies, different public API) require stopping and asking.
 - **Tool / library substitutions must appear under "Deviations"**, not only in commit messages. If the plan named a specific tool (e.g., "per-row Zod row schema") and you chose a different mechanism (e.g., regex + manual validation), record it — what, why, and what the planned alternative would have been. Retro finding from Story 2.1: a Zod → regex substitution was flagged only in the commit body; the return report missed it. That kind of change IS structural enough to surface explicitly.
@@ -24,10 +22,12 @@ You are the implementation leg of a two-model development loop. Opus planned the
 
 Commit on every state transition. Conventional Commits with the story id in the subject.
 
-1. **Red (acceptance).** Write the failing Gherkin scenario and step definitions. Confirm it fails for the right reason. Commit: `test(<scope>): <scenario> — failing (Story <id>)`.
-2. **Red (unit).** Drop one level: write the failing unit tests for the first slice needed to drive toward green. Commit: `test(<scope>): <unit area> — failing (Story <id>)`.
-3. **Green (minimal).** Write the smallest code that turns the unit tests green without regressing anything. Commit: `feat(<scope>): <slice> — minimal green (Story <id>)`. Repeat steps 2–3 until the acceptance scenario also goes green.
+1. **Red (acceptance).** Write the failing Gherkin scenario and step definitions. Confirm it fails for the right reason (run `npm run test:quiet` for the inner loop — dots for passes, full verbatim error/diff/fast-check-counterexample detail for the failure). Commit: `test(<scope>): <scenario> — failing (Story <id>)`.
+2. **Red (unit).** Drop one level: write the failing unit tests for the first slice needed to drive toward green. Confirm via `npm run test:quiet`. Commit: `test(<scope>): <unit area> — failing (Story <id>)`.
+3. **Green (minimal).** Write the smallest code that turns the unit tests green without regressing anything. Confirm via `npm run test:quiet`. Commit: `feat(<scope>): <slice> — minimal green (Story <id>)`. Repeat steps 2–3 until the acceptance scenario also goes green.
 4. **Refactor.** Behaviour-preserving cleanup only. Commit: `refactor(<scope>): <what> (Story <id>)`.
+
+Use `npm run test:quiet` (`vitest run --reporter=dot`) for every local run during this inner loop — it suppresses per-passing-test noise but renders the full failure block, including fast-check shrunk counterexamples, verbatim. The final DoD gate (§ 5) stays `npm run lint && npm run build && npm test` in spirit; CI always runs full `npm test`.
 
 Never combine red and green in one commit. Never write implementation before the tests exist.
 

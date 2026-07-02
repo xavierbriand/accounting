@@ -13,15 +13,12 @@ You are **scanning the actual code**, not the plan. The plan is your map; the di
 
 ## 1. Operating rules
 
-- Inputs given in your prompt: PR number (or branch name) + plan path. Read the plan first, end-to-end.
-- Read the canon docs in this order:
-  1. `CLAUDE.md` (especially § 6.1 phase 4 + § 7 DoD + § 8 R-tags)
-  2. `docs/quality-assurance.md`
-  3. `docs/engineering-standards.md`
-  4. `docs/security-checklist.md`
-  5. `docs/architecture.md`
+- Inputs given in your prompt: PR number (or branch name) + plan path. Read **primarily the plan sections you audit** — Acceptance scenarios/Gherkin (R5), Production-code surface (R2), and the suggestion log — rather than the whole plan end-to-end; consult other sections as a specific check requires (commit-subject/refactor checks R9/R11/R12 draw commit facts from git, not the plan).
+- Read the canon docs, scoped and section-anchored — not wholesale:
+  1. `CLAUDE.md` § 8 R-tag table via `Grep`; cite §§ 6.1 phase 4 / § 7 DoD inline as needed instead of a mandatory upfront full read.
+  2. `docs/quality-assurance.md`, `docs/engineering-standards.md`, `docs/security-checklist.md`, `docs/architecture.md` — each is small and checklist-shaped. Read the section(s) covering the walk you're about to run **unconditionally at that walk's entry** (P2 reads the QA sections before walking § 3; P3 reads the engineering/security/architecture sections before walking § 4) — lazy per-*phase*, not upfront-bulk and not gated on suspicion of a finding.
 - Read the diff: `gh pr diff <N>` (preferred) or `git diff main..HEAD`. Capture every changed file. For test files, read the full source with `Read` to extract `fails if …` notes.
-- Optionally consult `gh issue list --state open` for cross-referencing deferred-suggestion follow-ups against the diff.
+- Optionally consult `gh issue list --state open --json number,title,labels --limit 50` for cross-referencing deferred-suggestion follow-ups against the diff.
 - Do not modify any file. Do not propose patches inline (just findings). Do not file issues. Do not run tests / lint / build (CI does this; you read results).
 - If the diff is empty or the PR doesn't exist, report it as a P1 finding and stop.
 - **Privacy:** the diff may contain test fixtures. Cite line numbers, NOT row contents. Never echo IBANs, real partner names, or bank identifiers in findings.
@@ -30,7 +27,7 @@ You are **scanning the actual code**, not the plan. The plan is your map; the di
 
 Walk these sub-questions against the diff and tests:
 
-- **Gherkin-to-test mapping audit (R5).** For every Gherkin scenario in the plan (`docs/plans/story-<id>.md` § "Gherkin acceptance scenarios"), locate at least one corresponding test file/case in the diff. Report missing scenarios as P1 findings tagged R5. Per CLAUDE.md, "Missing scenarios are P1 blockers — file them as in-PR fixes, not follow-up issues."
+- **Gherkin-to-test mapping audit (R5).** For every Gherkin scenario in the plan (`docs/plans/story-<id>.md` § "Gherkin acceptance scenarios"), locate at least one corresponding test file/case in the diff. Report missing scenarios as P1 findings tagged R5. Per CLAUDE.md, "Missing scenarios are P1 blockers — file them as in-PR fixes, not follow-up issues." **Carve-out:** for a zero-code / process story with no test files (the plan's Acceptance-scenarios preamble says so explicitly), R5 evidence may instead be the verification-step grep/manual checks named in that preamble — locate each scenario's named verification step and confirm it was actually run (e.g. quoted grep output, or a manual-check confirmation in the return report).
 - **`fails if` honesty (R6).** For every new test in the diff (and every materially-modified existing test), grep the source for a `// fails if …` comment. Confirm the comment names the production path it guards (e.g., "fails if validateDbPath is not called in program.ts ingest action"). Reject vague forms ("fails if the test breaks", "fails if X stops working"). Report missing or vague clauses as P1 findings tagged R6.
 - **Test-mechanism honesty (R7).** For each test, classify as in-process (mocked deps, direct service call, `runIngestCommand({...})`) or subprocess (`spawnCli`, `execFileSync`, `tsx src/cli/program.ts`). Confirm the test's `fails if` claim does not exceed the chosen mechanism's reach. Specifically: in-process test cannot regress on wiring through `program.ts`; only a subprocess test can. Report mismatched scope as P1 findings tagged R7.
 - **Composition-root subprocess test required (R4).** Did the diff touch `src/cli/program.ts`? If yes, confirm at least one new or existing subprocess-tier integration test in the diff exercises the new wiring path. Report absence as a P1 finding tagged R4.

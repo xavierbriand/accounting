@@ -105,7 +105,7 @@ No `src/` files touched. No migrations. No schema changes. No product behaviour 
 | `harness/metrics/tests/loop-metrics.integration.test.ts` | Subprocess smoke test (R7) |
 | `harness/metrics/usage-reader.ts` | Tool 2 entrypoints |
 | `harness/metrics/lib/usage-reader.ts` | Tool 2 pure lib |
-| `harness/metrics/lib/validate-path.ts` | Boundary-hygiene helper — local `validateDbPath`-pattern re-implementation |
+| `harness/metrics/validate-path.ts` | Boundary-hygiene helper — local `validateDbPath`-pattern re-implementation (tool level, not `lib/`: it imports `node:fs`/`node:path`, so `lib/`'s zero-fs-imports convention doesn't apply — Phase 4 finding F7) |
 | `harness/metrics/tests/usage-reader.test.ts` | Fixture-based unit tests |
 | `harness/metrics/tests/usage-reader.integration.test.ts` | Subprocess smoke test (R7) |
 | `harness/metrics/tests/validate-path.test.ts` | Unit tests for the boundary-hygiene helper |
@@ -220,8 +220,8 @@ R16's 4-commit collapse covers zero-behaviour-change stories. story-h4 adds thre
 
 - [x] Phase 1 (plan) complete
 - [x] Phase 2 (plan-reviewer + sibling-overlap, launched in parallel in a single message) — complete 2026-07-02; all findings tagged below
-- [ ] Phase 3 (Sonnet implementation) — pending
-- [ ] Phase 4 (code review + refactor) — pending
+- [x] Phase 3 (Sonnet implementation) — complete 2026-07-02
+- [x] Phase 4 (code review + refactor) — complete 2026-07-02
 - [ ] Phase 5 (retrospective) — pending
 
 ## Suggestion log
@@ -248,3 +248,17 @@ Phase 2 run 2026-07-02: plan-reviewer (29 findings, 12/21 rule-tags apply — R1
 | Sibling | #99 closure would silently under-deliver 3 literal checkboxes | adopted | "#99 closure deviations" section added; C6 delivers the retro-rewrite item; comment posted on #99 at DoR |
 | Sibling | Pre-planning PR snapshot stale (#135/#126 closed; #141/#142 new) | adopted | Phase-2 snapshot-update bullet added to sub-loop section |
 | Sibling | #119's temp-git-repo scaffolding overlaps C1 fixture needs — reuse candidate | acknowledged | Evaluate shared helper at Phase 4 refactor; no scope change now |
+
+**Phase 4 — code-reviewer findings (2026-07-02).** 21 findings: R5 all three scenarios mapped and confirmed; R6/R7/R8 walks pass with one scope caveat folded into F5. Classified fix-now / acknowledge (0 deferred):
+
+| # | Finding | Class | Resolution |
+| --- | --- | --- | --- |
+| F5 | Unknown `--` flag beside valid positional silently accepted (contradicts boundary-hygiene claim; untested case) | fix-now | C7: rejected with usage text + integration test |
+| F7 | `lib/validate-path.ts` imports node:fs — violates harness lib-purity convention | fix-now | C7: relocated to tool level |
+| F1 | `fixtures/commit-log.txt` + `fixtures/session-attribution.jsonl` unused by any test | fix-now | C7: deleted; inline fixtures cover diversity |
+| F9 | README describes unimplemented price-map date-staleness tolerance | fix-now | C7: wording tightened to shipped behavior |
+| F6 | Committed loop.csv stale vs tool output (h4 plan_loc 248→250 after C6 plan edits) | fix-now | C7: regenerated after final plan edits; self-measurement churn noted for retro |
+| F2 | DoR checklist showed Phase 3 unticked despite landed commits | fix-now | C7: ticked 3 & 4 |
+| F3/F4 | C7/C8 slices + status.d fragment absent from diff | acknowledge | By phase design: C7 is this commit; C8 + R17 fragment land at Phase 5 |
+| F8 | Story-id→commit-subject matching duplicated in loop-metrics and usage-reader | acknowledge | Rule-of-three; cross-referenced on #144 whose checks need the same matcher |
+| F10 | `--story` dispatch via entrypoint-filename string match | acknowledge | Two modes in one entrypoint; revisit on a third mode |

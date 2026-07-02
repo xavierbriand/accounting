@@ -35,6 +35,18 @@ describe('metrics:usage subprocess smoke', () => {
     expect(result.stderr).toContain('Usage:');
   });
 
+  // fails if: a valid positional path argument masks an unknown trailing
+  // flag — main() previously filtered out every `--`-prefixed token before
+  // checking the positional count, so `<valid-path> --extra-unexpected-flag`
+  // exited 0 silently. Guards the boundary-hygiene claim ("entrypoints
+  // reject unrecognized argv tokens with usage text") end-to-end through
+  // the real CLI, not just the no-args case above (Phase-4 finding F5).
+  it('rejects a valid path argument accompanied by an unknown flag', () => {
+    const result = run([FIXTURE, '--extra-unexpected-flag']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Usage:');
+  });
+
   describe('symlink refusal', () => {
     const tempFiles: string[] = [];
     afterEach(() => {
@@ -80,6 +92,15 @@ describe('metrics:story subprocess smoke', () => {
 
   it('rejects --story with no id via usage text and a non-zero exit', () => {
     const result = run(['--story']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Usage:');
+  });
+
+  // fails if: a valid story id accompanied by a trailing unknown flag is
+  // silently accepted — same boundary-hygiene gap as the --story mode
+  // (Phase-4 finding F5).
+  it('rejects a valid story id accompanied by an unknown trailing flag', () => {
+    const result = run(['--story', 'h4', '--extra-unexpected-flag']);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Usage:');
   });

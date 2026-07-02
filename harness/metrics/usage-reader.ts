@@ -10,7 +10,7 @@ import {
   attributeToStory,
   formatStoryReport,
 } from './lib/usage-reader.js';
-import { validateInputPath } from './lib/validate-path.js';
+import { validateInputPath } from './validate-path.js';
 
 const USAGE_TEXT = `Usage:
   metrics:usage -- <path-to-session-jsonl>
@@ -131,11 +131,12 @@ function runStory(storyId: string): void {
 
 function main(): void {
   const args = process.argv.slice(2);
-  const isStoryMode = process.argv[1]?.includes('usage-reader') && args[0] === '--story';
+  const isStoryMode = args[0] === '--story';
 
   if (isStoryMode) {
     const storyId = args[1];
-    if (storyId === undefined || storyId.startsWith('--')) {
+    const rest = args.slice(2);
+    if (storyId === undefined || storyId.startsWith('--') || rest.length > 0) {
       process.stderr.write(USAGE_TEXT);
       process.exit(2);
     }
@@ -143,12 +144,12 @@ function main(): void {
     return;
   }
 
-  const positional = args.filter((a) => !a.startsWith('--'));
-  if (positional.length !== 1) {
+  const unknownFlags = args.filter((a) => a.startsWith('--'));
+  if (unknownFlags.length > 0 || args.length !== 1) {
     process.stderr.write(USAGE_TEXT);
     process.exit(2);
   }
-  runUsage(positional[0]);
+  runUsage(args[0]);
 }
 
 main();

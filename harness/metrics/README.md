@@ -73,10 +73,13 @@ file.
 
 ### Price map
 
-`harness/metrics/prices.json` carries a checked-in `asOf` date. If the map
-predates the models seen in a session by more than the reader's staleness
-tolerance, cost output degrades to token-only — tokens are always the
-primary, authoritative unit.
+`harness/metrics/prices.json` carries a checked-in `asOf` date, cited
+alongside any computed cost figure so the reader knows how current the
+rates are. `applyPrices` degrades to token-only (`cost: null`) when a
+session's model has no matching entry in the price map — it does not
+compare `asOf` against the session date; there is no automated staleness
+check. Tokens are always the primary, authoritative unit regardless of
+whether a cost figure is available.
 
 ## Boundary hygiene
 

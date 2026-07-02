@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { validateInputPath } from '../lib/validate-path.js';
+import { validateInputPath } from '../validate-path.js';
 
 const TEMP_FILES: string[] = [];
 

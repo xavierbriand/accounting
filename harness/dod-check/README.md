@@ -11,7 +11,10 @@ Three checks, one findings union:
   (`countChangeBodyCommits`): commits carrying the story id in their subject, excluding the
   preparatory `chore(docs): ... plan + P1/P2/P3 review` commit and the `chore(retro): ...` commit —
   both are bookkeeping, not TDD slices, and including them would inflate the count past the declared
-  envelope (e.g. a 10-slice story would read 11 or 12 and false-hard-fail once out of draft).
+  envelope (e.g. a 10-slice story would read 11 or 12 and false-hard-fail once out of draft). Merge
+  commits are excluded from the scan entirely (`git log --no-merges`): they never carry the story-id
+  convention, and a GitHub `pull_request` build checks out a synthetic merge commit (`Merge <sha>
+  into <base>`) that would otherwise be a false `missing-story-id`.
 - **TODO / TBD** — `TODO` comments anywhere in tracked `src/`, `tests/`, `harness/` source; `TBD` left
   in a PR body section (excluding the § 10 merge checklist, which legitimately uses placeholder
   language).
@@ -104,6 +107,7 @@ sends `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead
 ## Wiring
 
 - **CI** (`.github/workflows/ci.yml`): a `Run DoD checks` step, with `DOD_PR_DRAFT` /
-  `DOD_PR_NUMBER` wired from `github.event.pull_request.*`.
+  `DOD_PR_NUMBER` wired from `github.event.pull_request.*`, `GH_TOKEN: ${{ github.token }}` so
+  `gh pr view` works, and the job-level `permissions: pull-requests: read` that token needs.
 - **PostToolUse hook** (`.claude/settings.json`): runs `--check gherkin` when an edit touches
   `tests/features/**`.

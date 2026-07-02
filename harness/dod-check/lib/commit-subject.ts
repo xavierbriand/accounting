@@ -67,6 +67,19 @@ export function parseEnvelopeRule(planContent: string): EnvelopeRule | null {
   return { rule, min: range.min, max: range.max };
 }
 
+const PREP_COMMIT_SUBJECT = /^chore\(docs\):.*\bplan \+ P1\/P2\/P3 review\b/;
+const RETRO_COMMIT_SUBJECT = /^chore\(retro\)/;
+
+export function countChangeBodyCommits(commits: CommitLogEntry[], storyId: string): number {
+  const pattern = buildStoryIdRegExp(storyId);
+  return commits.filter(
+    (commit) =>
+      pattern.test(commit.subject) &&
+      !PREP_COMMIT_SUBJECT.test(commit.subject) &&
+      !RETRO_COMMIT_SUBJECT.test(commit.subject),
+  ).length;
+}
+
 export function checkCommitEnvelope(
   count: number,
   envelope: EnvelopeRule | null,

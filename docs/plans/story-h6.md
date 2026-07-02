@@ -340,3 +340,22 @@ every substantive finding is tagged.
 | Sibling | #147 names #144's scanner family as a fold-in target but isn't acknowledged | adopted | Context: listed as out-of-scope future scanner-family candidate |
 | Sibling | #119 temp-git-repo shared-helper coordination | acknowledged | Already captured in Risks table; evaluate shared helper at Phase 4, no scope grab |
 | Sibling | Story-id uniqueness + no open-PR overlap | acknowledged | Confirmed: `story-h6` free on `origin/main` and all branches; 0 open PRs |
+
+**Phase 4 — code-reviewer findings (2026-07-02).** 10 findings (4 P1, 1 P2, 5 P3; 14/15 rule-tags
+apply). Classified fix-now / defer-issue / acknowledge by Opus:
+
+| # | Finding | Class | Resolution |
+| --- | --- | --- | --- |
+| F1 | `pr-tbd` matches any inline `TBD` prose, not a placeholder — flags this PR's own sections 2 & 5 (self-reference); would hard-fail the story's own merge | fix-now | Match only a standalone placeholder line (`^\s*[*_`]*TBD[*_`]*\s*$`); add an inline-prose non-match test |
+| F2 | Envelope counts `commits.length` — all range commits incl. the P0 prep and any id-less ones; reads 11 after retro → false hard-fail out of draft | fix-now | Count behaviour slices only: commits carrying the story id, excluding the preparatory `chore(docs): … plan + P1/P2/P3 review` and `chore(retro):` bookkeeping commits (documented in README + a pure `countChangeBodyCommits` unit test). Keeps h6 at exactly 10 slices — honours the draft-aware choice without self-block |
+| F3 | `orphan-step` declared, in `HARD_KINDS`, formatted, and documented — but `checkGherkinMap` never emits one (plan-vs-diff gap) | fix-now | Implement the reverse leg: a step definition matched by no scenario step → `orphan-step`; add unit + integration coverage |
+| F4 | `resolvePrBody` / `getCommitLog` / `resolveStoryId` swallow `gh`/`git` failures with no reported degradation line (contradicts plan + README) | fix-now | Collect + emit degradation lines (human stderr + `--json` `degraded[]`), matching `resolveDraftState` |
+| F5 | No subprocess-tier test for `pr-tbd` (Scenario B's TBD leg unit-only); `resolvePrBody` wiring untested | fix-now | Add a `DOD_PR_BODY_FILE` env seam (read body from a file when set) so the integration test exercises `pr-tbd` draft/out-of-draft legs; also usable by CI |
+| F6 | R8: `--json` shape asserted for only `missing-story-id`, not the other ~5 kinds | fix-now | Add `--json` assertions covering every `DodFinding` kind |
+| F7 | Metrics tests write into real `docs/metrics/` (`loop.csv`, `story-h4.md`) — pre-existing (h4), not h6's diff; caused a flaky failure mid-review | defer-issue | [#150](https://github.com/xavierbriand/accounting/issues/150); new dod-check tests already use `mkdtempSync`+cleanup |
+| F8 | R10/R12: `c0c9198` bundled a `TODO_MARKER→TODO_COMMENT_MARKER` behaviour fix + fixture tests under a `chore:` subject | acknowledge | Already pushed; retro "Change" lesson (surface post-green fixes as their own visible slice) |
+| F9 | Plan-scenario extraction only reads in-fence `Scenario:` lines, not the plan's `**Scenario X —**` bold headers → plan↔feature leg inert for harness plans | acknowledge | Intentional: matching bold-header names to `.feature` names would emit false `plan-only` findings for every harness story (none have features). README documents the limitation |
+| F10 | Soft: `draftSuffix` per-finding recompute; `findPlanFile`/`resolveStoryId` redundant I/O; `buildMatcher` bare catch | acknowledge | Opportunistic; `buildMatcher` catch is the fail-safe direction (invalid pattern → never matches) |
+
+Fix-now items F1–F6 land in **one** `fix(harness):` Phase-4 commit (keeping behaviour-slice count at
+10). F7 → issue. F8/F9/F10 → retro/acknowledge.

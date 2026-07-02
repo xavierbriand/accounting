@@ -88,15 +88,11 @@ function buildMatcher(def: StepDefinitionSource, registry: ParameterTypeRegistry
   }
 }
 
-export function checkGherkinMap(
+function findUnmappedScenarios(
   scenarios: FeatureScenario[],
-  stepDefs: StepDefinitionSource[],
-  planScenarioNames: string[],
-): GherkinMapResult {
-  const registry = new ParameterTypeRegistry();
-  const matchers = stepDefs.map((def) => buildMatcher(def, registry));
-
-  const findings: GherkinMapFinding[] = [];
+  matchers: Array<(text: string) => boolean>,
+): UnmappedScenarioFinding[] {
+  const findings: UnmappedScenarioFinding[] = [];
   for (const scenario of scenarios) {
     for (const step of scenario.steps) {
       const resolved = matchers.some((matcher) => matcher(step));
@@ -111,8 +107,15 @@ export function checkGherkinMap(
       }
     }
   }
+  return findings;
+}
 
+function findPlanOnlyScenarios(
+  scenarios: FeatureScenario[],
+  planScenarioNames: string[],
+): UnmappedScenarioFinding[] {
   const featureScenarioNames = new Set(scenarios.map((s) => s.name));
+  const findings: UnmappedScenarioFinding[] = [];
   for (const planName of planScenarioNames) {
     if (!featureScenarioNames.has(planName)) {
       findings.push({
@@ -123,6 +126,39 @@ export function checkGherkinMap(
       });
     }
   }
+  return findings;
+}
+
+function findOrphanSteps(
+  stepDefs: StepDefinitionSource[],
+  matchers: Array<(text: string) => boolean>,
+  scenarios: FeatureScenario[],
+): OrphanStepFinding[] {
+  const allStepTexts = scenarios.flatMap((scenario) => scenario.steps);
+  const findings: OrphanStepFinding[] = [];
+  stepDefs.forEach((def, index) => {
+    const matcher = matchers[index];
+    const usedBySomeScenario = allStepTexts.some((text) => matcher(text));
+    if (!usedBySomeScenario) {
+      findings.push({ kind: 'orphan-step', pattern: def.pattern, file: def.file });
+    }
+  });
+  return findings;
+}
+
+export function checkGherkinMap(
+  scenarios: FeatureScenario[],
+  stepDefs: StepDefinitionSource[],
+  planScenarioNames: string[],
+): GherkinMapResult {
+  const registry = new ParameterTypeRegistry();
+  const matchers = stepDefs.map((def) => buildMatcher(def, registry));
+
+  const findings: GherkinMapFinding[] = [
+    ...findUnmappedScenarios(scenarios, matchers),
+    ...findPlanOnlyScenarios(scenarios, planScenarioNames),
+    ...findOrphanSteps(stepDefs, matchers, scenarios),
+  ];
 
   return { findings };
 }

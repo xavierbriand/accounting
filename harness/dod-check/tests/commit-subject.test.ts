@@ -5,6 +5,7 @@ import {
   checkCommitSubjects,
   parseEnvelopeRule,
   checkCommitEnvelope,
+  countChangeBodyCommits,
   type CommitLogEntry,
 } from '../lib/commit-subject.js';
 
@@ -157,5 +158,64 @@ describe('checkCommitEnvelope', () => {
   it('reports envelope-not-declared when no envelope rule resolved', () => {
     const finding = checkCommitEnvelope(8, null);
     expect(finding).toEqual({ kind: 'commit-envelope', count: 8, rule: null, min: null, max: null });
+  });
+});
+
+describe('countChangeBodyCommits', () => {
+  // fails if: feat/test/fix behaviour-slice commits carrying the story id
+  // are not counted — guards the "count behaviour slices only" invariant
+  // (F2): a real story's commit set should count its actual TDD slices.
+  it('counts feat/test/fix slices that carry the story id', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'a1', subject: 'test(harness): shared story-id matcher — failing [story-h6]' },
+      { sha: 'a2', subject: 'feat(harness): story-id-matcher — green [story-h6]' },
+      { sha: 'a3', subject: 'fix(harness): edge case [story-h6]' },
+    ];
+    expect(countChangeBodyCommits(commits, 'h6')).toBe(3);
+  });
+
+  // fails if: the preparatory "plan + P1/P2/P3 review" commit is counted —
+  // guards F2's exclusion of the P0 prep commit from the envelope.
+  it('excludes the preparatory "chore(docs): ... plan + P1/P2/P3 review" commit', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'p0', subject: 'chore(docs): story-h6 plan + P1/P2/P3 review [story-h6]' },
+      { sha: 'a1', subject: 'test(harness): shared story-id matcher — failing [story-h6]' },
+      { sha: 'a2', subject: 'feat(harness): story-id-matcher — green [story-h6]' },
+    ];
+    expect(countChangeBodyCommits(commits, 'h6')).toBe(2);
+  });
+
+  // fails if: the "chore(retro): ..." bookkeeping commit is counted — guards
+  // F2's exclusion of the retro commit, avoiding a false hard-fail once the
+  // retro commit lands and pushes the count to 11.
+  it('excludes the "chore(retro): ..." commit', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'a1', subject: 'test(harness): shared story-id matcher — failing [story-h6]' },
+      { sha: 'a2', subject: 'feat(harness): story-id-matcher — green [story-h6]' },
+      { sha: 'r1', subject: 'chore(retro): story-h6 retrospective + status fragment [story-h6]' },
+    ];
+    expect(countChangeBodyCommits(commits, 'h6')).toBe(2);
+  });
+
+  // fails if: commits without the story id in the subject are counted —
+  // guards against inflating the envelope with unrelated commits.
+  it('ignores commits without the story id in the subject', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'a1', subject: 'test(harness): shared story-id matcher — failing [story-h6]' },
+      { sha: 'x1', subject: 'chore(deps): bump something unrelated' },
+    ];
+    expect(countChangeBodyCommits(commits, 'h6')).toBe(1);
+  });
+
+  it('excludes both the prep and retro commits together, counting only the middle slices', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'p0', subject: 'chore(docs): story-h6 plan + P1/P2/P3 review [story-h6]' },
+      { sha: 'a1', subject: 'test(harness): shared story-id matcher — failing [story-h6]' },
+      { sha: 'a2', subject: 'feat(harness): story-id-matcher — green [story-h6]' },
+      { sha: 'a3', subject: 'test(harness): commit-subject + envelope check — failing [story-h6]' },
+      { sha: 'a4', subject: 'feat(harness): commit-subject discipline, draft-aware envelope — green [story-h6]' },
+      { sha: 'r1', subject: 'chore(retro): story-h6 retrospective + status fragment [story-h6]' },
+    ];
+    expect(countChangeBodyCommits(commits, 'h6')).toBe(4);
   });
 });

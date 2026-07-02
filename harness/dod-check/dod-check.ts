@@ -6,6 +6,7 @@ import {
   checkCommitSubjects,
   parseEnvelopeRule,
   checkCommitEnvelope,
+  countChangeBodyCommits,
   type CommitLogEntry,
   type MissingStoryIdFinding,
   type CommitEnvelopeFinding,
@@ -49,14 +50,22 @@ function isHardFinding(finding: DodFinding): boolean {
   return HARD_KINDS.has(finding.kind);
 }
 
-function resolveStoryId(repoRoot: string): { storyId: string } | { unresolved: string } {
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function resolveStoryId(
+  repoRoot: string,
+  degraded: string[],
+): { storyId: string } | { unresolved: string } {
   let branch: string;
   try {
     branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd: repoRoot,
       encoding: 'utf8',
     }).trim();
-  } catch {
+  } catch (err) {
+    degraded.push(`resolveStoryId: git rev-parse failed (${errorMessage(err)})`);
     branch = '';
   }
   const branchMatch = /^story-(.+)$/.exec(branch);
@@ -75,7 +84,8 @@ function resolveStoryId(repoRoot: string): { storyId: string } | { unresolved: s
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
-  } catch {
+  } catch (err) {
+    degraded.push(`resolveStoryId: git diff --name-only failed (${errorMessage(err)})`);
     planFiles = [];
   }
 
@@ -93,7 +103,7 @@ function resolveStoryId(repoRoot: string): { storyId: string } | { unresolved: s
   return { unresolved: reason };
 }
 
-function getCommitLog(repoRoot: string): CommitLogEntry[] {
+function getCommitLog(repoRoot: string, degraded: string[]): CommitLogEntry[] {
   let output: string;
   try {
     output = execFileSync(
@@ -101,7 +111,8 @@ function getCommitLog(repoRoot: string): CommitLogEntry[] {
       ['log', '--format=%H%x1f%s', 'origin/main...HEAD'],
       { cwd: repoRoot, encoding: 'utf8' },
     );
-  } catch {
+  } catch (err) {
+    degraded.push(`getCommitLog: git log failed (${errorMessage(err)})`);
     return [];
   }
   return output
@@ -119,18 +130,18 @@ function findPlanFile(repoRoot: string, storyId: string): string | null {
   return fs.existsSync(candidate) ? candidate : null;
 }
 
-function runCommitSubjectCheck(repoRoot: string): DodFinding[] {
-  const resolution = resolveStoryId(repoRoot);
+function runCommitSubjectCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+  const resolution = resolveStoryId(repoRoot, degraded);
   if ('unresolved' in resolution) {
     return [{ kind: 'story-id-unresolved', reason: resolution.unresolved }];
   }
   const { storyId } = resolution;
-  const commits = getCommitLog(repoRoot);
+  const commits = getCommitLog(repoRoot, degraded);
   const findings: DodFinding[] = [...checkCommitSubjects(commits, storyId)];
 
   const planPath = findPlanFile(repoRoot, storyId);
   const envelope = planPath ? parseEnvelopeRule(fs.readFileSync(planPath, 'utf8')) : null;
-  const envelopeFinding = checkCommitEnvelope(commits.length, envelope);
+  const envelopeFinding = checkCommitEnvelope(countChangeBodyCommits(commits, storyId), envelope);
   if (envelopeFinding) {
     findings.push(envelopeFinding);
   }
@@ -176,6 +187,14 @@ function runTodoCheck(repoRoot: string): DodFinding[] {
 type PrBodyResolution = { body: string } | { unavailable: string };
 
 function resolvePrBody(repoRoot: string): PrBodyResolution {
+  const bodyFile = process.env['DOD_PR_BODY_FILE'];
+  if (bodyFile) {
+    try {
+      return { body: fs.readFileSync(bodyFile, 'utf8') };
+    } catch (err) {
+      return { unavailable: `DOD_PR_BODY_FILE read failed (${errorMessage(err)})` };
+    }
+  }
   const prNumber = process.env['DOD_PR_NUMBER'];
   const args = prNumber ? [prNumber] : [];
   try {
@@ -185,13 +204,14 @@ function resolvePrBody(repoRoot: string): PrBodyResolution {
     });
     return { body };
   } catch (err) {
-    return { unavailable: err instanceof Error ? err.message : String(err) };
+    return { unavailable: errorMessage(err) };
   }
 }
 
-function runPrTbdCheck(repoRoot: string): DodFinding[] {
+function runPrTbdCheck(repoRoot: string, degraded: string[]): DodFinding[] {
   const resolution = resolvePrBody(repoRoot);
   if ('unavailable' in resolution) {
+    degraded.push(`resolvePrBody: could not resolve PR body (${resolution.unavailable})`);
     return [];
   }
   return scanPrBodyTbd(resolution.body);
@@ -215,7 +235,7 @@ function extractPlanScenarioNames(planContent: string): string[] {
   return names;
 }
 
-function runGherkinMapCheck(repoRoot: string): DodFinding[] {
+function runGherkinMapCheck(repoRoot: string, degraded: string[]): DodFinding[] {
   const featuresDir = path.join(repoRoot, 'tests', 'features');
   const stepsDir = path.join(featuresDir, 'steps');
   if (!fs.existsSync(featuresDir)) return [];
@@ -234,7 +254,7 @@ function runGherkinMapCheck(repoRoot: string): DodFinding[] {
     return parseStepDefinitions(fs.readFileSync(path.join(stepsDir, f), 'utf8'), relPath);
   });
 
-  const resolution = resolveStoryId(repoRoot);
+  const resolution = resolveStoryId(repoRoot, degraded);
   const planScenarioNames =
     'storyId' in resolution
       ? (() => {
@@ -276,8 +296,7 @@ function resolveDraftState(repoRoot: string): DraftResolution {
     }
     return { isDraft, degraded: null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { isDraft: true, degraded: `gh pr view failed (${message})` };
+    return { isDraft: true, degraded: `gh pr view failed (${errorMessage(err)})` };
   }
 }
 
@@ -345,8 +364,8 @@ function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
   ].join('\n');
 }
 
-function formatJsonReport(findings: DodFinding[]): string {
-  return JSON.stringify({ findings });
+function formatJsonReport(findings: DodFinding[], degraded: string[]): string {
+  return JSON.stringify({ findings, degraded });
 }
 
 function main(): void {
@@ -356,11 +375,12 @@ function main(): void {
   const onlyCheck = checkIndex !== -1 ? args[checkIndex + 1] : null;
 
   const repoRoot = process.cwd();
+  const degraded: string[] = [];
 
   const checks: Record<string, () => DodFinding[]> = {
-    commits: () => runCommitSubjectCheck(repoRoot),
-    'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrTbdCheck(repoRoot)],
-    gherkin: () => runGherkinMapCheck(repoRoot),
+    commits: () => runCommitSubjectCheck(repoRoot, degraded),
+    'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrTbdCheck(repoRoot, degraded)],
+    gherkin: () => runGherkinMapCheck(repoRoot, degraded),
   };
 
   const selectedChecks = onlyCheck ? [onlyCheck] : Object.keys(checks);
@@ -368,13 +388,18 @@ function main(): void {
 
   const draft = resolveDraftState(repoRoot);
   if (draft.degraded) {
-    process.stderr.write(`draft-state degraded: ${draft.degraded}\n`);
+    degraded.push(`resolveDraftState: ${draft.degraded}`);
   }
 
   if (json) {
-    process.stdout.write(formatJsonReport(findings) + '\n');
-  } else if (findings.length > 0) {
-    process.stderr.write(formatHumanReport(findings, draft.isDraft) + '\n');
+    process.stdout.write(formatJsonReport(findings, degraded) + '\n');
+  } else {
+    for (const line of degraded) {
+      process.stderr.write(`degraded: ${line}\n`);
+    }
+    if (findings.length > 0) {
+      process.stderr.write(formatHumanReport(findings, draft.isDraft) + '\n');
+    }
   }
 
   const hardCount = findings.filter(isHardFinding).length;

@@ -175,6 +175,96 @@ describe('dod-check integration — Gherkin↔step existence mapping (Scenario C
   });
 });
 
+describe('dod-check integration — pr-tbd via DOD_PR_BODY_FILE seam (F5)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 1. Story',
+        '',
+        'filled in',
+        '',
+        '## 2. Intent',
+        '',
+        'TBD',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] lint / build / test green on CI',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: the pr-tbd check is not exercised at the subprocess tier via
+  // DOD_PR_BODY_FILE, or a standalone TBD placeholder in a non-checklist
+  // section fails to fail the process once out of draft — guards F5's seam
+  // end-to-end (Scenario B's TBD leg was previously unit-only).
+  it('advisory pr-tbd → exit 0 while the PR is a draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'true',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).toContain('(advisory — PR is draft)');
+  });
+
+  it('hard pr-tbd → exit 1 once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).not.toContain('(advisory — PR is draft)');
+  });
+});
+
+describe('dod-check integration — degradation reporting (F4)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+  });
+
+  // fails if: a gh/git failure in resolvePrBody is swallowed with no
+  // reported degradation line — guards F4's "never silent" contract for the
+  // pr-tbd resolution path. This temp repo has no git remote, so `gh pr
+  // view` fails with "no git remotes found".
+  it('reports a degradation line when resolvePrBody cannot reach gh', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], { DOD_PR_DRAFT: 'true' });
+    expect(result.stderr).toContain('degraded:');
+    expect(result.stderr.toLowerCase()).toContain('pr body');
+  });
+
+  // fails if: --json mode drops the degradation report instead of
+  // surfacing it as a `degraded` field alongside `findings` — guards F4's
+  // JSON-mode surface.
+  it('includes a degraded array in --json output alongside findings', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd', '--json'], { DOD_PR_DRAFT: 'true' });
+    const parsed = JSON.parse(result.stdout) as { findings: unknown[]; degraded: string[] };
+    expect(Array.isArray(parsed.degraded)).toBe(true);
+    expect(parsed.degraded.some((d) => d.toLowerCase().includes('pr body'))).toBe(true);
+  });
+});
+
 describe('dod-check integration — --json output shape', () => {
   let tmpDir: string;
 
@@ -197,5 +287,134 @@ describe('dod-check integration — --json output shape', () => {
     expect(finding).toBeDefined();
     expect(typeof finding?.['sha']).toBe('string');
     expect(typeof finding?.['subject']).toBe('string');
+  });
+});
+
+describe('dod-check integration — --json covers every DodFinding kind (F6, R8)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(
+      tmpDir,
+      'zz',
+      [
+        '## Slice plan (R13: target 6-10 commits)',
+        '',
+        '```gherkin',
+        'Scenario: a plan-only scenario absent from features',
+        '  Given nothing relevant',
+        '```',
+      ].join('\n'),
+    );
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    fs.mkdirSync(path.join(tmpDir, 'src', 'core'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'src', 'core', 'thing.ts'),
+      'export function thing(): void {\n  // TODO: finish this\n}\n',
+    );
+    git(tmpDir, ['add', 'src/core/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'chore: a commit with no story id reference']);
+
+    const featuresDir = path.join(tmpDir, 'tests', 'features');
+    const stepsDir = path.join(featuresDir, 'steps');
+    fs.mkdirSync(stepsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(featuresDir, 'widget.feature'),
+      [
+        'Feature: widget',
+        '',
+        '  Scenario: unmapped step scenario',
+        '    Given a step with no matching def',
+        '',
+        '  Scenario: clean scenario',
+        '    Given a resolvable step',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(stepsDir, 'widget.steps.ts'),
+      "import { Given } from 'quickpickle';\nGiven('a resolvable step', function () {});\nGiven('a step nobody calls', function () {});\n",
+    );
+    git(tmpDir, ['add', 'tests']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): widget — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      ['## 1. Story', '', 'TBD', '', '## 10. Merge checklist', '', '- [ ] done'].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: any DodFinding kind is missing from the --json findings array,
+  // or a finding's kind-specific fields deviate from the discriminated
+  // union — guards R8 mock-diversity across the full finding-kind set
+  // (missing-story-id, commit-envelope, todo-comment, pr-tbd,
+  // unmapped-scenario, orphan-step).
+  it('emits every non-story-id-unresolved DodFinding kind with its documented shape', () => {
+    const result = runDodCheck(tmpDir, ['--json'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>>; degraded: string[] };
+    expect(Array.isArray(parsed.findings)).toBe(true);
+    expect(Array.isArray(parsed.degraded)).toBe(true);
+
+    const byKind = (kind: string): Record<string, unknown> | undefined =>
+      parsed.findings.find((f) => f['kind'] === kind);
+
+    const missingStoryId = byKind('missing-story-id');
+    expect(missingStoryId).toBeDefined();
+    expect(typeof missingStoryId?.['sha']).toBe('string');
+    expect(typeof missingStoryId?.['subject']).toBe('string');
+
+    const commitEnvelope = byKind('commit-envelope');
+    expect(commitEnvelope).toBeDefined();
+    expect(typeof commitEnvelope?.['count']).toBe('number');
+
+    const todoComment = byKind('todo-comment');
+    expect(todoComment).toBeDefined();
+    expect(typeof todoComment?.['file']).toBe('string');
+    expect(typeof todoComment?.['line']).toBe('number');
+
+    const prTbd = byKind('pr-tbd');
+    expect(prTbd).toBeDefined();
+    expect(typeof prTbd?.['section']).toBe('string');
+
+    const unmappedScenario = byKind('unmapped-scenario');
+    expect(unmappedScenario).toBeDefined();
+    expect(typeof unmappedScenario?.['scenario']).toBe('string');
+    expect(typeof unmappedScenario?.['reason']).toBe('string');
+
+    const orphanStep = byKind('orphan-step');
+    expect(orphanStep).toBeDefined();
+    expect(typeof orphanStep?.['pattern']).toBe('string');
+    expect(typeof orphanStep?.['file']).toBe('string');
+  });
+});
+
+describe('dod-check integration — --json covers story-id-unresolved (F6, R8)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'not-a-story-branch']);
+  });
+
+  // fails if: story-id-unresolved is absent from the --json shape assertions
+  // — guards the last DodFinding kind (R8), distinct from the others because
+  // it short-circuits the commit-subject check rather than co-occurring.
+  it('emits story-id-unresolved with its documented shape when no story- branch and no plan file resolve', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits', '--json'], { DOD_PR_DRAFT: 'true' });
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+    const finding = parsed.findings.find((f) => f['kind'] === 'story-id-unresolved');
+    expect(finding).toBeDefined();
+    expect(typeof finding?.['reason']).toBe('string');
   });
 });

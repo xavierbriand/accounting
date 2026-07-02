@@ -155,4 +155,37 @@ describe('checkGherkinMap', () => {
     const result = checkGherkinMap(scenarios, defs, []);
     expect(result.findings).toEqual([]);
   });
+
+  // fails if: a step definition matched by no scenario step anywhere in the
+  // feature corpus is not reported — guards F3's reverse-direction
+  // "orphan-step" check (declared in the finding union but previously never
+  // emitted).
+  it('reports orphan-step for a step definition used by no scenario', () => {
+    const defs: StepDefinitionSource[] = [
+      { pattern: 'a precondition', kind: 'expression', file: 'widget.steps.ts' },
+      { pattern: 'a step nobody calls', kind: 'expression', file: 'widget.steps.ts' },
+    ];
+    const scenarios = [
+      { name: 'first scenario', file: 'widget.feature', steps: ['a precondition'] },
+    ];
+    const result = checkGherkinMap(scenarios, defs, []);
+    expect(result.findings).toContainEqual({
+      kind: 'orphan-step',
+      pattern: 'a step nobody calls',
+      file: 'widget.steps.ts',
+    });
+  });
+
+  // fails if: a step definition used by at least one scenario is falsely
+  // flagged as orphaned — guards against over-reporting on the reverse leg.
+  it('does not flag a step definition used by at least one scenario as orphan', () => {
+    const defs: StepDefinitionSource[] = [
+      { pattern: 'a precondition', kind: 'expression', file: 'widget.steps.ts' },
+    ];
+    const scenarios = [
+      { name: 'first scenario', file: 'widget.feature', steps: ['a precondition'] },
+    ];
+    const result = checkGherkinMap(scenarios, defs, []);
+    expect(result.findings.some((f) => f.kind === 'orphan-step')).toBe(false);
+  });
 });

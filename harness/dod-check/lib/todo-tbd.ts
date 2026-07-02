@@ -30,7 +30,7 @@ export function scanTodoComments(files: SourceFile[]): TodoCommentFinding[] {
 }
 
 const SECTION_HEADING = /^## (\d+)\. (.+)$/gm;
-const TBD_MARKER = /\bTBD\b/;
+const TBD_PLACEHOLDER_LINE = /^\s*[*_`]*TBD[*_`]*\s*$/m;
 const MERGE_CHECKLIST_SECTION_NUMBER = '10';
 
 export function scanPrBodyTbd(body: string): PrTbdFinding[] {
@@ -49,7 +49,7 @@ export function scanPrBodyTbd(body: string): PrTbdFinding[] {
     }
     const end = i + 1 < headings.length ? headings[i + 1].start : body.length;
     const region = body.slice(heading.start, end);
-    if (TBD_MARKER.test(region)) {
+    if (TBD_PLACEHOLDER_LINE.test(region)) {
       findings.push({ kind: 'pr-tbd', section: `${heading.number}. ${heading.title}` });
     }
   }

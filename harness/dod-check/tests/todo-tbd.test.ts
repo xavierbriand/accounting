@@ -129,4 +129,36 @@ describe('scanPrBodyTbd', () => {
       { kind: 'pr-tbd', section: '2. Intent' },
     ]);
   });
+
+  // fails if: an inline mention of "TBD" in ordinary prose (e.g. a PR body
+  // describing this very TBD scanner) is flagged as an unfilled section —
+  // guards against self-referential false positives (this PR's own body
+  // discusses "TBD" as a concept in sections 2/5 without leaving a
+  // placeholder).
+  it('does not flag a PR body with an inline mention of "TBD" in section 2 (not a placeholder)', () => {
+    const body = [
+      '## 1. Story',
+      '',
+      'filled in',
+      '',
+      '## 2. Intent',
+      '',
+      'This story adds a scanner that detects TBD placeholders left in PR bodies.',
+      '',
+      '## 10. Merge checklist',
+      '',
+      '- [ ] lint / build / test green on CI',
+    ].join('\n');
+    expect(scanPrBodyTbd(body)).toEqual([]);
+  });
+
+  // fails if: a standalone TBD placeholder wrapped in markdown emphasis or
+  // backticks (e.g. "**TBD**", "`TBD`") is missed — guards the placeholder
+  // form actually used in the PR template.
+  it('reports pr-tbd for a standalone TBD placeholder wrapped in markdown emphasis', () => {
+    const body = ['## 1. Story', '', '**TBD**', '', '## 10. Merge checklist', '', '- [ ] done'].join(
+      '\n',
+    );
+    expect(scanPrBodyTbd(body)).toEqual([{ kind: 'pr-tbd', section: '1. Story' }]);
+  });
 });

@@ -125,16 +125,16 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 
 - **Concept:** every primitive has a niche — when does each *and only it* solve the problem?
 
-| Primitive | Niche (when it's the right answer) |
-| --- | --- |
-| **Slash command** | A reusable invocation a *human* types. Self-contained. No silent triggering. |
-| **Skill** | Domain knowledge the *model* loads when relevant. Triggered by topic, not command. |
-| **Hook** | An *automated* response to a tool event the user shouldn't have to type. Side-effects on the harness, not the model. |
-| **Sub-agent** | A *context-budget* tool. Spin up when the work would pollute the parent's context with intermediate results. |
-| **MCP server** | An *external system* you want exposed as tools. Not for in-repo logic — that's a hook. |
-| **Statusline** | Persistent state the user wants visible *between* turns (cost, branch, last test result). |
-| **Output style** | Format-of-response control — when default markdown is wrong for the audience. |
-| **Permission mode** | Blast-radius gradient (Principle 5) made operational. |
+| Primitive | Niche (when it's the right answer) | Example in this repo |
+| --- | --- | --- |
+| **Slash command** | A reusable invocation a *human* types. Self-contained. No silent triggering. | `.claude/commands/story-status.md` |
+| **Skill** | Domain knowledge the *model* loads when relevant. Triggered by topic, not command. | `.claude/commands/new-story-preflight.md` |
+| **Hook** | An *automated* response to a tool event the user shouldn't have to type. Side-effects on the harness, not the model. | Stop hook in `.claude/settings.json` |
+| **Sub-agent** | A *context-budget* tool. Spin up when the work would pollute the parent's context with intermediate results. | `.claude/agents/sibling-overlap.md` |
+| **MCP server** | An *external system* you want exposed as tools. Not for in-repo logic — that's a hook. | `.mcp.json` |
+| **Statusline** | Persistent state the user wants visible *between* turns (cost, branch, last test result). | `.claude/settings.json` (statusline config, user-level `~/.claude/settings.json`) |
+| **Output style** | Format-of-response control — when default markdown is wrong for the audience. | *(not yet added)* |
+| **Permission mode** | Blast-radius gradient (Principle 5) made operational. | `.claude/settings.json` permissions allow-list |
 
 - **Exercise:** add **one of each** to this repo, choosing the example that fits its niche:
   - **Slash command** `/story-status` — summarises in-flight stories from `docs/status.d/`.

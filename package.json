@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:quiet": "vitest run --reporter=dot",
     "test:perf": "vitest run tests/perf/",
     "lint": "eslint .",
     "build": "tsc && tsc-alias && tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json && cp -R src/infra/db/migrations dist/infra/db/",

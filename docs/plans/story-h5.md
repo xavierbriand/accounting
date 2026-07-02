@@ -244,9 +244,9 @@ reporter, the rest is prompt/doc text. That is the zero-behaviour-change case R1
 
 - [x] Phase 1 (plan) complete
 - [x] Phase 2 (plan-reviewer + sibling-overlap, launched in parallel in a single message) — complete 2026-07-02; all findings tagged below
-- [ ] Phase 3 (Sonnet implementation)
-- [ ] Phase 4 (code review + refactor)
-- [ ] Phase 5 (retrospective)
+- [x] Phase 3 (Sonnet implementation) — complete 2026-07-02; C1/C2/C3 landed, gate green (689/689, drift-scan exit 0)
+- [x] Phase 4 (code review + refactor) — complete 2026-07-02; code-reviewer returned 0 blocking findings, 3 soft suggestions (all acknowledged)
+- [ ] Phase 5 (retrospective) — merge gate (§ 7 DoD item 11) remains with the user
 
 ## Suggestion log
 
@@ -282,3 +282,14 @@ _Additional findings from the third (completed) `plan-reviewer` run:_
 | P3 | R16 "4 change-body commits" asserted without walking the **base-3 + optional-4th** arithmetic R16's text specifies. | adopted | Sizing section restates: 3 base slices (feat(agent) + empty refactor + retro) + 1 optional 4th (build/config) triggered by the process-and-docs span. |
 | P3 | `maintenance-sub-loop.md` line 10 offers **MCP list tools** as a `gh` alternative; those have their own default page sizes, and Scenario C's `grep "gh …"` won't catch an unbounded MCP call. | adopted | Add a parenthetical to the MCP-alternative note: bound MCP list calls too (`per_page`) — same context-diet intent. Cheap, on-goal. |
 | P1 | `.claude/commands/new-story-preflight.md` is a **fourth agent-facing spec** not in the plan's file list. | acknowledged | It issues no canon-doc read and no `gh` list of its own (it points to `maintenance-sub-loop.md` and copies the template) — nothing to scope or bound. Out of scope; noted here for completeness. |
+
+**Phase 4 — code-reviewer findings (2026-07-02).** 0 blocking P1/P2/P3 findings; 3 soft suggestions.
+Checklist-preservation verified byte-identical against `origin/main` (only read-blocks + the planned
+R5 carve-out changed); Scenarios B/C re-verified by the reviewer's own greps; R11 body verbatim;
+R12 + commit-grouping correct. Rule-tags: R2/R5/R6/R11/R12/R16 apply and pass.
+
+| # | Finding | Class | Resolution |
+| --- | --- | --- | --- |
+| S1 | MCP-alternative parenthetical is prose-only; Scenario C's `grep "gh …"` can't verify MCP-path compliance | acknowledge | Pre-acknowledged Phase-2 caveat; the grep-reach gap is inherent to bounding a non-shell call. No new action. |
+| S2 | No `test:harness:quiet` composing the quiet reporter with `vitest.harness.config.ts` | acknowledge | YAGNI — the sonnet red/green loop uses product tests (`npm test`), not harness tests; no current consumer. Retro Try candidate if a future story wants it. |
+| S3 | Plan outweighs diff (Module 5 heuristic): ~284-line plan vs ~32-line functional diff | acknowledge | Pre-named in the Risks table; inherent to prompt-editing stories. Contextualized in the retro. |

@@ -1,0 +1,7 @@
+bdf91984563cd22d6856605584d2a7637cafbc6a|chore(docs): story-maint-18 — story-id uniqueness check in maintenance sub-loop (#142)
+c880563a1b2c3d4e5f6789012345678901234abcd|story-h2: promote drift-scan table-only findings to hard (exit 1) (#125)
+12a6c1321d6d3853e8e5c94c2a9c85c0b5e92510|story-h1: drift-scan automation [Module 1, harness-engineering] (#115)
+ec4098eaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|story-3.5: Status CLI Command (#89)
+d923eabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|Story 3.1: Versioned Split Rules (validity-window foundation) (#53)
+3b087efccccccccccccccccccccccccccccccccc|story-A: inline new-category creation in ingest prompt (#73) (#78)
+f0a524eddddddddddddddddddddddddddddddddd|feat(config): YAML configuration manager + 0600 DB perms (Story 1.4) (#20)

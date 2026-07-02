@@ -165,3 +165,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R19 | Maintenance sub-loop checks open/draft PRs **and** issues for sibling-work overlap before opening a new plan | [story-maint-16](docs/retrospectives/story-maint-16.md) |
 | R20 | Empty `feat:` slices retitle to `chore(workflow): empty slice — TDD rhythm note <reason>` (R11 covers `refactor:` only) | [story-D](docs/retrospectives/story-D.md) |
 | R21 | Drift-scan enforces CLAUDE.md § 8 ↔ retro and plan ↔ source consistency at write/CI time; opt-out via `*(pending)*` marker | [story-h1](docs/retrospectives/story-h1.md) |
+| R23 | Maintenance sub-loop checks story-id uniqueness (`docs/plans/`, `docs/retrospectives/`, `docs/status.d/` on `origin/main`, plus open PR branch names) before a new story id is chosen | [story-maint-18](docs/retrospectives/story-maint-18.md) |

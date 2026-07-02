@@ -11,6 +11,7 @@ import {
   formatStoryReport,
 } from './lib/usage-reader.js';
 import { validateInputPath } from './validate-path.js';
+import { buildStoryIdGitGrepPattern } from '../lib/story-id-matcher.js';
 
 const USAGE_TEXT = `Usage:
   metrics:usage -- <path-to-session-jsonl>
@@ -42,8 +43,7 @@ function getStoryCommitWindow(
   repoRoot: string,
   storyId: string,
 ): { windowStart: string; windowEnd: string } | null {
-  const escaped = storyId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = `(\\[story-${escaped}\\]|(^|[^A-Za-z0-9.-])story-${escaped}([^A-Za-z0-9-]|$)|(^|[^A-Za-z0-9.-])Story ${escaped}([^A-Za-z0-9.]|$))`;
+  const pattern = buildStoryIdGitGrepPattern(storyId);
   let output: string;
   try {
     output = execFileSync(

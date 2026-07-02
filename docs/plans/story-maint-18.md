@@ -32,7 +32,9 @@ No FR coverage (process/workflow fix). Targets [docs/templates/maintenance-sub-l
 Add a new checklist bullet to [docs/templates/maintenance-sub-loop.md](../templates/maintenance-sub-loop.md), placed immediately after "Sibling work check" (both bullets are, at heart, "does this collide with something that already exists" — grouping them keeps the checklist's collision-avoidance checks together):
 
 ```markdown
-- [ ] **Story-id uniqueness.** Before picking a story id, confirm no `docs/plans/story-<id>.md` or `docs/retrospectives/story-<id>.md` already exists on `origin/main`: `git ls-tree -r origin/main --name-only -- docs/plans/ docs/retrospectives/ | grep -i "story-<id>\.md"`. Also check open PR branch names (`gh pr list --state open --json headRefName`) for the same id in flight. If taken, pick the next free id before branching. Curriculum-numbered tracks (e.g. `story-h<N>`) are especially exposed — a module number does not guarantee its id is unused; off-curriculum cleanups can consume ids out of sequence.
+- [ ] **Story-id uniqueness.** Before picking a story id (e.g. `h3`), confirm no `docs/plans/`, `docs/retrospectives/`, or `docs/status.d/` file for that id already exists on `origin/main`:
+      `git ls-tree -r origin/main --name-only -- docs/plans/ docs/retrospectives/ docs/status.d/ | grep -i "story-h3"`
+      Also check open PR branch names (`gh pr list --state open --json headRefName`) for the same id in flight. If taken, pick the next free id before branching. Curriculum-numbered tracks (e.g. `story-h<N>`) are especially exposed — a module number does not guarantee its id is unused; off-curriculum cleanups can consume ids out of sequence.
 ```
 
 `git ls-tree -r origin/main` (rather than a local `ls docs/plans/`) is deliberate: it checks the authoritative remote state directly, so it works correctly even from a fresh worktree that hasn't fetched yet, and it won't be fooled by a stale local checkout.
@@ -62,7 +64,7 @@ Change-body commits:
 3. **C3:** `chore(retro): story-maint-18 retrospective + status fragment [story-maint-18]`
    Files: `docs/retrospectives/story-maint-18.md`, `docs/status.d/2026-07-02-story-maint-18.md`
 
-**Total: 2 change-body + 1 retro = 3 commits + empty refactor slot = 4.** Within R16 (4 commits for zero-behaviour-change stories).
+**Total: 3 listed commits (C1 change + C2 empty refactor slot + C3 retro) = 4 change-body commits under R16's own count** (R16 counts the empty refactor slot as one of the 4). Within R16 (4 commits for zero-behaviour-change stories).
 
 ## Risks & deferred items
 
@@ -79,8 +81,24 @@ Change-body commits:
 3. `npx tsx harness/drift-scan/drift-scan.ts --all` — exit 0 (no CLAUDE.md § 8 ↔ retro drift introduced; CLAUDE.md itself is untouched).
 4. `npm run lint && npm run build && npm test` — green (no production surface touched; sanity check only).
 
+## Suggestion log
+
+Phase 2 — `plan-reviewer` + `sibling-overlap` in parallel, 2026-07-02.
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 1 | New checklist bullet's grep scope covered `docs/plans/` + `docs/retrospectives/` but not `docs/status.d/`, even though status fragments are also keyed by story id | ADOPT | Extended the bullet's `git ls-tree` command to include `docs/status.d/` |
+| 2 | Slice-plan "Total" line's arithmetic ("2 change-body + 1 retro = 3 commits + empty refactor slot = 4") reads as self-inconsistent against R16's own phrasing, which counts the empty refactor slot as one of the 4 | ADOPT | Reworded to match R16's counting convention |
+| 3 | Example command uses a literal `<id>` placeholder, not directly copy-pasteable unlike some other checklist bullets | ADOPT | Reworded to show `h3` as a concrete example id inline, with the demonstrated grep pattern |
+| 4 | Verification plan step 2 is a one-time manual demonstration against a past incident, not a repeatable automated regression check — nothing stops the new bullet from being silently weakened or deleted later | ACKNOWLEDGE | Plan's own "Why not a script/lint" section already discusses and declines automation for this story, deferring to a follow-up if a second collision occurs; consistent with this repo's "wait for 2-3 data points" pattern for codifying tooling |
+| 5 | Deviation from issue #139's literally-proposed `ls docs/plans/` command in favor of `git ls-tree -r origin/main` | ACKNOWLEDGE | Plan already justifies the deviation (works from a fresh/unfetched worktree, checks authoritative remote state) — no change needed |
+| 6 | DoR checklist line said "Phase 2 ... pending" at review time | ACKNOWLEDGE | Non-issue — both plan-reviewer and sibling-overlap ran in parallel as CLAUDE.md § 6.1 phase 2 requires; checklist updated below |
+| 7 | Sibling-overlap audit: no overlapping open PR/issue found | ACKNOWLEDGE | Clean — nothing to resolve |
+
+**Tally:** 3 adopted / 4 acknowledged / 0 deferred / 0 rejected. DoR gate met — no un-tagged suggestions.
+
 ## DoR checklist
 
 - [x] Phase 1 (Plan): complete in this document.
-- [ ] Phase 2 (Critical review — plan-reviewer + sibling-overlap in parallel): pending.
-- [ ] Draft PR with template sections 1–6 filled. **Next action.**
+- [x] Phase 2 (Critical review — plan-reviewer + sibling-overlap in parallel): complete 2026-07-02; findings triaged above.
+- [x] Draft PR with template sections 1–6 filled — [#142](https://github.com/xavierbriand/accounting/pull/142).

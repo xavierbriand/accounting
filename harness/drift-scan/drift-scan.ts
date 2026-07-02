@@ -129,10 +129,7 @@ function main(): void {
     process.stderr.write(formatHumanReport(findings) + '\n');
   }
 
-  const hardFindings = findings.filter(
-    (f) => f.kind === 'retro-only' || f.kind === 'missing-path',
-  );
-  process.exit(hardFindings.length > 0 ? 1 : 0);
+  process.exit(findings.length > 0 ? 1 : 0);
 }
 
 main();

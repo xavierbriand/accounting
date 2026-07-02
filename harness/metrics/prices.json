@@ -1,0 +1,17 @@
+{
+  "asOf": "2026-07-02",
+  "models": {
+    "claude-sonnet-5": {
+      "inputPerMillion": 3.0,
+      "outputPerMillion": 15.0,
+      "cacheReadPerMillion": 0.3,
+      "cacheWritePerMillion": 3.75
+    },
+    "claude-fable-5": {
+      "inputPerMillion": 10.0,
+      "outputPerMillion": 50.0,
+      "cacheReadPerMillion": 1.0,
+      "cacheWritePerMillion": 12.5
+    }
+  }
+}

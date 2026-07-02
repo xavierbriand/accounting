@@ -13,7 +13,10 @@
     "ingest": "tsx src/cli/program.ts ingest",
     "categorize": "tsx src/cli/program.ts categorize",
     "test:harness": "vitest run --config vitest.harness.config.ts",
-    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit"
+    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
+    "metrics:loop": "tsx harness/metrics/loop-metrics.ts",
+    "metrics:usage": "tsx harness/metrics/usage-reader.ts",
+    "metrics:story": "tsx harness/metrics/usage-reader.ts --story"
   },
   "repository": {
     "type": "git",

@@ -32,8 +32,8 @@ No FR coverage (process/workflow fix). Targets [docs/templates/maintenance-sub-l
 Add a new checklist bullet to [docs/templates/maintenance-sub-loop.md](../templates/maintenance-sub-loop.md), placed immediately after "Sibling work check" (both bullets are, at heart, "does this collide with something that already exists" — grouping them keeps the checklist's collision-avoidance checks together):
 
 ```markdown
-- [ ] **Story-id uniqueness.** Before picking a story id (e.g. `h3`), confirm no `docs/plans/`, `docs/retrospectives/`, or `docs/status.d/` file for that id already exists on `origin/main`:
-      `git ls-tree -r origin/main --name-only -- docs/plans/ docs/retrospectives/ docs/status.d/ | grep -i "story-h3"`
+- [ ] **Story-id uniqueness.** Before picking a story id (e.g. `zz9`), confirm no `docs/plans/`, `docs/retrospectives/`, or `docs/status.d/` file for that id already exists on `origin/main`:
+      `git ls-tree -r origin/main --name-only -- docs/plans/ docs/retrospectives/ docs/status.d/ | grep -i "story-zz9"`
       Also check open PR branch names (`gh pr list --state open --json headRefName`) for the same id in flight. If taken, pick the next free id before branching. Curriculum-numbered tracks (e.g. `story-h<N>`) are especially exposed — a module number does not guarantee its id is unused; off-curriculum cleanups can consume ids out of sequence.
 ```
 
@@ -45,7 +45,7 @@ Add a new checklist bullet to [docs/templates/maintenance-sub-loop.md](../templa
 
 ## Production-code surface (R2)
 
-None. Single file changed: `docs/templates/maintenance-sub-loop.md` (docs/process only, no `src/`, no `harness/`, no schema/migration).
+None — no `src/`, no `harness/`, no schema/migration. Files touched are all docs/process: `docs/templates/maintenance-sub-loop.md` (the checklist bullet), `CLAUDE.md` (§ 8 R23 row), plus this plan, the retro, and the status fragment.
 
 ## Gherkin acceptance scenarios
 

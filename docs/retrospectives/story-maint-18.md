@@ -19,6 +19,18 @@ Adds a "Story-id uniqueness" bullet to [docs/templates/maintenance-sub-loop.md](
 
 - **If a second story-id collision occurs despite this bullet, escalate to automation** — e.g. a `new-story-preflight` skill assertion (the skill already runs the maintenance sub-loop per its own checklist item 1, so adding a mechanical id-uniqueness check there is a small extension) rather than adding a third checklist bullet asking the agent to be more careful. One incident doesn't yet justify the extra tooling surface; two would.
 
+## Code-review findings (Phase 4, 2026-07-02)
+
+5 findings total (0 P1, 0 P2, 5 P3 of which 2 soft).
+
+| Finding | Resolution |
+| --- | --- |
+| Action-items table cited a stale pre-rebase commit hash (`827cffe`) for both the checklist bullet and the CLAUDE.md § 8 row | fix-now — corrected to `a8cc558` (checklist bullet) and `ed365e2` (CLAUDE.md row), the actual post-rebase hashes |
+| Checklist bullet's worked example used `story-h3`, which merged during this same session and is no longer an available id | fix-now — swapped to a synthetic placeholder (`story-zz9`) in both the checklist file and the plan's mirrored code block |
+| Plan's "Production-code surface (R2)" text said "Single file changed" but the diff also touches `CLAUDE.md` and three new docs files (plan/retro/status fragment) | fix-now — reworded to enumerate the full docs-only file list |
+| PR body said "Draft — Phase 2 pending" after the PR left draft state and Phase 2 completed | fix-now — PR description refreshed |
+| (soft) Enforcement is convention-only — nothing blocks a future edit from silently weakening the checklist bullet | acknowledged — already discussed in this retro's Change section; escalate to automation only after a second incident |
+
 ## Drift scan (mandatory)
 
 - [x] Did this story introduce contradictions between CLAUDE.md and any `docs/` file? **No.** CLAUDE.md § 8 gains the R23 row (this retro is its originating reference); the maintenance-sub-loop checklist file gains the corresponding bullet. Both edits are consistent with each other and with this retro.
@@ -29,7 +41,7 @@ Adds a "Story-id uniqueness" bullet to [docs/templates/maintenance-sub-loop.md](
 
 | Item | Where it lands | Status |
 | --- | --- | --- |
-| Story-id uniqueness checklist bullet | `docs/templates/maintenance-sub-loop.md` | done (commit `827cffe`) |
-| CLAUDE.md § 8 R23 row | `CLAUDE.md` | done (commit `827cffe`) |
+| Story-id uniqueness checklist bullet | `docs/templates/maintenance-sub-loop.md` | done (commit `a8cc558`) |
+| CLAUDE.md § 8 R23 row | `CLAUDE.md` | done (commit `ed365e2`) |
 | Escalate to automation if a second collision occurs | future story, if triggered | open |
 | R22 slot remains contested (3 pending candidates) — note for future codifier to start at R24, not R23 | future maintenance story | open |

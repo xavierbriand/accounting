@@ -32,3 +32,6 @@ coverage/
 /accounting.yaml
 /accounting.yml
 
+# Harness runtime artifacts (written by Stop hook; not committed)
+.claude/.last-lint-result
+

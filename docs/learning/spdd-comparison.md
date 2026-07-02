@@ -5,7 +5,7 @@
 > 1. **Talk-feeder for Module 6** — the speaker preparing the 45-min agentic-engineering talk needs three slide-ready bullets, named methodology references, and the *places we exceed and trail SPDD* mapped to talk sections.
 > 2. **Onboarding for the starter template** — a forking colleague reading this alongside `STARTER.md` to understand *why* the workflow looks the way it does, with both sides steel-manned so they can defend the loop's choices to their own team.
 >
-> See also: [harness-engineering.md](harness-engineering.md) (the parent curriculum doc).
+> See also: [harness-engineering.md](harness-engineering.md) (the parent curriculum doc) · [application-layer-comparison.md](application-layer-comparison.md) (sibling — same loop benchmarked against Malte Ubl's "The New Application Layer").
 
 ## § 1. Preamble
 

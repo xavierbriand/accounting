@@ -222,7 +222,7 @@ R16's 4-commit collapse covers zero-behaviour-change stories. story-h4 adds thre
 - [x] Phase 2 (plan-reviewer + sibling-overlap, launched in parallel in a single message) — complete 2026-07-02; all findings tagged below
 - [x] Phase 3 (Sonnet implementation) — complete 2026-07-02
 - [x] Phase 4 (code review + refactor) — complete 2026-07-02
-- [ ] Phase 5 (retrospective) — pending
+- [x] Phase 5 (retrospective) — complete 2026-07-02; merge gate (§ 7 DoD item 11) remains with the user
 
 ## Suggestion log
 
@@ -261,4 +261,5 @@ Phase 2 run 2026-07-02: plan-reviewer (29 findings, 12/21 rule-tags apply — R1
 | F2 | DoR checklist showed Phase 3 unticked despite landed commits | fix-now | C7: ticked 3 & 4 |
 | F3/F4 | C7/C8 slices + status.d fragment absent from diff | acknowledge | By phase design: C7 is this commit; C8 + R17 fragment land at Phase 5 |
 | F8 | Story-id→commit-subject matching duplicated in loop-metrics and usage-reader | acknowledge | Rule-of-three; cross-referenced on #144 whose checks need the same matcher |
-| F10 | `--story` dispatch via entrypoint-filename string match | acknowledge | Two modes in one entrypoint; revisit on a third mode |
+| F10 | `--story` dispatch via entrypoint-filename string match | acknowledge | Superseded within C7 itself: the F5 fix removed the filename guard (dispatch now checks `args[0] === '--story'` directly) — this row describes removed code; corrected at Phase 5 for log honesty |
+| P5-1 | `prices.json` claude-fable-5 rates fabricated ($15/$75 vs actual $10/$50; cache rates scaled off the wrong base) — survived Phases 3–4, caught at Phase 5 against the pricing reference | fix-now (R9 inline) | Corrected to $10/$50, cache-read $1.00, cache-write $12.50; lesson in retro Change |

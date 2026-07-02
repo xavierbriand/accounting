@@ -106,9 +106,12 @@ function resolveStoryId(
 function getCommitLog(repoRoot: string, degraded: string[]): CommitLogEntry[] {
   let output: string;
   try {
+    // --no-merges: a PR-build merge commit ("Merge <sha> into <base>") and any
+    // `Merge …` commit never carry the story-id convention and are not behaviour
+    // slices — excluding them keeps the subject check and the envelope count honest.
     output = execFileSync(
       'git',
-      ['log', '--format=%H%x1f%s', 'origin/main...HEAD'],
+      ['log', '--no-merges', '--format=%H%x1f%s', 'origin/main...HEAD'],
       { cwd: repoRoot, encoding: 'utf8' },
     );
   } catch (err) {

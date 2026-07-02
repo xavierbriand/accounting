@@ -86,6 +86,37 @@ describe('dod-check integration — commit-subject discipline, draft-aware (Scen
   });
 });
 
+describe('dod-check integration — merge commits are excluded from the subject scan', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    // A side branch whose commit carries the id, merged with an id-less merge
+    // subject — mimics the synthetic merge commit GitHub checks out for a
+    // pull_request build ("Merge <sha> into <base>").
+    git(tmpDir, ['checkout', '-q', '-b', 'side']);
+    fs.writeFileSync(path.join(tmpDir, 'side.txt'), 's\n');
+    git(tmpDir, ['add', 'side.txt']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): side work — green [story-zz]']);
+    git(tmpDir, ['checkout', '-q', 'story-zz']);
+    git(tmpDir, ['merge', '--no-ff', '-q', '-m', 'Merge pull request #1 from fork/feature', 'side']);
+  });
+
+  // fails if: getCommitLog stops passing --no-merges — the id-less merge
+  // subject would be flagged missing-story-id (hard), which is exactly the
+  // false positive a GitHub pull_request build hits on its merge commit.
+  it('does not flag an id-less merge commit as missing-story-id', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'true' });
+    expect(result.stderr).not.toContain('missing-story-id');
+    expect(result.stderr).not.toContain('Merge pull request');
+  });
+});
+
 describe('dod-check integration — advisory-only envelope does not fail a draft PR', () => {
   let tmpDir: string;
 

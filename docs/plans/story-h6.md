@@ -312,9 +312,9 @@ as TDD slices — not a zero-behaviour-change story.)
 - [x] Phase 2 (plan-reviewer + sibling-overlap, launched in parallel in a single message) — complete
       2026-07-02; plan-reviewer 24 findings (15/21 rule-tags apply, R1/R2/R3/R5/R6/R7/R8/R11/R12/R13/
       R17/R19/R21/R23 satisfied) + sibling-overlap (no overlap, #147 coordination note); all tagged below
-- [ ] Phase 3 (Sonnet implementation)
-- [ ] Phase 4 (code review + refactor)
-- [ ] Phase 5 (retrospective); merge gate (§ 7 DoD 11) with the user
+- [x] Phase 3 (Sonnet implementation) — complete 2026-07-02; C1–C9, 132 harness + 689 product tests green
+- [x] Phase 4 (code review + refactor) — complete 2026-07-02; 10 findings, F1–F6 fixed in one commit, F7→#150
+- [x] Phase 5 (retrospective) — complete 2026-07-02; merge gate (§ 7 DoD 11) remains with the user
 
 ## Suggestion log
 

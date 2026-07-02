@@ -8,10 +8,10 @@
       "cacheWritePerMillion": 3.75
     },
     "claude-fable-5": {
-      "inputPerMillion": 15.0,
-      "outputPerMillion": 75.0,
-      "cacheReadPerMillion": 1.5,
-      "cacheWritePerMillion": 18.75
+      "inputPerMillion": 10.0,
+      "outputPerMillion": 50.0,
+      "cacheReadPerMillion": 1.0,
+      "cacheWritePerMillion": 12.5
     }
   }
 }

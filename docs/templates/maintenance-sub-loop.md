@@ -8,6 +8,9 @@ This is the **runnable** form of the rule. The conceptual statement lives in CLA
 
 - [ ] **Sibling work check.** `gh pr list --state open --draft --base main` + `gh issue list --state open` — for each open/draft PR or issue, confirm it isn't already addressing the same goal you're about to plan against. If overlap, defer or coordinate.
   - **With GitHub MCP server active:** Use `list_pull_requests` / `list_issues` / `get_issue` MCP tools instead of the `gh pr list` / `gh issue list` bash calls. Set `export GITHUB_TOKEN=$(gh auth token)` in your shell before starting Claude Code. Without MCP, the bash forms above still work.
+- [ ] **Story-id uniqueness.** Before picking a story id (e.g. `zz9`), confirm no `docs/plans/`, `docs/retrospectives/`, or `docs/status.d/` file for that id already exists on `origin/main`:
+      `git ls-tree -r origin/main --name-only -- docs/plans/ docs/retrospectives/ docs/status.d/ | grep -i "story-zz9"`
+      Also check open PR branch names (`gh pr list --state open --json headRefName`) for the same id in flight. If taken, pick the next free id before branching. Curriculum-numbered tracks (e.g. `story-h<N>`) are especially exposed — a module number does not guarantee its id is unused; off-curriculum cleanups can consume ids out of sequence.
 - [ ] **Working tree clean.** `git status` clean; story branch rebased on `origin/main`.
 - [ ] **Open issues.** `gh issue list --state open --limit 50` — re-prioritise, close stale, confirm `deferred-suggestion` items still relevant.
 - [ ] **Open PRs.** `gh pr list --state open` — Dependabot/draft state.

@@ -48,6 +48,25 @@ Seventh end-to-end run of the product development loop, and the last story of Ep
 - **New runtime deps:** 0. **New dev deps:** 0.
 - **Time-to-DoD:** one working session.
 
+### Measured data (story-h4 addendum, 2026-07-02)
+
+`npm run metrics:loop` names story 2.5 the top weight-ratio offender across
+all 35 resolvable stories: `plan_loc=608`, `diff_loc=352`,
+`weight_ratio≈1.73` — the plan is roughly 1.7× longer than the diff it
+produced, the highest ratio on record. Cross-checking against the prose
+above: this is the story with 6 stress-tested planning decisions (2
+flipped), a 9-finding P1/P2/P3 critical review, and 2 phase-4 fix commits
+folded into the same PR — the heaviest front-loaded review process in the
+sample, on a story whose actual code delta (352 LOC across migration +
+adapter + CLI wiring) was comparatively small. This corroborates the Keep
+note above ("review layers earned their budget") with a number instead of
+a narrative: the review weight is visible in `plan_loc`, not just in this
+file's bullet count. Module 5's framing applies directly — a `weight_ratio`
+this high is a retro prompt ("was 608 lines of plan proportionate to a
+352-line diff?"), not evidence of waste; two correctness bugs (the FK-pragma
+placement, the TOCTOU race) were caught by that same review process before
+implementation, which a lighter plan would have risked shipping.
+
 ## Carryovers resolved
 
 - Story 2.3 retro action A (60-LOC + duplication trigger) → paid off: P3 critical review promoted slice 13 from "possibly empty" to mandatory `loadAndParse` extraction. `runIngestCommand` delivered at 55 LOC.

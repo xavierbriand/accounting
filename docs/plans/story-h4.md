@@ -100,9 +100,15 @@ No `src/` files touched. No migrations. No schema changes. No product behaviour 
 | File | Purpose |
 | --- | --- |
 | `harness/metrics/loop-metrics.ts` | Tool 1 lib + entrypoint |
-| `harness/metrics/loop-metrics.test.ts` | Fixture-based unit tests |
-| `harness/metrics/usage-reader.ts` | Tool 2 lib + entrypoints |
-| `harness/metrics/usage-reader.test.ts` | Fixture-based unit tests |
+| `harness/metrics/lib/loop-metrics.ts` | Tool 1 pure lib (moved under `lib/` per `harness/README.md`'s "Adding a new tool" convention) |
+| `harness/metrics/tests/loop-metrics.test.ts` | Fixture-based unit tests (moved under `tests/`, same convention) |
+| `harness/metrics/tests/loop-metrics.integration.test.ts` | Subprocess smoke test (R7) |
+| `harness/metrics/usage-reader.ts` | Tool 2 entrypoints |
+| `harness/metrics/lib/usage-reader.ts` | Tool 2 pure lib |
+| `harness/metrics/lib/validate-path.ts` | Boundary-hygiene helper — local `validateDbPath`-pattern re-implementation |
+| `harness/metrics/tests/usage-reader.test.ts` | Fixture-based unit tests |
+| `harness/metrics/tests/usage-reader.integration.test.ts` | Subprocess smoke test (R7) |
+| `harness/metrics/tests/validate-path.test.ts` | Unit tests for the boundary-hygiene helper |
 | `harness/metrics/fixtures/` | Synthetic git-shape + telemetry fixtures (no real session content) |
 | `harness/metrics/prices.json` | Model→price map with `asOf` date |
 | `harness/metrics/README.md` | Invocation, spike findings, source wiring |
@@ -117,8 +123,10 @@ No `src/` files touched. No migrations. No schema changes. No product behaviour 
 | --- | --- |
 | `package.json` | `metrics:loop`, `metrics:usage`, `metrics:story` scripts |
 | `docs/retrospectives/README.md` | "Cost" line in retro conventions |
-| `.gitignore` | Raw telemetry output dir (spike-dependent path) |
 | `docs/learning/harness-engineering.md` | Module 5 exercise notes updated to match shipped shape (JSONL finding) |
+| `docs/retrospectives/story-2.5.md` | Measured-data addendum to the top weight-ratio outlier retro (C6, #99 closure item) |
+
+`.gitignore` — **not modified.** The spike's selected source (`~/.claude/projects/.../*.jsonl`) lives outside this repository entirely; there is no repo-local raw-telemetry directory to exempt. See `harness/metrics/README.md` § "Raw vs. committed".
 
 **Output formats (R2 — new machine-readable surfaces):**
 

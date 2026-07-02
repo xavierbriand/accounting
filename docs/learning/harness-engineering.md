@@ -200,9 +200,9 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 ### Module 5 — Cost & telemetry as a *retro aid*, not a *trend chart*
 
 - **Concept honesty.** With n=16 stories and rules that change what gets checked, you cannot get a clean trend. Confounders dominate: rule scope shifts, story difficulty varies, the underlying model upgrades. Telemetry's value here is **case studies and counterexamples**, not statistics. Specifically: making future retros easier to write, and *finding outlier stories* (a story that took 3× the median cost is a retro prompt, not a regression).
-- **Exercise A — cost per story.** Parse session JSONL (or the project's session dir) and join Claude Code session timestamps to git commit timestamps. Output `docs/metrics/<story-id>.md` with cost, token usage, sub-agent calls. Drop into the retro template as a starting field — "this story cost $X, surprises?"
-- **Exercise B — loop metrics extraction.** Scrape every retro's "Loop metrics" section into `docs/metrics/loop.csv` (story-id, plan-LOC, diff-LOC, commits-planned, commits-actual, phase-4-findings-by-severity, tests-added, deviations). Don't draw a chart. Instead: **sort by ratio of plan-LOC to diff-LOC and find the three worst weight-ratio offenders.** Each is a free retro topic.
-- **Teach-back:** "the chart isn't the talk. The outlier list is." Show the three stories where the workflow was over-engineered for the task. Show what changed afterward.
+- **Exercise A — cost per story (shipped as story-h4, `harness/metrics/usage-reader.ts`).** The literal "parse session JSONL" framing needs a source-discovery spike first: local session JSONL interleaves multiple record shapes, and only one of them — `assistant`-type records — carries a usage object (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `model`); a sibling shape (`queue-operation`) is a pure file-operations journal with no usage fields at all. Read `harness/metrics/README.md` for the full decision record (OTEL export probed and unverifiable in a desktop-app environment; local JSONL used as the fallback tier instead). `npm run metrics:story -- <id>` joins session timestamps to the story's commit-window (git log, not a session dir listing) and writes `docs/metrics/story-<id>.md` with token totals, an attribution-confidence note, and an explicit unattributed-session list — "this story cost X tokens, Y sessions, surprises?" as a retro field.
+- **Exercise B — loop metrics extraction (shipped as story-h4, `harness/metrics/loop-metrics.ts`).** The literal "scrape every retro's Loop metrics section" framing was rejected at plan time: 21 of 37 retros have the section, but as free-form prose bullets, not fields — extraction would be brittle. `npm run metrics:loop` computes `plan_loc`, `diff_loc`, `commits`, and `weight_ratio` **deterministically from git** instead (plan file line count; merge-commit `--numstat` diff size resolved from the commit subject across this repo's several naming conventions; commit count by subject match) plus a boolean `retro_loop_metrics` presence flag, into `docs/metrics/loop.csv`. Sorts by weight ratio and names the three worst offenders on stderr — same "free retro topic" result, deterministic source.
+- **Teach-back:** "the chart isn't the talk. The outlier list is." Show the three stories where the workflow was over-engineered for the task (story-2.5 topped the first real run at `weight_ratio≈1.73` — see its retro's measured-data addendum). Show what changed afterward.
 
 ### Module 6 — Teach-back, evaluated by colleague-ships-without-you
 
@@ -229,6 +229,7 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 - [.claude/agents/sonnet-implementer.md](../../.claude/agents/sonnet-implementer.md) — Module 3 deviations worked-example anchor; Part B failure-signatures source.
 - [CLAUDE.md](../../CLAUDE.md) — Modules 1 & 3 amendment targets (drift-scan rule, trivial-story lane).
 - [docs/retrospectives/](../retrospectives/) — Module 5 raw signal source; failure-signature mining ground.
+- [harness/metrics/](../../harness/metrics/) — Module 5 shipped tooling (`loop-metrics.ts`, `usage-reader.ts`) and the telemetry-source spike decision record.
 - [docs/plans/](../plans/) — Module 4d fixture quarry (real plans → known-good eval inputs).
 - [.claude/settings.json](../../.claude/settings.json) — Module 2 hook + permission edits.
 
@@ -255,7 +256,7 @@ The first five are intermediate; **the sixth is the actual evaluation.**
 - ✅ Module 2: each primitive added with a one-sentence niche justification in its commit message; the niche table from Part C populated from your own work.
 - ✅ Module 3: merged PR adding the trivial-story lane to CLAUDE.md, with retroactive maint-01 savings comparison; sibling-overlap detector running at plan time.
 - ✅ Module 4: `evals/plan-reviewer.test.ts` green on 3 fixtures; one deliberate prompt regression detected by the suite; the 90-second live demo (4e) rehearsed.
-- ✅ Module 5: `docs/metrics/loop.csv` populated retroactively; three weight-ratio outlier stories named; one retro rewritten using the data.
+- ✅ Module 5: `docs/metrics/loop.csv` populated retroactively (story-h4); three weight-ratio outlier stories named on stderr; story-2.5's retro rewritten using the measured data (`weight_ratio≈1.73`, the top offender).
 - ✅ Module 6 — **the real test**: a colleague forks the starter template and ships their first story without you intervening. If that doesn't happen, the curriculum hasn't landed.
 
 End-state self-test: in one breath, without naming a vendor product, "**what is harness engineering, what's the smallest unit, and how do you know your harness is working?**"

@@ -21,6 +21,19 @@ Harness tooling for the harness-engineering curriculum (issue #94). Lives here, 
 | `npx tsx harness/drift-scan/drift-scan.ts` | Run drift-scan against the live repo |
 | `npx tsx harness/drift-scan/drift-scan.ts --all` | Scan all plans, not just diff-scoped ones |
 | `npx tsx harness/drift-scan/drift-scan.ts --json` | Machine-readable findings on stdout |
+| `npm run dod:check` / `npx tsx harness/dod-check/dod-check.ts` | Commit-subject, TODO/TBD, Gherkin↔step DoD checks (see `harness/dod-check/README.md`) |
+
+## Shared helpers (`harness/lib/`)
+
+Cross-tool pure logic that multiple `harness/<tool>/` consumers need lives in `harness/lib/`, not
+duplicated per tool (rule-of-three: a third consumer of the same logic extracts a shared helper —
+story-h6). Current helpers:
+
+- `harness/lib/story-id-matcher.ts` — canonical story-id-in-commit-subject matcher, exported as both
+  a JS `RegExp` (`buildStoryIdRegExp`, for in-process matching) and an ERE string
+  (`buildStoryIdGitGrepPattern`, for `git log --extended-regexp --grep`). Consumed by
+  `harness/metrics/lib/loop-metrics.ts`, `harness/metrics/usage-reader.ts`, and
+  `harness/dod-check/lib/commit-subject.ts`.
 
 ## Coverage policy
 

@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   checkCommitSubjects,
   parseEnvelopeRule,
   checkCommitEnvelope,
   type CommitLogEntry,
 } from '../lib/commit-subject.js';
+
+const FIXTURES_DIR = path.join(import.meta.dirname, '..', 'fixtures', 'plans');
+
+function readFixture(name: string): string {
+  return fs.readFileSync(path.join(FIXTURES_DIR, name), 'utf8');
+}
 
 const COMMITS: CommitLogEntry[] = [
   { sha: 'aaa1111', subject: 'test(harness): shared story-id matcher — failing [story-zz]' },
@@ -80,6 +88,55 @@ describe('parseEnvelopeRule', () => {
   it('returns null when there is no Slice-plan/Sizing heading at all', () => {
     const plan = '## Risks\n\nR13 mentioned only here, out of scope.\n';
     expect(parseEnvelopeRule(plan)).toBeNull();
+  });
+
+  // Fixture-file-backed pins of the same five corpus shapes (not just
+  // story-h6's own single shape) — guards regression against real plan
+  // files, not only inline strings authored alongside the parser.
+  describe('fixture corpus — all five real Slice-plan/Sizing heading shapes', () => {
+    it('slice-plan-r13-inline-tag.md → R13', () => {
+      expect(parseEnvelopeRule(readFixture('slice-plan-r13-inline-tag.md'))).toEqual({
+        rule: 'R13',
+        min: 6,
+        max: 10,
+      });
+    });
+
+    it('slice-plan-r14-inline-tag.md → R14', () => {
+      expect(parseEnvelopeRule(readFixture('slice-plan-r14-inline-tag.md'))).toEqual({
+        rule: 'R14',
+        min: 5,
+        max: 7,
+      });
+    });
+
+    it('slice-plan-r16-inline-tag.md → R16', () => {
+      expect(parseEnvelopeRule(readFixture('slice-plan-r16-inline-tag.md'))).toEqual({
+        rule: 'R16',
+        min: 4,
+        max: 4,
+      });
+    });
+
+    it('slice-plan-plain-heading-body-tag.md → R13 (tag in body, not heading)', () => {
+      expect(parseEnvelopeRule(readFixture('slice-plan-plain-heading-body-tag.md'))).toEqual({
+        rule: 'R13',
+        min: 6,
+        max: 10,
+      });
+    });
+
+    it('sizing-commits-r16-collapse-heading.md → R16 (Sizing heading variant)', () => {
+      expect(parseEnvelopeRule(readFixture('sizing-commits-r16-collapse-heading.md'))).toEqual({
+        rule: 'R16',
+        min: 4,
+        max: 4,
+      });
+    });
+
+    it('slice-plan-no-envelope-tag.md → null (advisory "not declared" path)', () => {
+      expect(parseEnvelopeRule(readFixture('slice-plan-no-envelope-tag.md'))).toBeNull();
+    });
   });
 });
 

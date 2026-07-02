@@ -44,6 +44,28 @@ describe('scanTodoComments', () => {
     const files: SourceFile[] = [{ path: 'x.ts', content: 'const todoListLength = 3;\n' }];
     expect(scanTodoComments(files)).toEqual([]);
   });
+
+  // fails if: a markdown bold-emphasis marker ("**TODO / TBD**", prose
+  // discussing the scanner itself) is mistaken for a code-comment
+  // continuation marker ("* TODO: ..." inside a /* */ block) — guards a
+  // real self-referential false positive discovered when dod-check scanned
+  // its own README.
+  it('does not flag "TODO" following a markdown bold-emphasis marker', () => {
+    const files: SourceFile[] = [
+      { path: 'README.md', content: '- **TODO / TBD** — describes the scanner, not an open item.\n' },
+    ];
+    expect(scanTodoComments(files)).toEqual([]);
+  });
+
+  // fails if: a genuine JSDoc-style block-comment continuation line
+  // ("   * TODO: ...") is missed once the bold-marker false positive above
+  // is excluded — guards that the fix didn't overcorrect.
+  it('still flags a genuine block-comment continuation TODO ("   * TODO: ...")', () => {
+    const files: SourceFile[] = [
+      { path: 'x.ts', content: '/**\n * TODO: revisit this helper\n */\n' },
+    ];
+    expect(scanTodoComments(files)).toEqual([{ kind: 'todo-comment', file: 'x.ts', line: 2 }]);
+  });
 });
 
 describe('scanPrBodyTbd', () => {

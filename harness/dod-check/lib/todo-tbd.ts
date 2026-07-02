@@ -14,14 +14,14 @@ export type PrTbdFinding = {
   section: string;
 };
 
-const TODO_MARKER = /\bTODO\b/;
+const TODO_COMMENT_MARKER = /(?:\/\/|\/\*|^\s*\*|#)\s*TODO\b/;
 
 export function scanTodoComments(files: SourceFile[]): TodoCommentFinding[] {
   const findings: TodoCommentFinding[] = [];
   for (const file of files) {
     const lines = file.content.split('\n');
     lines.forEach((line, index) => {
-      if (TODO_MARKER.test(line)) {
+      if (TODO_COMMENT_MARKER.test(line)) {
         findings.push({ kind: 'todo-comment', file: file.path, line: index + 1 });
       }
     });

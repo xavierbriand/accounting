@@ -1,6 +1,12 @@
 {
-  "asOf": "2026-07-02",
+  "asOf": "2026-07-03",
   "models": {
+    "claude-opus-4-8": {
+      "inputPerMillion": 5.0,
+      "outputPerMillion": 25.0,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 6.25
+    },
     "claude-sonnet-5": {
       "inputPerMillion": 3.0,
       "outputPerMillion": 15.0,

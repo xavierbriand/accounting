@@ -62,6 +62,12 @@ enforcement tier.
   only ever exercised story-shaped repos, which is why the gap survived to main.
 - **1Password signing stalled again** (C3), as in h6. It's now a documented, recurring session hazard;
   worth confirming the agent is live before a long implementation handoff.
+- **A pre-existing subprocess-test flake surfaced on CI, not locally.** A dod-check integration test
+  (unchanged h6 test) spawns `npx tsx` and hit ~5.2s on a loaded CI runner — over vitest's 5s default —
+  and red-failed h7's build though it was green locally and on h6's CI. Fixed by setting
+  `testTimeout: 30000` in `vitest.harness.config.ts` for the whole harness suite. **Lesson:** tests
+  that shell out to a cold interpreter need an explicit generous timeout from day one; the default is a
+  latent flake that only shows under CI load.
 
 ## Try
 

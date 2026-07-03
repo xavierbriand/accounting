@@ -119,10 +119,12 @@ Demonstrates the metric fix by recomputing `weight_ratio` under shipped-only `di
 
 | Story | plan_loc | old diff_loc (all) | old weight_ratio | new diff_loc (shipped) | new weight_ratio | crosses 1.0? |
 |---|---|---|---|---|---|---|
-| maint-01 | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| maint-18 | _tbd_ | _tbd_ | 0.64 (reported) | ~4 (4-line change) | _tbd (≫1.0 expected)_ | expected **yes** |
+| maint-01 | 276 | 395 | 0.70 | 59 | 4.68 | **yes** |
+| maint-18 | 104 | 163 | 0.64 | 4 | 26.00 | **yes** |
 
-Expected narrative: maint-18 (a 4-line change wrapped in ~171 process lines) reads "healthy" 0.64 today because the ceremony inflates `diff_loc`; under shipped-only measurement it flips to ≫1.0, correctly flagging an over-heavy gate. maint-01 numbers confirm the direction on a second data point.
+Computed from each story's squashed merge commit on `origin/main` (`git show --numstat <sha>`), filtered through the same `sumShippedDiffLoc`/`isProcessArtifactPath` logic landed in slice 2: maint-01 = `1e269b7`, maint-18 = `bdf9198`. `plan_loc` cross-checked via `git show <sha>:docs/plans/story-<id>.md | wc -l`.
+
+Narrative confirmed: maint-18 (a 4-line `src`/`.claude`-adjacent change wrapped in ~159 lines of plan/retro/status-fragment ceremony) reported "healthy" at 0.64 under the old all-paths `diff_loc`; under shipped-only measurement it flips to 26.00 — correctly flagging an over-heavy gate. maint-01 (a `tsconfig.test.json` + small test-file fix wrapped in a 276-line plan and 60-line retro) shows the same direction: 0.70 → 4.68. Both stories cross the `>1.0` threshold that the new `weight-ratio-heavy` dod-check trigger (slice 3/4) now wires to an always-advisory finding.
 
 ## Verification plan
 

@@ -8,6 +8,7 @@ import {
   countChangeBodyCommits,
   type CommitLogEntry,
 } from '../lib/commit-subject.js';
+import { isAlwaysAdvisory } from '../dod-check.js';
 
 const FIXTURES_DIR = path.join(import.meta.dirname, '..', 'fixtures', 'plans');
 
@@ -158,6 +159,44 @@ describe('checkCommitEnvelope', () => {
   it('reports envelope-not-declared when no envelope rule resolved', () => {
     const finding = checkCommitEnvelope(8, null);
     expect(finding).toEqual({ kind: 'commit-envelope', count: 8, rule: null, min: null, max: null });
+  });
+
+  // Boundary classification (story-h7): pins min-1 / min / max / max+1 and
+  // the tier each maps to via isAlwaysAdvisory, so an off-by-one at either
+  // edge is caught immediately rather than discovered via a subprocess
+  // integration failure.
+  describe('boundary classification — min-1 / min / max / max+1', () => {
+    const RULE = { rule: 'R13' as const, min: 6, max: 10 };
+
+    // fails if: count = min-1 stops reporting a finding, or the finding is
+    // classified as anything but always-advisory — guards the under-target
+    // leg of Scenario B.
+    it('count = min-1 (5): reports a finding, classified always-advisory', () => {
+      const finding = checkCommitEnvelope(5, RULE);
+      expect(finding).toEqual({ kind: 'commit-envelope', count: 5, rule: 'R13', min: 6, max: 10 });
+      expect(finding && isAlwaysAdvisory(finding)).toBe(true);
+    });
+
+    // fails if: count = min reports a finding at all — guards the inclusive
+    // lower boundary of the "inside declared range" no-finding path.
+    it('count = min (6): reports no finding', () => {
+      expect(checkCommitEnvelope(6, RULE)).toBeNull();
+    });
+
+    // fails if: count = max reports a finding at all — guards the inclusive
+    // upper boundary of the "inside declared range" no-finding path.
+    it('count = max (10): reports no finding', () => {
+      expect(checkCommitEnvelope(10, RULE)).toBeNull();
+    });
+
+    // fails if: count = max+1 stops reporting a finding, or the finding is
+    // classified as always-advisory instead of the soft (draft-aware) gate
+    // — guards the over-target leg of Scenario B staying gated.
+    it('count = max+1 (11): reports a finding, classified draft-aware (not always-advisory)', () => {
+      const finding = checkCommitEnvelope(11, RULE);
+      expect(finding).toEqual({ kind: 'commit-envelope', count: 11, rule: 'R13', min: 6, max: 10 });
+      expect(finding && isAlwaysAdvisory(finding)).toBe(false);
+    });
   });
 });
 

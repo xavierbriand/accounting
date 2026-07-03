@@ -139,6 +139,55 @@ describe('dod-check integration — advisory-only envelope does not fail a draft
   });
 });
 
+describe('dod-check integration — under-min vs over-max envelope labels are distinguishable (Scenario B)', () => {
+  function commitStoryZzCommits(tmpDir: string, extraCount: number): void {
+    for (let i = 0; i < extraCount; i++) {
+      fs.writeFileSync(path.join(tmpDir, `extra-${i}.txt`), `${i}\n`);
+      git(tmpDir, ['add', `extra-${i}.txt`]);
+      git(tmpDir, ['commit', '-q', '-m', `feat(harness): extra slice ${i} — green [story-zz]`]);
+    }
+  }
+
+  // fails if: an under-min count (3, below R13's min of 6) renders the old
+  // combined "envelope R13 (6-10)" wording instead of the distinguishable
+  // "under the R13 (6-10) target (advisory)" label, or gates the exit code
+  // once out of draft — guards Scenario B's under-count leg end-to-end.
+  it('under-min (3 commits) is labelled "under ... target (advisory)" and exits 0 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    commitStoryZzCommits(tmpDir, 1); // 2 story commits total: under R13's min of 6
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
+    expect(result.stderr).not.toContain('(advisory — PR is draft)');
+  });
+
+  // fails if: an over-max count (12, above R13's max of 10) renders the old
+  // combined wording instead of "over the R13 (6-10) envelope", or stops
+  // gating the exit code once out of draft — guards Scenario B's
+  // over-count leg staying hard.
+  it('over-max (12 commits) is labelled "over ... envelope" and exits 1 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    commitStoryZzCommits(tmpDir, 11); // 12 story commits total: over R13's max of 10
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toMatch(/over the R13 \(6–10\) envelope/);
+  });
+});
+
 describe('dod-check integration — TODO/TBD honesty (Scenario B)', () => {
   let tmpDir: string;
 

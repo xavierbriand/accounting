@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import {
   checkCommitSubjects,
   parseEnvelopeRule,
@@ -411,4 +412,9 @@ function main(): void {
   process.exit(exitCode);
 }
 
-main();
+// Guards against executing the CLI (including process.exit) as a side
+// effect of importing this module for unit-testing isAlwaysAdvisory —
+// dod-check.ts is otherwise only ever invoked directly via tsx/npx.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main();
+}

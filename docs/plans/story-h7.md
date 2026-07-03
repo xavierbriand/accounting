@@ -194,9 +194,9 @@ reports it as advisory and does **not** self-block. That reflexive pass is the s
 - [x] Phase 2 (plan-reviewer + sibling-overlap, parallel) — complete 2026-07-03; #151 filed;
       plan-reviewer 22 findings (13/15 rule-tags apply, design confirmed complete/non-overlapping) +
       sibling-overlap (no overlap); all tagged below
-- [ ] Phase 3 (Sonnet implementation)
-- [ ] Phase 4 (code review + refactor)
-- [ ] Phase 5 (retrospective); merge gate with the user
+- [x] Phase 3 (Sonnet implementation) — complete 2026-07-03; C1–C5 (impl stalled at C3 on signing, coordinator finished); 84 harness + 689 product green
+- [x] Phase 4 (code review + refactor) — complete 2026-07-03; 5 findings, F1–F4 fixed in one commit, F5/F6 acknowledged
+- [x] Phase 5 (retrospective) — complete 2026-07-03; merge gate with the user
 
 ## Suggestion log
 

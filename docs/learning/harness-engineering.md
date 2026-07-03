@@ -21,6 +21,8 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 ## Part A — Audit verdict (this repo as of 2026-04-29)
 
+> **Superseded audit.** This snapshot predates drift-scan (h1/h2), the primitives round (h3), metrics (h4), the context diet (h5), dod-check + enforcement tiers (h6/h7), and DDD adoption (ddd-1). The current audit is [harness-health-check-2026-07-03.md](harness-health-check-2026-07-03.md); read Part A as the historical baseline it measures against.
+
 ### Doing well (these are not common; lead with them when teaching)
 
 - **Agent specialization with restricted tools.** plan-reviewer / code-reviewer / sonnet-implementer each have a tight tool list and a precise spec. Most teams build one "do-everything" agent. ([.claude/agents/](../../.claude/agents/))

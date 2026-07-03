@@ -524,6 +524,54 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
   });
 });
 
+describe('dod-check integration — weight-ratio-heavy advisory finding (S3/S4)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+  });
+
+  // fails if: the finding is dropped from isAlwaysAdvisory (exit would flip
+  // to 1 out of draft) or runWeightRatioCheck is unregistered — guards S3
+  // end-to-end via the real CLI.
+  it('emits weight-ratio-heavy as advisory (exit 0) when plan LOC exceeds shipped diff LOC', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    // Large plan (many lines), tiny shipped diff (one src line changed).
+    const planLines = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
+    writePlan(tmpDir, 'zz', `## Slice plan (R13: target 6-10 commits)\n\n${planLines}\n`);
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'src', 'thing.ts'), 'export const x = 1;\n');
+    git(tmpDir, ['add', 'src/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): thing — green [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'weight-ratio'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('weight-ratio-heavy');
+    expect(result.stderr).toContain('advisory');
+  });
+
+  // fails if: the ratio > 1.0 guard is inverted or dropped — guards S4 end
+  // to end: a plan ≤ shipped emits no finding.
+  it('emits no finding when plan LOC is less than or equal to shipped diff LOC', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nshort plan\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    const bigContent = Array.from({ length: 50 }, (_, i) => `export const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'src', 'thing.ts'), bigContent + '\n');
+    git(tmpDir, ['add', 'src/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): thing — green [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'weight-ratio'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('weight-ratio-heavy');
+  });
+});
+
 describe('dod-check integration — --json covers story-id-unresolved (F6, R8)', () => {
   let tmpDir: string;
 

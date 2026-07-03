@@ -36,4 +36,11 @@ describe('isAlwaysAdvisory', () => {
     const finding: DodFinding = { kind: 'missing-story-id', sha: 'abc1234', subject: 'chore: x' };
     expect(isAlwaysAdvisory(finding)).toBe(false);
   });
+
+  // fails if: weight-ratio-heavy is dropped from the always-advisory set —
+  // per h7's "new checks enter advisory" lesson, it must never gate CI.
+  it('is true for weight-ratio-heavy', () => {
+    const finding: DodFinding = { kind: 'weight-ratio-heavy', planLoc: 200, shippedLoc: 50, ratio: 4 };
+    expect(isAlwaysAdvisory(finding)).toBe(true);
+  });
 });

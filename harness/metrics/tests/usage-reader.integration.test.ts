@@ -1,15 +1,17 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { initTempRepo, writeAndCommit } from './_helpers/temp-git-repo.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const ENTRYPOINT = path.join(REPO_ROOT, 'harness', 'metrics', 'usage-reader.ts');
 const FIXTURE = path.join(REPO_ROOT, 'harness', 'metrics', 'fixtures', 'session-mixed.jsonl');
+const REAL_STORY_H4_PATH = path.join(REPO_ROOT, 'docs', 'metrics', 'story-h4.md');
 
-function run(args: string[]): ReturnType<typeof spawnSync> {
-  return spawnSync('npx', ['tsx', ENTRYPOINT, ...args], { cwd: REPO_ROOT, encoding: 'utf8' });
+function run(args: string[], cwd: string = REPO_ROOT): ReturnType<typeof spawnSync> {
+  return spawnSync('npx', ['tsx', ENTRYPOINT, ...args], { cwd, encoding: 'utf8' });
 }
 
 describe('metrics:usage subprocess smoke', () => {
@@ -73,16 +75,42 @@ describe('metrics:usage subprocess smoke', () => {
 });
 
 describe('metrics:story subprocess smoke', () => {
+  const TEMP_DIRS: string[] = [];
+
+  beforeAll(() => {
+    // fails if: the real repo's docs/metrics/story-h4.md already exists
+    // before this test runs — the regression guard below (no story-h4.md
+    // appears) would be meaningless against an already-polluted tree.
+    expect(fs.existsSync(REAL_STORY_H4_PATH)).toBe(false);
+  });
+
+  afterEach(() => {
+    for (const dir of TEMP_DIRS.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  afterAll(() => {
+    // fails if: the entrypoint's cwd argument is ignored/dropped and an
+    // untracked docs/metrics/story-h4.md appears in the real repo — guards
+    // the second regression #150 reports.
+    expect(fs.existsSync(REAL_STORY_H4_PATH)).toBe(false);
+  });
+
   // fails if: attribution-window wiring (git log window resolution, real
   // session-file discovery) breaks even though attributeToStory's pure
   // logic is unit-tested. R7 scope note: subprocess smoke covers script
   // wiring only. (Gherkin scenario C: story attribution declares
   // uncertainty.)
-  it('writes docs/metrics/story-<id>.md with an attribution note', () => {
-    const result = run(['--story', 'h4']);
+  it('writes <tmpDir>/docs/metrics/story-<id>.md with an attribution note', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(tmpDir, 'touched.txt', 'x\n', 'chore: fixture commit [story-zz]');
+
+    const result = run(['--story', 'zz']);
     expect(result.status).toBe(0);
 
-    const reportPath = path.join(REPO_ROOT, 'docs', 'metrics', 'story-h4.md');
+    const reportPath = path.join(tmpDir, 'docs', 'metrics', 'story-zz.md');
     expect(fs.existsSync(reportPath)).toBe(true);
     const report = fs.readFileSync(reportPath, 'utf8');
     expect(report).toContain('session count:');

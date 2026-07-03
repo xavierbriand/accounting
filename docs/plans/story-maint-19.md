@@ -125,4 +125,4 @@ Phase 2 — `plan-reviewer` + `sibling-overlap` in parallel, 2026-07-03.
 - [x] Phase 0 (Model): `No model impact` declared above (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — plan-reviewer + sibling-overlap in parallel): complete 2026-07-03; findings triaged above.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled — [#158](https://github.com/xavierbriand/accounting/pull/158).

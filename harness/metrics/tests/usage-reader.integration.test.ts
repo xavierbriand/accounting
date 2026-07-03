@@ -107,7 +107,7 @@ describe('metrics:story subprocess smoke', () => {
     TEMP_DIRS.push(tmpDir);
     writeAndCommit(tmpDir, 'touched.txt', 'x\n', 'chore: fixture commit [story-zz]');
 
-    const result = run(['--story', 'zz']);
+    const result = run(['--story', 'zz'], tmpDir);
     expect(result.status).toBe(0);
 
     const reportPath = path.join(tmpDir, 'docs', 'metrics', 'story-zz.md');

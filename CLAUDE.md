@@ -30,6 +30,7 @@ Full decisions in [docs/architecture.md](docs/architecture.md). Quick reference:
 - **`Result<T, E>` in Core** — domain methods return `Result` values, never throw. CLI is the only place that inspects `result.isFailure`.
 - **Append-only ledger.** No `UPDATE`/`DELETE` on ledger rows — corrections are new balancing entries.
 - Port interfaces are PascalCase without an `I` prefix (`TransactionRepository`). Repositories map snake_case DB columns to camelCase domain fields at the boundary.
+- **Domain model is explicit and user-owned.** Ubiquitous language in [docs/domain/glossary.md](docs/domain/glossary.md), strategic view in [docs/domain/context-map.md](docs/domain/context-map.md). Code identifiers use glossary terms; new domain vocabulary updates the glossary in the same PR (R25). Agents propose glossary/context-map deltas, never rewrite those files.
 
 ## 3. Money & precision (most-forgotten rules)
 
@@ -66,19 +67,20 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 
 ## 6. Development workflow
 
-Two formal gates: **DoR** (phases 1–2 complete) · **DoD** (phases 3–5 complete, merge checklist — see § 7).
+Two formal gates: **DoR** (phases 0–2 complete) · **DoD** (phases 3–5 complete, merge checklist — see § 7).
 
 ### 6.1 Phases
 
+0. **Model** (user + Opus, `ddd-modeler` in support): for any story that adds or changes a Core domain concept, run the `model-session` skill — frame the domain question → `ddd-modeler` (Mode A) proposes 2–3 candidate shapes → converge with the user in dialogue → model note at `docs/domain/model-notes/story-<id>.md` (template: [docs/templates/model-note.md](docs/templates/model-note.md)) → user signs off glossary/context-map deltas (user authors those files; agents propose only). *Exit:* model note committed with the plan; glossary/context-map deltas staged on the same branch; the plan's `## Domain model` section derives from the note (R24). Stories with no model impact skip Phase 0 by declaring `No model impact — <reason>` in the plan (maint/process/docs stories qualify by default).
 1. **Plan** (Opus): collect intent → converge → Gherkin → draft PR → hand off to Sonnet. Plan file at `docs/plans/story-<id>.md`. *Exit:* draft PR, sections 1–6 filled. Sub-rules (see § 8): **R1** plan file alongside code · **R2** production-code surface section · **R3** tool-bundle import audit · **R4** composition-root subprocess test when `program.ts` touched.
 2. **Critical review** (Opus, P1/P2/P3): invoke `plan-reviewer` sub-agent AND `sibling-overlap` sub-agent **in parallel** (single message, two Agent tool calls); consume both structured findings; tag each finding adopted/deferred/rejected in the suggestion log. Deferred → GitHub issue. *Exit (DoR):* both agents complete, no un-tagged suggestions, every deferred has an issue link.
 3. **Implement** (Sonnet): failing acceptance → failing unit → green → structured report. *Exit:* tests green, branch pushed, PR in draft.
-4. **Code review + refactor** (Opus): invoke `code-reviewer` sub-agent (`subagent_type: "code-reviewer"`) with the PR number and plan path; consume the structured findings; classify each fix-now / defer-issue / acknowledge. Sub-rules (see § 8): **R5** Gherkin-to-test mapping · **R6** `fails if` honesty · **R7** test-mechanism honesty · **R8** mock diversity · **R9** trivial inline fix carve-out. *Exit:* refactor merged, CI green.
+4. **Code review + refactor** (Opus): invoke `code-reviewer` sub-agent (`subagent_type: "code-reviewer"`) with the PR number and plan path — and, when the story has a model note, `ddd-modeler` (Mode B, model conformance) **in parallel** (single message, two Agent tool calls, same pattern as phase 2); consume the structured findings; classify each fix-now / defer-issue / acknowledge. Sub-rules (see § 8): **R5** Gherkin-to-test mapping · **R6** `fails if` honesty · **R7** test-mechanism honesty · **R8** mock diversity · **R9** trivial inline fix carve-out. *Exit:* refactor merged, CI green.
 5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. New rules add a row to § 8. *Exit:* file committed. Merge user-gated.
 
 ### 6.2 Model tier
 
-- **Opus:** planning, critical review, code review, refactor planning, retrospective synthesis.
+- **Opus:** domain modeling (`ddd-modeler`), planning, critical review, code review, refactor planning, retrospective synthesis.
 - **Sonnet:** failing tests, implementation, refactor execution.
 - **Haiku:** not used yet.
 
@@ -166,3 +168,5 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R20 | Empty `feat:` slices retitle to `chore(workflow): empty slice — TDD rhythm note <reason>` (R11 covers `refactor:` only) | [story-D](docs/retrospectives/story-D.md) |
 | R21 | Drift-scan enforces CLAUDE.md § 8 ↔ retro and plan ↔ source consistency at write/CI time; opt-out via `*(pending)*` marker | [story-h1](docs/retrospectives/story-h1.md) |
 | R23 | Maintenance sub-loop checks story-id uniqueness (`docs/plans/`, `docs/retrospectives/`, `docs/status.d/` on `origin/main`, plus open PR branch names) before a new story id is chosen | [story-maint-18](docs/retrospectives/story-maint-18.md) |
+| R24 | Stories touching Core domain concepts require a Phase-0 model note at `docs/domain/model-notes/story-<id>.md`; the plan's Domain-model section derives from it; no-model-impact stories declare it with a reason | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
+| R25 | Model-conformance review at Phase 4 (`ddd-modeler` Mode B): code identifiers use glossary terms; new domain vocabulary updates `docs/domain/glossary.md` in the same PR | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |

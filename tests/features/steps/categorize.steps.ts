@@ -143,13 +143,6 @@ When('I run categorize with a script only for the ALTIMA group', function (state
   );
 });
 
-When('I run categorize without scripted prompts', function (state: CategorizeWorld) {
-  state.lastResult = spawnCli(
-    ['categorize', '--file', state.csvPath!],
-    { cwd: state.tmpDir },
-  );
-});
-
 When('I run categorize with an empty scripted-prompts script', function (state: CategorizeWorld) {
   // Empty script: any prompt invocation would throw "ScriptedPrompter: expected next entry"
   // proving via the clean exit that the prompter was never called.

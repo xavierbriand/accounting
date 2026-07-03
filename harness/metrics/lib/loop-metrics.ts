@@ -1,3 +1,5 @@
+import { buildStoryIdRegExp } from '../../lib/story-id-matcher.js';
+
 export type CommitLogEntry = {
   sha: string;
   subject: string;
@@ -17,23 +19,11 @@ export type SkipEntry = {
   reason: string;
 };
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function buildStoryIdPattern(storyId: string): RegExp {
-  const escaped = escapeRegExp(storyId);
-  return new RegExp(
-    `(?:\\[story-${escaped}\\]|\\bstory-${escaped}\\b(?!-)|\\bStory ${escaped}\\b)`,
-    'i',
-  );
-}
-
 export function resolveStoryCommit(
   commitLog: CommitLogEntry[],
   storyId: string,
 ): CommitLogEntry | null {
-  const pattern = buildStoryIdPattern(storyId);
+  const pattern = buildStoryIdRegExp(storyId);
   for (const entry of commitLog) {
     if (pattern.test(entry.subject)) {
       return entry;
@@ -43,7 +33,7 @@ export function resolveStoryCommit(
 }
 
 export function countStoryCommits(commitLog: CommitLogEntry[], storyId: string): number {
-  const pattern = buildStoryIdPattern(storyId);
+  const pattern = buildStoryIdRegExp(storyId);
   return commitLog.filter((entry) => pattern.test(entry.subject)).length;
 }
 

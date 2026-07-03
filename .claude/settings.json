@@ -28,7 +28,8 @@
       "Bash(ls)",
       "Bash(ls:*)",
       "Bash(npm run typecheck:harness)",
-      "Bash(npx tsx harness/drift-scan/drift-scan.ts:*)"
+      "Bash(npx tsx harness/drift-scan/drift-scan.ts:*)",
+      "Bash(npx tsx harness/dod-check/dod-check.ts:*)"
     ]
   },
   "hooks": {
@@ -39,6 +40,10 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_FILE_PATHS\" | grep -qE '(docs/(retrospectives|plans)/.*\\.md|^CLAUDE\\.md)'; then npx tsx harness/drift-scan/drift-scan.ts || true; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_FILE_PATHS\" | grep -qE 'tests/features/'; then npx tsx harness/dod-check/dod-check.ts --check gherkin || true; fi"
           }
         ]
       }

@@ -211,6 +211,23 @@ describe('dod-check integration — under-min vs over-max envelope labels are di
     expect(result.stderr).toContain('commit-envelope');
     expect(result.stderr).toMatch(/over the R13 \(6–10\) envelope/);
   });
+
+  // fails if: a plan with no declared envelope rule (no `## Slice plan` heading)
+  // gates the exit code out of draft — guards Scenario C's not-declared leg as
+  // always-advisory end-to-end (rule===null branch of isAlwaysAdvisory).
+  it('a not-declared envelope is "not declared in plan (advisory)" and exits 0 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    // Plan present, but no `## Slice plan` heading → no envelope rule declared.
+    writePlan(tmpDir, 'zz', '# Story zz\n\nNo slice-plan heading here.\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/envelope not declared in plan \(advisory\)/);
+  });
 });
 
 describe('dod-check integration — TODO/TBD honesty (Scenario B)', () => {
@@ -481,6 +498,10 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     const commitEnvelope = byKind('commit-envelope');
     expect(commitEnvelope).toBeDefined();
     expect(typeof commitEnvelope?.['count']).toBe('number');
+    // declared-rule (over-max) fixture: rule/min/max carry the range in the JSON shape.
+    expect(typeof commitEnvelope?.['rule']).toBe('string');
+    expect(typeof commitEnvelope?.['min']).toBe('number');
+    expect(typeof commitEnvelope?.['max']).toBe('number');
 
     const todoComment = byKind('todo-comment');
     expect(todoComment).toBeDefined();

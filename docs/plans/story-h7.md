@@ -216,3 +216,19 @@ not repeated.
 | P3 | CLAUDE.md § 8 jumps R21→R23 (no R22 row) | acknowledged | Pre-existing (R22 was an h1 `*(pending)*` candidate never codified); out of scope for h7, not introduced here |
 | Sibling | loop.csv post-h6 regen must sequence after h7 (it's the PR that first hits the regression) | adopted | Risks table: deferred follow-up, regenerate after h7 merges |
 | Sibling | #150 / #147 adjacent, independent | acknowledged | No file/logic contention; referenced, not absorbed |
+
+**Phase 4 — code-reviewer findings (2026-07-03).** 5 findings (2 P1, 0 P2, 3 P3; design confirmed
+clean — no `any`, no bare catch, `isAlwaysAdvisory` a top-level pure predicate, C1/C3 verified
+genuinely red before their green pair). Classified by Opus:
+
+| # | Finding | Class | Resolution |
+| --- | --- | --- | --- |
+| F1 | R5: Scenario C's not-declared-envelope leg has in-process coverage but no subprocess test | fix-now | Add an integration leg: a plan with no Slice-plan heading, out of draft → `envelope not declared in plan (advisory)`, exit 0 |
+| F2 | R8: the `--json` `commit-envelope` assertion checks only `count`, not `rule`/`min`/`max`, and only a declared fixture | fix-now | Tighten the `--json` shape assertion to `rule`/`min`/`max` (the `--json` shape itself is unchanged by h7) |
+| F3 | README "Story-id resolution" still says "advisory", not "always-advisory" (terminology drift within the file) | fix-now | README wording aligned |
+| F4 | README "Output" section omits the bare `(advisory)` suffix that always-advisory findings now carry | fix-now | README wording added |
+| F5 | `CommitEnvelopeFinding` is a flat type; the `min !== null` guards are compiler-appeasement, not bugs | acknowledge | Opportunistic discriminated-union tightening deferred to a future story that touches the type |
+| F6 | The `import.meta.url` entrypoint guard is untested directly | acknowledge | Low risk; indirectly exercised by `dod-check.unit.test.ts` importing the module without exit |
+
+Fix-now F1–F4 land in one Phase-4 commit (bringing the story to 6 behaviour slices — squarely within
+R13, so the envelope reports clean).

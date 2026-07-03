@@ -102,16 +102,18 @@ findings are still computed and reported regardless of any degradation. Degradat
 
 ## Output
 
-Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`,
-with an `(advisory — PR is draft)` suffix on draft-aware findings while the PR is a draft. `--json`
-sends `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.
+Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`.
+Draft-aware findings carry an `(advisory — PR is draft)` suffix while the PR is a draft; always-advisory
+findings carry a bare `(advisory)` suffix regardless of draft state. `--json` sends
+`{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.
 
 ## Story-id resolution
 
 1. Current branch name, if it matches `story-<id>`.
 2. Otherwise, the single plan file added in `git diff --name-only origin/main...HEAD -- 'docs/plans/*.md'`.
-3. If neither resolves (e.g. a maintenance PR, or zero/multiple plan files added), the commit-subject
-   check is skipped and reports a `story-id-unresolved` advisory finding naming why.
+3. If neither resolves (e.g. a Dependabot/chore PR, or zero/multiple plan files added), the
+   commit-subject check is skipped and reports a `story-id-unresolved` **always-advisory** finding
+   naming why — it never gates the exit code.
 
 ## Wiring
 

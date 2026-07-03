@@ -49,7 +49,7 @@ afterEach(() => {
   }
 });
 
-describe('dod-check integration — commit-subject discipline, draft-aware (Scenario A)', () => {
+describe('dod-check integration — missing-story-id is hard (Scenario A / C)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -64,24 +64,24 @@ describe('dod-check integration — commit-subject discipline, draft-aware (Scen
     git(tmpDir, ['commit', '-q', '-m', 'chore: a commit with no story id reference']);
   });
 
-  // fails if: a subject missing the story id is not flagged, or the
-  // envelope finding fails a draft PR (guards commit-subject.ts presence +
-  // envelope paths and the entrypoint draft-aware exit).
-  it('reports missing-story-id (hard) and an advisory envelope finding while the PR is a draft', () => {
+  // fails if: a subject missing the story id is not flagged as hard, or the
+  // co-occurring under-min envelope is not rendered as always-advisory
+  // (guards HARD_KINDS + the under-min always-advisory label).
+  it('flags missing-story-id (hard, exit 1); the under-min envelope is always-advisory', () => {
     const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'true' });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('missing-story-id');
     expect(result.stderr).toContain('chore: a commit with no story id reference');
     expect(result.stderr).toContain('commit-envelope');
-    expect(result.stderr).toContain('(advisory — PR is draft)');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
   });
 
-  // fails if: the envelope finding does not become a hard failure once the
-  // PR is out of draft — guards the draft-aware exit-code gate end-to-end.
-  it('the envelope finding becomes a hard failure once the PR is out of draft', () => {
+  // fails if: missing-story-id stops being hard out of draft, or the under-min
+  // envelope wrongly acquires the draft-aware suffix (it is always-advisory).
+  it('missing-story-id stays hard out of draft; the under-min envelope carries no draft suffix', () => {
     const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toContain('missing-story-id');
     expect(result.stderr).not.toContain('(advisory — PR is draft)');
   });
 });
@@ -117,7 +117,7 @@ describe('dod-check integration — merge commits are excluded from the subject 
   });
 });
 
-describe('dod-check integration — advisory-only envelope does not fail a draft PR', () => {
+describe('dod-check integration — under-min envelope is always-advisory (exits 0 even out of draft)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -129,13 +129,104 @@ describe('dod-check integration — advisory-only envelope does not fail a draft
     git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
   });
 
-  // fails if: an advisory-only finding (envelope, count=1, outside 6-10)
-  // fails a draft PR on its own — guards "does not fail on its own".
-  it('a commit count outside 6-10 does not fail while the PR is a draft', () => {
-    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'true' });
+  // fails if: an under-min commit count (1 < 6) gates the exit code out of
+  // draft — the regression that would self-block small stories like h7 itself
+  // (guards the isAlwaysAdvisory count<min branch + the exit partition).
+  it('an under-min commit count is (advisory) and exits 0 out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('commit-envelope');
-    expect(result.stderr).toContain('(advisory — PR is draft)');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
+  });
+});
+
+describe('dod-check integration — a non-story PR does not hard-fail (Scenario A, #151 regression)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    // A Dependabot/chore-shaped branch: no story- name, no plan file added.
+    git(tmpDir, ['checkout', '-q', '-b', 'chore-loop-csv']);
+    fs.writeFileSync(path.join(tmpDir, 'change.txt'), 'x\n');
+    git(tmpDir, ['add', 'change.txt']);
+    git(tmpDir, ['commit', '-q', '-m', 'chore(metrics): regenerate loop.csv']);
+  });
+
+  // fails if: story-id-unresolved gates the exit code out of draft — the #151
+  // regression that hard-failed every Dependabot/chore PR (guards
+  // isAlwaysAdvisory's story-id-unresolved branch + the exit partition).
+  it('reports story-id-unresolved as (advisory) and exits 0 out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('story-id-unresolved');
+    expect(result.stderr).toContain('(advisory)');
+  });
+});
+
+describe('dod-check integration — under-min vs over-max envelope labels are distinguishable (Scenario B)', () => {
+  function commitStoryZzCommits(tmpDir: string, extraCount: number): void {
+    for (let i = 0; i < extraCount; i++) {
+      fs.writeFileSync(path.join(tmpDir, `extra-${i}.txt`), `${i}\n`);
+      git(tmpDir, ['add', `extra-${i}.txt`]);
+      git(tmpDir, ['commit', '-q', '-m', `feat(harness): extra slice ${i} — green [story-zz]`]);
+    }
+  }
+
+  // fails if: an under-min count (3, below R13's min of 6) renders the old
+  // combined "envelope R13 (6-10)" wording instead of the distinguishable
+  // "under the R13 (6-10) target (advisory)" label, or gates the exit code
+  // once out of draft — guards Scenario B's under-count leg end-to-end.
+  it('under-min (3 commits) is labelled "under ... target (advisory)" and exits 0 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    commitStoryZzCommits(tmpDir, 1); // 2 story commits total: under R13's min of 6
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
+    expect(result.stderr).not.toContain('(advisory — PR is draft)');
+  });
+
+  // fails if: an over-max count (12, above R13's max of 10) renders the old
+  // combined wording instead of "over the R13 (6-10) envelope", or stops
+  // gating the exit code once out of draft — guards Scenario B's
+  // over-count leg staying hard.
+  it('over-max (12 commits) is labelled "over ... envelope" and exits 1 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    commitStoryZzCommits(tmpDir, 11); // 12 story commits total: over R13's max of 10
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toMatch(/over the R13 \(6–10\) envelope/);
+  });
+
+  // fails if: a plan with no declared envelope rule (no `## Slice plan` heading)
+  // gates the exit code out of draft — guards Scenario C's not-declared leg as
+  // always-advisory end-to-end (rule===null branch of isAlwaysAdvisory).
+  it('a not-declared envelope is "not declared in plan (advisory)" and exits 0 out of draft', () => {
+    const tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    // Plan present, but no `## Slice plan` heading → no envelope rule declared.
+    writePlan(tmpDir, 'zz', '# Story zz\n\nNo slice-plan heading here.\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/envelope not declared in plan \(advisory\)/);
   });
 });
 
@@ -407,6 +498,10 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     const commitEnvelope = byKind('commit-envelope');
     expect(commitEnvelope).toBeDefined();
     expect(typeof commitEnvelope?.['count']).toBe('number');
+    // declared-rule (over-max) fixture: rule/min/max carry the range in the JSON shape.
+    expect(typeof commitEnvelope?.['rule']).toBe('string');
+    expect(typeof commitEnvelope?.['min']).toBe('number');
+    expect(typeof commitEnvelope?.['max']).toBe('number');
 
     const todoComment = byKind('todo-comment');
     expect(todoComment).toBeDefined();

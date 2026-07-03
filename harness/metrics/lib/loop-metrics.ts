@@ -57,19 +57,29 @@ export type BuildLoopRowResult = {
   skipReason: string | null;
 };
 
+function makeRow(
+  storyId: string,
+  planLoc: number,
+  diffLoc: number | 'n/a',
+  weightRatio: number | 'n/a',
+  retroLoopMetrics: boolean,
+): LoopRow {
+  return {
+    story_id: storyId,
+    plan_loc: planLoc,
+    diff_loc: diffLoc,
+    weight_ratio: weightRatio,
+    retro_loop_metrics: retroLoopMetrics,
+  };
+}
+
 export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
   const { storyId, planLoc, commitLog, retroLoopMetrics, diffStatLookup } = input;
   const resolved = resolveStoryCommit(commitLog, storyId);
 
   if (resolved === null) {
     return {
-      row: {
-        story_id: storyId,
-        plan_loc: planLoc,
-        diff_loc: 'n/a',
-        weight_ratio: 'n/a',
-        retro_loop_metrics: retroLoopMetrics,
-      },
+      row: makeRow(storyId, planLoc, 'n/a', 'n/a', retroLoopMetrics),
       skipReason: `no merge commit resolved for story id "${storyId}"`,
     };
   }
@@ -77,13 +87,7 @@ export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
   const diffLoc = diffStatLookup(resolved.sha);
   if (diffLoc === null || diffLoc === 0) {
     return {
-      row: {
-        story_id: storyId,
-        plan_loc: planLoc,
-        diff_loc: 'n/a',
-        weight_ratio: 'n/a',
-        retro_loop_metrics: retroLoopMetrics,
-      },
+      row: makeRow(storyId, planLoc, 'n/a', 'n/a', retroLoopMetrics),
       skipReason: `merge commit for story id "${storyId}" has zero diff_loc`,
     };
   }
@@ -94,13 +98,7 @@ export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
   // including ceremony". See story-h8.
   const weightRatio = computeWeightRatio(planLoc, diffLoc) ?? 'n/a';
   return {
-    row: {
-      story_id: storyId,
-      plan_loc: planLoc,
-      diff_loc: diffLoc,
-      weight_ratio: weightRatio,
-      retro_loop_metrics: retroLoopMetrics,
-    },
+    row: makeRow(storyId, planLoc, diffLoc, weightRatio, retroLoopMetrics),
     skipReason: null,
   };
 }

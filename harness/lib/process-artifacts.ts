@@ -4,6 +4,13 @@ export function isProcessArtifactPath(p: string): boolean {
   return PROCESS_ARTIFACT_PREFIXES.some((prefix) => p.startsWith(prefix));
 }
 
+export function countLoc(content: string): number {
+  if (content.length === 0) {
+    return 0;
+  }
+  return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+}
+
 export function sumShippedDiffLoc(numstatOutput: string): number {
   let total = 0;
   for (const line of numstatOutput.split('\n')) {

@@ -12,7 +12,7 @@ import {
   type LoopRow,
   type SkipEntry,
 } from './lib/loop-metrics.js';
-import { sumShippedDiffLoc } from '../lib/process-artifacts.js';
+import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 function getPlanStoryIds(repoRoot: string): string[] {
   const plansDir = path.join(repoRoot, 'docs', 'plans');
@@ -51,11 +51,7 @@ function diffLocForSha(repoRoot: string, sha: string): number | null {
 
 function planLocFor(repoRoot: string, storyId: string): number {
   const planPath = path.join(repoRoot, 'docs', 'plans', `story-${storyId}.md`);
-  const content = fs.readFileSync(planPath, 'utf8');
-  if (content.length === 0) {
-    return 0;
-  }
-  return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+  return countLoc(fs.readFileSync(planPath, 'utf8'));
 }
 
 function retroLoopMetricsFor(repoRoot: string, storyId: string): boolean {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isProcessArtifactPath, sumShippedDiffLoc, PROCESS_ARTIFACT_PREFIXES } from '../process-artifacts.js';
+import { isProcessArtifactPath, sumShippedDiffLoc, countLoc, PROCESS_ARTIFACT_PREFIXES } from '../process-artifacts.js';
 
 describe('isProcessArtifactPath', () => {
   // fails if: a plan/retro/status-fragment path is not recognized as a
@@ -61,5 +61,33 @@ describe('sumShippedDiffLoc', () => {
       '1\t1\tharness/metrics/loop-metrics.ts',
     ].join('\n');
     expect(sumShippedDiffLoc(numstat)).toBe(2);
+  });
+});
+
+describe('countLoc', () => {
+  // fails if: an empty string is counted as 1 line instead of 0 — would
+  // inflate planLoc for a zero-byte plan file.
+  it('returns 0 for an empty string', () => {
+    expect(countLoc('')).toBe(0);
+  });
+
+  // fails if: the trailing-newline adjustment is dropped — a file ending in
+  // \n would be over-counted by one line (a phantom trailing blank line).
+  it('does not count a trailing newline as an extra line', () => {
+    expect(countLoc('line 1\nline 2\n')).toBe(2);
+  });
+
+  // fails if: content with no trailing newline loses its last line — guards
+  // the else-branch of the trailing-newline adjustment.
+  it('counts the final line when there is no trailing newline', () => {
+    expect(countLoc('line 1\nline 2')).toBe(2);
+  });
+
+  // fails if: multi-line counting regresses to a naive split without the
+  // trailing-newline guard — guards the general case beyond the 2-line
+  // fixtures above.
+  it('counts every line in a multi-line document with a trailing newline', () => {
+    const content = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n') + '\n';
+    expect(countLoc(content)).toBe(50);
   });
 });

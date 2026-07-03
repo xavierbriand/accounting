@@ -27,7 +27,7 @@ import {
   type GherkinMapFinding,
 } from './lib/gherkin-map.js';
 import { checkWeightRatio, type WeightRatioHeavyFinding } from './lib/weight-ratio.js';
-import { sumShippedDiffLoc } from '../lib/process-artifacts.js';
+import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 export type StoryIdUnresolvedFinding = {
   kind: 'story-id-unresolved';
@@ -165,11 +165,7 @@ function runCommitSubjectCheck(repoRoot: string, degraded: string[]): DodFinding
 }
 
 function planLocFor(planPath: string): number {
-  const content = fs.readFileSync(planPath, 'utf8');
-  if (content.length === 0) {
-    return 0;
-  }
-  return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+  return countLoc(fs.readFileSync(planPath, 'utf8'));
 }
 
 function shippedLocSinceMain(repoRoot: string, degraded: string[]): number | null {

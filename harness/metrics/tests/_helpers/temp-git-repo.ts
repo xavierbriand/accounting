@@ -35,3 +35,11 @@ export function writeAndCommit(tmpDir: string, relPath: string, content: string,
   git(tmpDir, ['add', relPath]);
   git(tmpDir, ['commit', '-q', '-m', subject]);
 }
+
+// Shared afterEach cleanup for the TEMP_DIRS-array pattern both integration
+// test files use — removes each dir and clears the list.
+export function cleanupTempDirs(dirs: string[]): void {
+  for (const dir of dirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}

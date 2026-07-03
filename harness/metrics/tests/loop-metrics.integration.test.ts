@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initTempRepo, writeAndCommit } from './_helpers/temp-git-repo.js';
+import { initTempRepo, writeAndCommit, cleanupTempDirs } from './_helpers/temp-git-repo.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const ENTRYPOINT = path.join(REPO_ROOT, 'harness', 'metrics', 'loop-metrics.ts');
@@ -24,9 +24,7 @@ describe('metrics:loop subprocess smoke', () => {
   });
 
   afterEach(() => {
-    for (const dir of TEMP_DIRS.splice(0)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+    cleanupTempDirs(TEMP_DIRS);
   });
 
   function buildFixtureRepo(): string {
@@ -73,8 +71,9 @@ describe('metrics:loop subprocess smoke', () => {
   // fails if: a story whose commit cannot be resolved is dropped from both
   // the CSV and the skip-report instead of appearing in the CSV as 'n/a'
   // plus a named skip reason — the baseline would then lie by omission
-  // (guards loop-metrics.ts's row-emission path end-to-end, isolated from
-  // the real repo's history via the fixture built above).
+  // (Gherkin Scenario A's skip-case leg; guards loop-metrics.ts's
+  // row-emission path end-to-end, isolated from the real repo's history via
+  // the fixture built above).
   it('never silently drops an unresolvable story — every skip is named with a reason', () => {
     const tmpDir = buildFixtureRepo();
 

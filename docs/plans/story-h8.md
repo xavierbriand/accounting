@@ -156,9 +156,23 @@ Sources: `plan-reviewer` (P1×10 / P2×2 / P3×10 = 22) + `sibling-overlap` (3 c
 | 13 | sibling-overlap: h10 (#162) row-driven walk must inherit R26; `process-artifacts.ts` anticipates it | **ACKNOWLEDGE** | Keep R26 drift-clean (finding 7); shared filter intentionally single-source |
 | 14 | P2 QA / R8 mock-diversity not walked | **REJECT** | Out of scope — no product (`src/`) surface, no user-facing structured output; QA doc scopes both to product |
 
+### Phase 4 (code review — `code-reviewer`; no model note → no ddd-modeler B)
+
+4 findings (2 P1 / 2 P3) + 3 soft, plus one Opus-caught doc bug. All fixed in the Phase-4 refactor batch (`dccf114` docs, `2698bcf` refactor) unless acknowledged.
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 15 | `harness/dod-check/README.md` still says "Three checks" — omits `weight-ratio` (R2 doc drift) | **FIX-NOW** | README updated: four checks, invocation, always-advisory enforcement row, output |
+| 16 | `--json` "every DodFinding kind" test omits `weight-ratio-heavy` — completeness claim false (R8) | **FIX-NOW** | Added `--json` shape assertion in the S3 test + honest comment in the every-kind test |
+| 17 | `planLocFor` LOC-counting duplicated in `dod-check.ts` + `loop-metrics.ts` (against the single-source theme) | **FIX-NOW** | Extracted shared `countLoc` into `harness/lib/process-artifacts.ts`; both delegate; unit-tested |
+| 18 | Opus-caught: Reduced-lane **Phase 2** cell listed `code-reviewer` (a Phase-4 agent) | **FIX-NOW** | Cell corrected to `sibling-overlap` only |
+| 19 | Body commits lack `Co-Authored-By` agent trailers (R9 authorship signal) | **ACKNOWLEDGE** | No rule mandates it; legitimate Sonnet slices — Try item to add trailers to the sonnet-implementer spec |
+| 20 | `sumShippedDiffLoc` mis-parses a rename crossing a process-prefix boundary | **ACKNOWLEDGE** | Plan Risks row already accepts this as rare/non-critical for a health heuristic |
+
 ## DoR checklist
 
 - [x] Phase 0 (Model): `No model impact` declared above (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — plan-reviewer + sibling-overlap in parallel): 22 + 3 findings triaged in the Suggestion log (8 ADOPT, 5 ACKNOWLEDGE, 1 REJECT, 0 DEFER).
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR ([#167](https://github.com/xavierbriand/accounting/pull/167)) with template sections 1–6 filled.
+- [x] Phase 4 (Code review — `code-reviewer`): 4 findings + 1 Opus-caught triaged (4 FIX-NOW, 2 ACKNOWLEDGE); refactor merged.

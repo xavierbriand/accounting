@@ -26,6 +26,8 @@ import {
   type StepDefinitionSource,
   type GherkinMapFinding,
 } from './lib/gherkin-map.js';
+import { checkWeightRatio, type WeightRatioHeavyFinding } from './lib/weight-ratio.js';
+import { sumShippedDiffLoc } from '../lib/process-artifacts.js';
 
 export type StoryIdUnresolvedFinding = {
   kind: 'story-id-unresolved';
@@ -38,7 +40,8 @@ export type DodFinding =
   | TodoCommentFinding
   | PrTbdFinding
   | GherkinMapFinding
-  | StoryIdUnresolvedFinding;
+  | StoryIdUnresolvedFinding
+  | WeightRatioHeavyFinding;
 
 const HARD_KINDS: ReadonlySet<DodFinding['kind']> = new Set([
   'missing-story-id',
@@ -53,6 +56,7 @@ function isHardFinding(finding: DodFinding): boolean {
 
 export function isAlwaysAdvisory(finding: DodFinding): boolean {
   if (finding.kind === 'story-id-unresolved') return true;
+  if (finding.kind === 'weight-ratio-heavy') return true;
   if (finding.kind === 'commit-envelope') {
     return finding.rule === null || (finding.min !== null && finding.count < finding.min);
   }
@@ -158,6 +162,48 @@ function runCommitSubjectCheck(repoRoot: string, degraded: string[]): DodFinding
     findings.push(envelopeFinding);
   }
   return findings;
+}
+
+function planLocFor(planPath: string): number {
+  const content = fs.readFileSync(planPath, 'utf8');
+  if (content.length === 0) {
+    return 0;
+  }
+  return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+}
+
+function shippedLocSinceMain(repoRoot: string, degraded: string[]): number | null {
+  try {
+    const output = execFileSync('git', ['diff', '--numstat', 'origin/main...HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    return sumShippedDiffLoc(output);
+  } catch (err) {
+    degraded.push(`shippedLocSinceMain: git diff --numstat failed (${errorMessage(err)})`);
+    return null;
+  }
+}
+
+function runWeightRatioCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+  const resolution = resolveStoryId(repoRoot, degraded);
+  if ('unresolved' in resolution) {
+    degraded.push(`runWeightRatioCheck: story id unresolved (${resolution.unresolved})`);
+    return [];
+  }
+  const planPath = findPlanFile(repoRoot, resolution.storyId);
+  if (!planPath) {
+    degraded.push(`runWeightRatioCheck: no plan file for story id "${resolution.storyId}"`);
+    return [];
+  }
+  const shippedLoc = shippedLocSinceMain(repoRoot, degraded);
+  if (shippedLoc === null || shippedLoc === 0) {
+    degraded.push('runWeightRatioCheck: shippedLoc is zero or unresolvable');
+    return [];
+  }
+  const planLoc = planLocFor(planPath);
+  const finding = checkWeightRatio(planLoc, shippedLoc);
+  return finding ? [finding] : [];
 }
 
 const TRACKED_SOURCE_DIRS = ['src', 'tests', 'harness'];
@@ -379,11 +425,23 @@ function formatGherkinLines(findings: DodFinding[]): string[] {
   return lines;
 }
 
+function formatWeightRatioLines(findings: DodFinding[]): string[] {
+  const weightRatioFindings = findings.filter(
+    (f): f is WeightRatioHeavyFinding => f.kind === 'weight-ratio-heavy',
+  );
+  if (weightRatioFindings.length === 0) return [];
+  return weightRatioFindings.map(
+    (f) =>
+      `  weight-ratio-heavy: plan ${f.planLoc} LOC vs shipped ${f.shippedLoc} LOC (ratio=${f.ratio.toFixed(2)}) (advisory)`,
+  );
+}
+
 function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
   return [
     ...formatCommitSubjectLines(findings, isDraft),
     ...formatTodoTbdLines(findings, isDraft),
     ...formatGherkinLines(findings),
+    ...formatWeightRatioLines(findings),
   ].join('\n');
 }
 
@@ -404,6 +462,7 @@ function main(): void {
     commits: () => runCommitSubjectCheck(repoRoot, degraded),
     'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrTbdCheck(repoRoot, degraded)],
     gherkin: () => runGherkinMapCheck(repoRoot, degraded),
+    'weight-ratio': () => runWeightRatioCheck(repoRoot, degraded),
   };
 
   const selectedChecks = onlyCheck ? [onlyCheck] : Object.keys(checks);

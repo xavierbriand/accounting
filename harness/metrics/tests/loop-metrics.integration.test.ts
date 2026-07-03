@@ -33,7 +33,12 @@ describe('metrics:loop subprocess smoke', () => {
     // story-aa: resolvable commit + a retro carrying the Loop metrics heading.
     // The retro commit deliberately omits the story tag so it doesn't also
     // match countStoryCommits('aa') — only the plan commit should count.
+    // The plan commit also ships a non-process (src/) file: once diff_loc
+    // excludes docs/plans/, a plan-only commit would have zero shipped
+    // diff_loc and flip this fixture into a skip instead of a happy-path
+    // numeric row (Phase-2 finding).
     writeAndCommit(tmpDir, 'docs/plans/story-aa.md', '# Story aa\n\nline2\nline3\nline4\n', 'feat(harness): aa fixture — green [story-aa]');
+    writeAndCommit(tmpDir, 'src/aa-feature.ts', 'export const aa = 1;\n', 'feat(harness): aa shipped file [story-aa]');
     writeAndCommit(
       tmpDir,
       'docs/retrospectives/story-aa.md',
@@ -55,17 +60,17 @@ describe('metrics:loop subprocess smoke', () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('top-3 weight-ratio offenders:');
-    expect(result.stderr).toContain('aa (weight_ratio=1)');
+    expect(result.stderr).toContain('aa (weight_ratio=5)');
     expect(result.stderr).toContain('skipped stories:');
 
     const csvPath = path.join(tmpDir, 'docs', 'metrics', 'loop.csv');
     expect(fs.existsSync(csvPath)).toBe(true);
     const csv = fs.readFileSync(csvPath, 'utf8');
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('story_id,plan_loc,diff_loc,commits,weight_ratio,retro_loop_metrics');
+    expect(lines[0]).toBe('story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics');
     expect(lines).toHaveLength(3);
-    expect(lines).toContain('aa,5,5,1,1,true');
-    expect(lines[2]).toMatch(/^bb,\d+,n\/a,0,n\/a,false$/);
+    expect(lines).toContain('aa,5,1,5,true');
+    expect(lines[2]).toMatch(/^bb,\d+,n\/a,n\/a,false$/);
   });
 
   // fails if: a story whose commit cannot be resolved is dropped from both

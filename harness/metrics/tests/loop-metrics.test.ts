@@ -103,7 +103,6 @@ describe('buildLoopRow', () => {
       storyId: 'nonexistent-99',
       planLoc: 120,
       commitLog: COMMIT_LOG,
-      commits: 0,
       retroLoopMetrics: false,
       diffStatLookup: () => null,
     });
@@ -111,7 +110,6 @@ describe('buildLoopRow', () => {
       story_id: 'nonexistent-99',
       plan_loc: 120,
       diff_loc: 'n/a',
-      commits: 0,
       weight_ratio: 'n/a',
       retro_loop_metrics: false,
     });
@@ -125,7 +123,6 @@ describe('buildLoopRow', () => {
       storyId: 'h1',
       planLoc: 200,
       commitLog: COMMIT_LOG,
-      commits: 3,
       retroLoopMetrics: true,
       diffStatLookup: (sha) => (sha === '12a6c13' ? 100 : null),
     });
@@ -133,7 +130,6 @@ describe('buildLoopRow', () => {
       story_id: 'h1',
       plan_loc: 200,
       diff_loc: 100,
-      commits: 3,
       weight_ratio: 2,
       retro_loop_metrics: true,
     });
@@ -147,7 +143,6 @@ describe('buildLoopRow', () => {
       storyId: 'h1',
       planLoc: 200,
       commitLog: COMMIT_LOG,
-      commits: 1,
       retroLoopMetrics: false,
       diffStatLookup: () => 0,
     });
@@ -158,18 +153,19 @@ describe('buildLoopRow', () => {
 
 describe('formatCsv', () => {
   // fails if: column order deviates from the plan's documented contract
-  // (story_id, plan_loc, diff_loc, commits, weight_ratio, retro_loop_metrics)
-  // — downstream consumers (the retro Cost line, C6 annotation) key on order.
+  // (story_id, plan_loc, diff_loc, weight_ratio, retro_loop_metrics) —
+  // downstream consumers (the retro Cost line, C6 annotation) key on order.
+  // The `commits` column is dropped (S2) — it was always 1 post-squash.
   it('emits the header followed by one row per LoopRow in documented column order', () => {
     const rows: LoopRow[] = [
-      { story_id: 'h1', plan_loc: 200, diff_loc: 100, commits: 3, weight_ratio: 2, retro_loop_metrics: true },
-      { story_id: 'nonexistent-99', plan_loc: 120, diff_loc: 'n/a', commits: 0, weight_ratio: 'n/a', retro_loop_metrics: false },
+      { story_id: 'h1', plan_loc: 200, diff_loc: 100, weight_ratio: 2, retro_loop_metrics: true },
+      { story_id: 'nonexistent-99', plan_loc: 120, diff_loc: 'n/a', weight_ratio: 'n/a', retro_loop_metrics: false },
     ];
     const csv = formatCsv(rows);
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('story_id,plan_loc,diff_loc,commits,weight_ratio,retro_loop_metrics');
-    expect(lines[1]).toBe('h1,200,100,3,2,true');
-    expect(lines[2]).toBe('nonexistent-99,120,n/a,0,n/a,false');
+    expect(lines[0]).toBe('story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics');
+    expect(lines[1]).toBe('h1,200,100,2,true');
+    expect(lines[2]).toBe('nonexistent-99,120,n/a,n/a,false');
   });
 });
 
@@ -179,11 +175,11 @@ describe('formatTop3Report', () => {
   // only rank stories with a real, computed weight_ratio.
   it('names the top-3 numeric weight-ratio offenders, highest first', () => {
     const rows: LoopRow[] = [
-      { story_id: 'low', plan_loc: 10, diff_loc: 100, commits: 1, weight_ratio: 0.1, retro_loop_metrics: false },
-      { story_id: 'high', plan_loc: 300, diff_loc: 10, commits: 1, weight_ratio: 30, retro_loop_metrics: false },
-      { story_id: 'mid', plan_loc: 100, diff_loc: 50, commits: 1, weight_ratio: 2, retro_loop_metrics: false },
-      { story_id: 'skip', plan_loc: 10, diff_loc: 'n/a', commits: 0, weight_ratio: 'n/a', retro_loop_metrics: false },
-      { story_id: 'mid2', plan_loc: 60, diff_loc: 40, commits: 1, weight_ratio: 1.5, retro_loop_metrics: false },
+      { story_id: 'low', plan_loc: 10, diff_loc: 100, weight_ratio: 0.1, retro_loop_metrics: false },
+      { story_id: 'high', plan_loc: 300, diff_loc: 10, weight_ratio: 30, retro_loop_metrics: false },
+      { story_id: 'mid', plan_loc: 100, diff_loc: 50, weight_ratio: 2, retro_loop_metrics: false },
+      { story_id: 'skip', plan_loc: 10, diff_loc: 'n/a', weight_ratio: 'n/a', retro_loop_metrics: false },
+      { story_id: 'mid2', plan_loc: 60, diff_loc: 40, weight_ratio: 1.5, retro_loop_metrics: false },
     ];
     const report = formatTop3Report(rows);
     expect(report).toBe(

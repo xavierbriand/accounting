@@ -33,12 +33,14 @@ describe('metrics:loop subprocess smoke', () => {
     const tmpDir = initTempRepo();
     TEMP_DIRS.push(tmpDir);
     // story-aa: resolvable commit + a retro carrying the Loop metrics heading.
+    // The retro commit deliberately omits the story tag so it doesn't also
+    // match countStoryCommits('aa') — only the plan commit should count.
     writeAndCommit(tmpDir, 'docs/plans/story-aa.md', '# Story aa\n\nline2\nline3\nline4\n', 'feat(harness): aa fixture — green [story-aa]');
     writeAndCommit(
       tmpDir,
       'docs/retrospectives/story-aa.md',
       '# Retro aa\n\n## Loop metrics\n\nsome content\n',
-      'chore(retro): aa retro [story-aa]',
+      'chore: add aa retro fixture',
     );
     // story-bb: plan file present, but no commit anywhere references story-bb — skip case.
     writeAndCommit(tmpDir, 'docs/plans/story-bb.md', '# Story bb\n\nunresolvable\n', 'chore: add bb plan, no story tag');
@@ -51,7 +53,7 @@ describe('metrics:loop subprocess smoke', () => {
   it('writes <tmpDir>/docs/metrics/loop.csv with a header row and one row per fixture story, reporting top-3 + skips on stderr', () => {
     const tmpDir = buildFixtureRepo();
 
-    const result = spawnSync('npx', ['tsx', ENTRYPOINT], { cwd: REPO_ROOT, encoding: 'utf8' });
+    const result = spawnSync('npx', ['tsx', ENTRYPOINT], { cwd: tmpDir, encoding: 'utf8' });
 
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('top-3 weight-ratio offenders:');
@@ -64,7 +66,7 @@ describe('metrics:loop subprocess smoke', () => {
     const lines = csv.trim().split('\n');
     expect(lines[0]).toBe('story_id,plan_loc,diff_loc,commits,weight_ratio,retro_loop_metrics');
     expect(lines).toHaveLength(3);
-    expect(lines).toContain('aa,4,4,1,1,true');
+    expect(lines).toContain('aa,5,5,1,1,true');
     expect(lines[2]).toMatch(/^bb,\d+,n\/a,0,n\/a,false$/);
   });
 
@@ -76,7 +78,7 @@ describe('metrics:loop subprocess smoke', () => {
   it('never silently drops an unresolvable story — every skip is named with a reason', () => {
     const tmpDir = buildFixtureRepo();
 
-    const result = spawnSync('npx', ['tsx', ENTRYPOINT], { cwd: REPO_ROOT, encoding: 'utf8' });
+    const result = spawnSync('npx', ['tsx', ENTRYPOINT], { cwd: tmpDir, encoding: 'utf8' });
 
     expect(result.stderr).toContain('bb: no merge commit resolved for story id "bb"');
 

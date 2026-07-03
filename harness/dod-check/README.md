@@ -40,17 +40,26 @@ npx tsx harness/dod-check/dod-check.ts --json
 
 ## Enforcement model
 
+Three tiers:
+
 | Finding | Enforcement |
 | --- | --- |
 | `missing-story-id` | **hard** — always exit 1 |
 | `todo-comment` | **hard** — always exit 1 |
 | `unmapped-scenario` / `orphan-step` | **hard** — always exit 1 |
-| `commit-envelope` | **draft-aware** — advisory while the PR is a draft, hard once ready-for-review |
-| `pr-tbd` | **draft-aware** — same as above |
-| `story-id-unresolved` | advisory — reported, never a crash; skips the commit-subject check |
+| `pr-tbd` | **draft-aware** — advisory while the PR is a draft, hard once ready-for-review |
+| `commit-envelope`, count **over** the declared max | **draft-aware** — same as `pr-tbd` |
+| `commit-envelope`, count **under** the declared min | **always-advisory** — reported, never gates |
+| `commit-envelope`, rule **not declared** in the plan | **always-advisory** — reported, never gates |
+| `story-id-unresolved` (non-story PR — Dependabot/chore) | **always-advisory** — reported, never gates |
 
-Exit code: `1` if any hard finding exists, or any advisory finding exists **and** the PR is out of
-draft. `0` otherwise.
+Exit code: `1` iff a **hard** finding exists, **or** a **draft-aware** finding exists and the PR is
+out of draft. **Always-advisory** findings never affect the exit code — a non-story PR, an
+under-target (small) story, or a plan with no declared envelope is reported but not blocked. The
+envelope's job is to cap stories that are *too big* (§ 6.6 sizing); being small, or having no story at
+all, is not a merge blocker. Human report lines distinguish the three envelope cases: `over the
+R<n> (min–max) envelope`, `under the R<n> (min–max) target (advisory)`, and `envelope not declared in
+plan (advisory)`.
 
 ## Draft-state resolution
 

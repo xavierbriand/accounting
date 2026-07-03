@@ -140,6 +140,30 @@ describe('dod-check integration — under-min envelope is always-advisory (exits
   });
 });
 
+describe('dod-check integration — a non-story PR does not hard-fail (Scenario A, #151 regression)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    // A Dependabot/chore-shaped branch: no story- name, no plan file added.
+    git(tmpDir, ['checkout', '-q', '-b', 'chore-loop-csv']);
+    fs.writeFileSync(path.join(tmpDir, 'change.txt'), 'x\n');
+    git(tmpDir, ['add', 'change.txt']);
+    git(tmpDir, ['commit', '-q', '-m', 'chore(metrics): regenerate loop.csv']);
+  });
+
+  // fails if: story-id-unresolved gates the exit code out of draft — the #151
+  // regression that hard-failed every Dependabot/chore PR (guards
+  // isAlwaysAdvisory's story-id-unresolved branch + the exit partition).
+  it('reports story-id-unresolved as (advisory) and exits 0 out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('story-id-unresolved');
+    expect(result.stderr).toContain('(advisory)');
+  });
+});
+
 describe('dod-check integration — under-min vs over-max envelope labels are distinguishable (Scenario B)', () => {
   function commitStoryZzCommits(tmpDir: string, extraCount: number): void {
     for (let i = 0; i < extraCount; i++) {

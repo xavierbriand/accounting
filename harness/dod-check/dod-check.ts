@@ -322,7 +322,10 @@ function formatCommitEnvelopeLine(f: CommitEnvelopeFinding, isDraft: boolean): s
   if (f.rule === null) {
     return `  commit-envelope: ${f.count} commits, envelope not declared in plan (advisory)`;
   }
-  return `  commit-envelope: ${f.count} commits, envelope ${f.rule} (${f.min}–${f.max})${draftSuffix(f, isDraft)}`;
+  if (f.min !== null && f.count < f.min) {
+    return `  commit-envelope: ${f.count} commits, under the ${f.rule} (${f.min}–${f.max}) target (advisory)`;
+  }
+  return `  commit-envelope: ${f.count} commits, over the ${f.rule} (${f.min}–${f.max}) envelope${draftSuffix(f, isDraft)}`;
 }
 
 function formatCommitSubjectLines(findings: DodFinding[], isDraft: boolean): string[] {

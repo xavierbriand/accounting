@@ -49,7 +49,7 @@ afterEach(() => {
   }
 });
 
-describe('dod-check integration — commit-subject discipline, draft-aware (Scenario A)', () => {
+describe('dod-check integration — missing-story-id is hard (Scenario A / C)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -64,24 +64,24 @@ describe('dod-check integration — commit-subject discipline, draft-aware (Scen
     git(tmpDir, ['commit', '-q', '-m', 'chore: a commit with no story id reference']);
   });
 
-  // fails if: a subject missing the story id is not flagged, or the
-  // envelope finding fails a draft PR (guards commit-subject.ts presence +
-  // envelope paths and the entrypoint draft-aware exit).
-  it('reports missing-story-id (hard) and an advisory envelope finding while the PR is a draft', () => {
+  // fails if: a subject missing the story id is not flagged as hard, or the
+  // co-occurring under-min envelope is not rendered as always-advisory
+  // (guards HARD_KINDS + the under-min always-advisory label).
+  it('flags missing-story-id (hard, exit 1); the under-min envelope is always-advisory', () => {
     const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'true' });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('missing-story-id');
     expect(result.stderr).toContain('chore: a commit with no story id reference');
     expect(result.stderr).toContain('commit-envelope');
-    expect(result.stderr).toContain('(advisory — PR is draft)');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
   });
 
-  // fails if: the envelope finding does not become a hard failure once the
-  // PR is out of draft — guards the draft-aware exit-code gate end-to-end.
-  it('the envelope finding becomes a hard failure once the PR is out of draft', () => {
+  // fails if: missing-story-id stops being hard out of draft, or the under-min
+  // envelope wrongly acquires the draft-aware suffix (it is always-advisory).
+  it('missing-story-id stays hard out of draft; the under-min envelope carries no draft suffix', () => {
     const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('commit-envelope');
+    expect(result.stderr).toContain('missing-story-id');
     expect(result.stderr).not.toContain('(advisory — PR is draft)');
   });
 });
@@ -117,7 +117,7 @@ describe('dod-check integration — merge commits are excluded from the subject 
   });
 });
 
-describe('dod-check integration — advisory-only envelope does not fail a draft PR', () => {
+describe('dod-check integration — under-min envelope is always-advisory (exits 0 even out of draft)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -129,13 +129,14 @@ describe('dod-check integration — advisory-only envelope does not fail a draft
     git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
   });
 
-  // fails if: an advisory-only finding (envelope, count=1, outside 6-10)
-  // fails a draft PR on its own — guards "does not fail on its own".
-  it('a commit count outside 6-10 does not fail while the PR is a draft', () => {
-    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'true' });
+  // fails if: an under-min commit count (1 < 6) gates the exit code out of
+  // draft — the regression that would self-block small stories like h7 itself
+  // (guards the isAlwaysAdvisory count<min branch + the exit partition).
+  it('an under-min commit count is (advisory) and exits 0 out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'commits'], { DOD_PR_DRAFT: 'false' });
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('commit-envelope');
-    expect(result.stderr).toContain('(advisory — PR is draft)');
+    expect(result.stderr).toMatch(/under the R13 \(6–10\) target \(advisory\)/);
   });
 });
 

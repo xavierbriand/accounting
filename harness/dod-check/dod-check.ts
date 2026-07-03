@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import {
   checkCommitSubjects,
   parseEnvelopeRule,
@@ -48,6 +49,14 @@ const HARD_KINDS: ReadonlySet<DodFinding['kind']> = new Set([
 
 function isHardFinding(finding: DodFinding): boolean {
   return HARD_KINDS.has(finding.kind);
+}
+
+export function isAlwaysAdvisory(finding: DodFinding): boolean {
+  if (finding.kind === 'story-id-unresolved') return true;
+  if (finding.kind === 'commit-envelope') {
+    return finding.rule === null || (finding.min !== null && finding.count < finding.min);
+  }
+  return false;
 }
 
 function errorMessage(err: unknown): string {
@@ -304,7 +313,19 @@ function resolveDraftState(repoRoot: string): DraftResolution {
 }
 
 function draftSuffix(finding: DodFinding, isDraft: boolean): string {
-  return !isHardFinding(finding) && isDraft ? ' (advisory — PR is draft)' : '';
+  return !isHardFinding(finding) && !isAlwaysAdvisory(finding) && isDraft
+    ? ' (advisory — PR is draft)'
+    : '';
+}
+
+function formatCommitEnvelopeLine(f: CommitEnvelopeFinding, isDraft: boolean): string {
+  if (f.rule === null) {
+    return `  commit-envelope: ${f.count} commits, envelope not declared in plan (advisory)`;
+  }
+  if (f.min !== null && f.count < f.min) {
+    return `  commit-envelope: ${f.count} commits, under the ${f.rule} (${f.min}–${f.max}) target (advisory)`;
+  }
+  return `  commit-envelope: ${f.count} commits, over the ${f.rule} (${f.min}–${f.max}) envelope${draftSuffix(f, isDraft)}`;
 }
 
 function formatCommitSubjectLines(findings: DodFinding[], isDraft: boolean): string[] {
@@ -318,10 +339,9 @@ function formatCommitSubjectLines(findings: DodFinding[], isDraft: boolean): str
     if (f.kind === 'missing-story-id') {
       lines.push(`  missing-story-id: ${f.sha} "${f.subject}"`);
     } else if (f.kind === 'commit-envelope') {
-      const range = f.rule ? `${f.rule} (${f.min}–${f.max})` : 'not declared in plan';
-      lines.push(`  commit-envelope: ${f.count} commits, envelope ${range}${draftSuffix(f, isDraft)}`);
+      lines.push(formatCommitEnvelopeLine(f, isDraft));
     } else {
-      lines.push(`  story-id-unresolved: ${f.reason}`);
+      lines.push(`  story-id-unresolved: ${f.reason} (advisory)`);
     }
   }
   return lines;
@@ -405,10 +425,15 @@ function main(): void {
     }
   }
 
-  const hardCount = findings.filter(isHardFinding).length;
-  const advisoryCount = findings.length - hardCount;
-  const exitCode = hardCount > 0 || (advisoryCount > 0 && !draft.isDraft) ? 1 : 0;
+  const hard = findings.filter(isHardFinding);
+  const softGate = findings.filter((f) => !isHardFinding(f) && !isAlwaysAdvisory(f));
+  const exitCode = hard.length > 0 || (softGate.length > 0 && !draft.isDraft) ? 1 : 0;
   process.exit(exitCode);
 }
 
-main();
+// Guards against executing the CLI (including process.exit) as a side
+// effect of importing this module for unit-testing isAlwaysAdvisory —
+// dod-check.ts is otherwise only ever invoked directly via tsx/npx.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main();
+}

@@ -40,17 +40,26 @@ npx tsx harness/dod-check/dod-check.ts --json
 
 ## Enforcement model
 
+Three tiers:
+
 | Finding | Enforcement |
 | --- | --- |
 | `missing-story-id` | **hard** — always exit 1 |
 | `todo-comment` | **hard** — always exit 1 |
 | `unmapped-scenario` / `orphan-step` | **hard** — always exit 1 |
-| `commit-envelope` | **draft-aware** — advisory while the PR is a draft, hard once ready-for-review |
-| `pr-tbd` | **draft-aware** — same as above |
-| `story-id-unresolved` | advisory — reported, never a crash; skips the commit-subject check |
+| `pr-tbd` | **draft-aware** — advisory while the PR is a draft, hard once ready-for-review |
+| `commit-envelope`, count **over** the declared max | **draft-aware** — same as `pr-tbd` |
+| `commit-envelope`, count **under** the declared min | **always-advisory** — reported, never gates |
+| `commit-envelope`, rule **not declared** in the plan | **always-advisory** — reported, never gates |
+| `story-id-unresolved` (non-story PR — Dependabot/chore) | **always-advisory** — reported, never gates |
 
-Exit code: `1` if any hard finding exists, or any advisory finding exists **and** the PR is out of
-draft. `0` otherwise.
+Exit code: `1` iff a **hard** finding exists, **or** a **draft-aware** finding exists and the PR is
+out of draft. **Always-advisory** findings never affect the exit code — a non-story PR, an
+under-target (small) story, or a plan with no declared envelope is reported but not blocked. The
+envelope's job is to cap stories that are *too big* (§ 6.6 sizing); being small, or having no story at
+all, is not a merge blocker. Human report lines distinguish the three envelope cases: `over the
+R<n> (min–max) envelope`, `under the R<n> (min–max) target (advisory)`, and `envelope not declared in
+plan (advisory)`.
 
 ## Draft-state resolution
 
@@ -93,16 +102,18 @@ findings are still computed and reported regardless of any degradation. Degradat
 
 ## Output
 
-Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`,
-with an `(advisory — PR is draft)` suffix on draft-aware findings while the PR is a draft. `--json`
-sends `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.
+Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`.
+Draft-aware findings carry an `(advisory — PR is draft)` suffix while the PR is a draft; always-advisory
+findings carry a bare `(advisory)` suffix regardless of draft state. `--json` sends
+`{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.
 
 ## Story-id resolution
 
 1. Current branch name, if it matches `story-<id>`.
 2. Otherwise, the single plan file added in `git diff --name-only origin/main...HEAD -- 'docs/plans/*.md'`.
-3. If neither resolves (e.g. a maintenance PR, or zero/multiple plan files added), the commit-subject
-   check is skipped and reports a `story-id-unresolved` advisory finding naming why.
+3. If neither resolves (e.g. a Dependabot/chore PR, or zero/multiple plan files added), the
+   commit-subject check is skipped and reports a `story-id-unresolved` **always-advisory** finding
+   naming why — it never gates the exit code.
 
 ## Wiring
 

@@ -76,7 +76,7 @@ Every story is routed into one of three lanes at Phase 1, selected by risk surfa
 | Lane | Trigger | Phase 0 | Phase 2 review | Phase 4 review | Envelope | Plan location |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Full** | Touches `src/core/`, DB schema, or migrations | Required (if Core domain concept changes) | `plan-reviewer` + `sibling-overlap` | `code-reviewer` + `ddd-modeler` (Mode B, if model note) | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
-| **Reduced** | Infra-only (`src/infra`/`src/cli`) or behavior-changing `harness/` code | Skipped | `code-reviewer` + `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
+| **Reduced** | Infra-only (`src/infra`/`src/cli`) or behavior-changing `harness/` code | Skipped | `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
 | **Light** | Docs/process/`.claude` specs/harness doc-only | Skipped | Skipped | `code-reviewer` only | R16 | Plan folded into the PR body |
 
 See § 8: **R26** lane provenance.

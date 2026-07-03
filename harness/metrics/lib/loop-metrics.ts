@@ -9,7 +9,6 @@ export type LoopRow = {
   story_id: string;
   plan_loc: number;
   diff_loc: number | 'n/a';
-  commits: number;
   weight_ratio: number | 'n/a';
   retro_loop_metrics: boolean;
 };
@@ -32,11 +31,6 @@ export function resolveStoryCommit(
   return null;
 }
 
-export function countStoryCommits(commitLog: CommitLogEntry[], storyId: string): number {
-  const pattern = buildStoryIdRegExp(storyId);
-  return commitLog.filter((entry) => pattern.test(entry.subject)).length;
-}
-
 export function computeWeightRatio(planLoc: number, diffLoc: number): number | null {
   if (diffLoc === 0) {
     return null;
@@ -54,7 +48,6 @@ export type BuildLoopRowInput = {
   storyId: string;
   planLoc: number;
   commitLog: CommitLogEntry[];
-  commits: number;
   retroLoopMetrics: boolean;
   diffStatLookup: (sha: string) => number | null;
 };
@@ -65,7 +58,7 @@ export type BuildLoopRowResult = {
 };
 
 export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
-  const { storyId, planLoc, commitLog, commits, retroLoopMetrics, diffStatLookup } = input;
+  const { storyId, planLoc, commitLog, retroLoopMetrics, diffStatLookup } = input;
   const resolved = resolveStoryCommit(commitLog, storyId);
 
   if (resolved === null) {
@@ -74,7 +67,6 @@ export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
         story_id: storyId,
         plan_loc: planLoc,
         diff_loc: 'n/a',
-        commits,
         weight_ratio: 'n/a',
         retro_loop_metrics: retroLoopMetrics,
       },
@@ -89,7 +81,6 @@ export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
         story_id: storyId,
         plan_loc: planLoc,
         diff_loc: 'n/a',
-        commits,
         weight_ratio: 'n/a',
         retro_loop_metrics: retroLoopMetrics,
       },
@@ -97,13 +88,16 @@ export function buildLoopRow(input: BuildLoopRowInput): BuildLoopRowResult {
     };
   }
 
+  // weight_ratio = plan_loc / diff_loc, but diff_loc is now shipped-only
+  // (process artifacts excluded via sumShippedDiffLoc) — so > 1.0 means
+  // "plan heavier than shipped code", not "plan heavier than total diff
+  // including ceremony". See story-h8.
   const weightRatio = computeWeightRatio(planLoc, diffLoc) ?? 'n/a';
   return {
     row: {
       story_id: storyId,
       plan_loc: planLoc,
       diff_loc: diffLoc,
-      commits,
       weight_ratio: weightRatio,
       retro_loop_metrics: retroLoopMetrics,
     },
@@ -115,7 +109,6 @@ const CSV_COLUMNS: Array<keyof LoopRow> = [
   'story_id',
   'plan_loc',
   'diff_loc',
-  'commits',
   'weight_ratio',
   'retro_loop_metrics',
 ];

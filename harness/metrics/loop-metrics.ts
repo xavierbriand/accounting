@@ -7,12 +7,12 @@ import {
   formatCsv,
   formatTop3Report,
   formatSkipReport,
-  countStoryCommits,
   hasRetroLoopMetrics,
   type CommitLogEntry,
   type LoopRow,
   type SkipEntry,
 } from './lib/loop-metrics.js';
+import { sumShippedDiffLoc } from '../lib/process-artifacts.js';
 
 function getPlanStoryIds(repoRoot: string): string[] {
   const plansDir = path.join(repoRoot, 'docs', 'plans');
@@ -43,16 +43,7 @@ function diffLocForSha(repoRoot: string, sha: string): number | null {
       cwd: repoRoot,
       encoding: 'utf8',
     });
-    let total = 0;
-    for (const line of output.split('\n')) {
-      if (line.trim().length === 0) continue;
-      const [added, deleted] = line.split('\t');
-      const addedNum = Number.parseInt(added, 10);
-      const deletedNum = Number.parseInt(deleted, 10);
-      if (Number.isFinite(addedNum)) total += addedNum;
-      if (Number.isFinite(deletedNum)) total += deletedNum;
-    }
-    return total;
+    return sumShippedDiffLoc(output);
   } catch {
     return null;
   }
@@ -85,14 +76,12 @@ function main(): void {
 
   for (const storyId of storyIds) {
     const planLoc = planLocFor(repoRoot, storyId);
-    const commits = countStoryCommits(commitLog, storyId);
     const retroLoopMetrics = retroLoopMetricsFor(repoRoot, storyId);
 
     const { row, skipReason } = buildLoopRow({
       storyId,
       planLoc,
       commitLog,
-      commits,
       retroLoopMetrics,
       diffStatLookup: (sha) => diffLocForSha(repoRoot, sha),
     });

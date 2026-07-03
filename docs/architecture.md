@@ -72,6 +72,16 @@
 - **Decision:** `sum(debits) == sum(credits)` is checked in Core at construction time, before the transaction reaches the repository.
 - **Rationale:** the rule lives in the domain, not the database. A repository should never receive an unbalanced transaction.
 
+### Domain model — named DDD patterns
+
+- **Decision:** the tactical patterns the codebase has practiced implicitly since Epic 1 carry their Domain-Driven Design names. `Money` (`src/core/shared/money.ts`) is a **value object**; `Transaction` (`src/core/ledger/transaction.ts`) is the ledger's **aggregate root**, with `Entry` a value object inside it; `SplitRulesService`, `BufferStateService`, `RecurringForecastService`, and `SafeTransferCalculator` are **domain services**; ports such as `TransactionRepository` are **repositories**; ingest canonicalization is the **anti-corruption layer** against bank CSV formats; the validity window is the house temporal-versioning pattern. The ubiquitous language lives in [docs/domain/glossary.md](domain/glossary.md); the strategic view (single bounded context "Shared Finances", module map, split criteria) in [docs/domain/context-map.md](domain/context-map.md).
+- **Rationale:** the architecture was already DDD-shaped; naming it makes the model shareable, reviewable, and teachable. The code expresses the model — and the model now has a written form the code can be checked against (CLAUDE.md § 6.1 Phase 0 / Phase 4).
+
+### Domain events — plain value objects via a port
+
+- **Decision:** domain events enter as a first-class tactical pattern with Epic 4. An event is a plain immutable value object in Core — no base class, no dispatcher framework, no event sourcing — recorded through a Core port (working name `DomainEventRecorder` in `src/core/ports/`); Infra persists events append-only. First implementation lands with the first Epic 4 story that needs it (FR23 audit trail; FR19/FR20 soft edits are event-shaped). No code before then.
+- **Rationale:** the append-only ledger is already event thinking — FR23's audit trail and soft-edit corrections are "things that happened," not state to mutate. Plain value objects through a port keep Core pure and avoid the event-sourcing machinery the validity-window decision deliberately rejected.
+
 ## Project structure
 
 Target shape — directories materialise as stories implement them. This tree is the intended destination, not a snapshot of the current filesystem.

@@ -16,7 +16,24 @@ export type MissingPathFinding = {
   file: string;
 };
 
-export type DriftFinding = RetroOnlyFinding | TableOnlyFinding | MissingPathFinding;
+export type ClaudeStaleTagFinding = {
+  kind: 'claude-stale-tag';
+  tag: string;
+  file: string;
+};
+
+export type ClaudeRangeFinding = {
+  kind: 'claude-range';
+  range: string;
+  file: string;
+};
+
+export type DriftFinding =
+  | RetroOnlyFinding
+  | TableOnlyFinding
+  | MissingPathFinding
+  | ClaudeStaleTagFinding
+  | ClaudeRangeFinding;
 
 export type ComposeDriftResult = {
   retroOnly: Set<string>;
@@ -129,6 +146,41 @@ export function extractEnumeratedRuleRanges(content: string): string[] {
     ranges.push(match[0]);
   }
   return ranges;
+}
+
+const HOLE_MARKER_SUFFIX = /\s*(?:\*\(hole\)\*|_\(hole\)_|\(hole\))/i;
+
+export function extractClaudeTagRefs(content: string): Set<string> {
+  const holeTags = new Set<string>();
+  const holePattern = new RegExp(`(\\bR\\d+\\b)${HOLE_MARKER_SUFFIX.source}`, 'gi');
+  let holeMatch: RegExpExecArray | null;
+  while ((holeMatch = holePattern.exec(content)) !== null) {
+    holeTags.add(holeMatch[1]);
+  }
+
+  const tags = new Set<string>();
+  const allTagPattern = new RegExp(R_TAG_PATTERN.source, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = allTagPattern.exec(content)) !== null) {
+    const tag = match[0];
+    if (!holeTags.has(tag)) {
+      tags.add(tag);
+    }
+  }
+  return tags;
+}
+
+export function composeClaudeDrift(
+  tagRefs: Set<string>,
+  sectionEightTags: Set<string>,
+): Set<string> {
+  const staleTags = new Set<string>();
+  for (const tag of tagRefs) {
+    if (!sectionEightTags.has(tag)) {
+      staleTags.add(tag);
+    }
+  }
+  return staleTags;
 }
 
 export function formatJsonReport(findings: DriftFinding[]): string {

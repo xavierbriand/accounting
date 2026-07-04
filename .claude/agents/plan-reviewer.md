@@ -66,7 +66,7 @@ Walk `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-che
   - Adapter story: 5–7 commits (R14).
   - Major-bump-zero-code-change story: 4 commits (R15).
   - Plan's slice count appropriate for the type? Each slice = one behaviour + tests + minimal code (one Gherkin scenario typically)?
-- **Trivial inline fix carve-out (R9).** If the plan defers any refactor with "Opus may execute inline," does the deferred fix meet ALL of: ≤ 5 LOC, single file, fix coordinates pre-specified, no design question?
+- **Trivial inline fix carve-out (R9).** If the plan defers any refactor with "Opus may execute inline," does the deferred fix meet the R9 carve-out — per CLAUDE.md § 8: **≤5 LOC, single file, pre-specified** (coordinates fixed in the plan)?
 - **Empty refactor (R11).** If the plan includes an empty refactor slot, does the slot have a justification body planned?
 - **Commit subjects (R12).** Commit messages in the plan's slice plan use summary verbs (not enumeration)?
 - **Result combinator opportunities.** Is the plan introducing chained Result handling? Could `map` / `flatMap` / `getOrElse` / `Result.all` reduce boilerplate? (Soft suggestion only — not a blocker.)

@@ -13,6 +13,10 @@ function runScannerAt(cwd: string, extraArgs: string[] = []): SpawnSyncReturns<s
   return spawnSync('npx', ['tsx', SCANNER, ...extraArgs], { cwd, encoding: 'utf8' });
 }
 
+function inventoryRow(controlPath: string): string {
+  return `| \`${controlPath}\` |\n`;
+}
+
 function buildAgentSpecFixtureRepo(): string {
   const tmpDir = initTempRepo();
   writeAndCommit(tmpDir, 'CLAUDE.md', MINIMAL_CLAUDE_MD, 'chore: fixture CLAUDE.md');
@@ -26,7 +30,7 @@ function buildAgentSpecFixtureRepo(): string {
   writeAndCommit(
     tmpDir,
     'docs/harness/control-inventory.md',
-    '# Control inventory\n\n| known-agent |\n| known-command |\n',
+    `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}`,
     'chore: fixture control inventory',
   );
   return tmpDir;
@@ -166,6 +170,24 @@ describe('drift-scan integration', () => {
         expect(typeof finding['range']).toBe('string');
         expect(finding['path']).toBeUndefined();
         expect(finding['tag']).toBeUndefined();
+      } else if (kind === 'missing-role') {
+        expect(typeof finding['detail']).toBe('string');
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['tool']).toBeUndefined();
+      } else if (kind === 'role-tools-violation') {
+        expect(typeof finding['tool']).toBe('string');
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['detail']).toBeUndefined();
+      } else if (kind === 'unlisted-control') {
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['detail']).toBeUndefined();
+        expect(finding['tool']).toBeUndefined();
       } else {
         throw new Error(`unexpected finding kind: ${String(kind)}`);
       }
@@ -299,7 +321,7 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     writeAndCommit(
       tmpDir,
       'docs/harness/control-inventory.md',
-      '# Control inventory\n\n| no-role |\n',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/no-role.md')}`,
       'chore: register no-role in inventory',
     );
 
@@ -325,7 +347,7 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     writeAndCommit(
       tmpDir,
       'docs/harness/control-inventory.md',
-      '# Control inventory\n\n| bad-role |\n',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/bad-role.md')}`,
       'chore: register bad-role in inventory',
     );
 
@@ -351,7 +373,7 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     writeAndCommit(
       tmpDir,
       'docs/harness/control-inventory.md',
-      '# Control inventory\n\n| judge-with-edit |\n',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/judge-with-edit.md')}`,
       'chore: register judge-with-edit in inventory',
     );
 
@@ -400,7 +422,7 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     writeAndCommit(
       tmpDir,
       'docs/harness/control-inventory.md',
-      '# Control inventory\n\n| clean-doer |\n| clean-playbook |\n',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/clean-doer.md')}${inventoryRow('.claude/commands/clean-playbook.md')}`,
       'chore: register clean fixtures in inventory',
     );
 

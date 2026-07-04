@@ -52,7 +52,7 @@ Alternatives set aside:
 - `.claude/agents/*.md` (6 files) — **new frontmatter key** `role:`: sonnet-implementer → `doer`; code-reviewer, plan-reviewer, sibling-overlap, ddd-modeler → `judge`; backlog-refiner → `advisor`. Additive; registry ignores unknown keys (smoke-tested before slice lands).
 - `.claude/settings.json` — **no change needed**: h10b already extended the PostToolUse drift-scan matcher to `.claude/(agents|commands)/.*\.md` (verified on 2205b11).
 - `.claude/agents/*.md` frontmatter is a **recurring convergence point**: three stories add keys/checks over the same six files (ddd-2 `role:`, #172 `model:` conformance, #165 `spec-version`). `parseAgentSpecFrontmatter` is the intended single reader for all of them.
-- `harness/metrics/tests/_helpers/temp-git-repo.ts` → **moved** to `harness/lib/temp-git-repo.ts`; import paths updated in metrics tests (and dod-check tests if applicable).
+- `harness/metrics/tests/_helpers/temp-git-repo.ts` *(removed)* — hoisted to `harness/lib/temp-git-repo.ts` **(new)**; import paths updated in metrics tests (dod-check tests use their own local `initTempRepo()`, not this helper — out of scope for the hoist).
 - Docs (no code surface): `docs/harness/glossary.md` (new), `docs/harness/control-inventory.md` (new), `docs/domain/context-map.md` (delta), `docs/domain/model-notes/story-ddd-2.md` (new), CLAUDE.md § 2/§ 5/§ 6/§ 8, `README.md`, `harness/README.md`.
 
 ## Gherkin acceptance scenarios

@@ -28,12 +28,32 @@ export type ClaudeRangeFinding = {
   file: string;
 };
 
+export type MissingRoleFinding = {
+  kind: 'missing-role';
+  file: string;
+  detail: string;
+};
+
+export type RoleToolsViolationFinding = {
+  kind: 'role-tools-violation';
+  file: string;
+  tool: string;
+};
+
+export type UnlistedControlFinding = {
+  kind: 'unlisted-control';
+  file: string;
+};
+
 export type DriftFinding =
   | RetroOnlyFinding
   | TableOnlyFinding
   | MissingPathFinding
   | ClaudeStaleTagFinding
-  | ClaudeRangeFinding;
+  | ClaudeRangeFinding
+  | MissingRoleFinding
+  | RoleToolsViolationFinding
+  | UnlistedControlFinding;
 
 export type ComposeDriftResult = {
   retroOnly: Set<string>;
@@ -181,6 +201,60 @@ export function composeClaudeDrift(
     }
   }
   return staleTags;
+}
+
+export type AgentSpecEntry = {
+  file: string;
+  role: string | undefined;
+  tools: string[];
+};
+
+const VALID_ROLES: ReadonlySet<string> = new Set(['doer', 'judge', 'advisor']);
+const MUTATION_TOOLS: ReadonlySet<string> = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit']);
+
+export function checkAgentSpecRoles(entries: AgentSpecEntry[]): DriftFinding[] {
+  const findings: DriftFinding[] = [];
+  for (const entry of entries) {
+    if (entry.role === undefined) {
+      findings.push({ kind: 'missing-role', file: entry.file, detail: 'absent' });
+    } else if (!VALID_ROLES.has(entry.role)) {
+      findings.push({ kind: 'missing-role', file: entry.file, detail: `invalid: ${entry.role}` });
+    }
+
+    if (entry.role !== 'doer') {
+      for (const tool of entry.tools) {
+        if (MUTATION_TOOLS.has(tool)) {
+          findings.push({ kind: 'role-tools-violation', file: entry.file, tool });
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+export function checkControlCompleteness(
+  files: string[],
+  inventoryPaths: Set<string>,
+): DriftFinding[] {
+  const findings: DriftFinding[] = [];
+  for (const file of files) {
+    if (!inventoryPaths.has(file)) {
+      findings.push({ kind: 'unlisted-control', file });
+    }
+  }
+  return findings;
+}
+
+const INVENTORY_PATH_PATTERN = /`(\.claude\/(?:agents|commands)\/[^`\s]+\.md)`/g;
+
+export function extractInventoryControlPaths(inventoryContent: string): Set<string> {
+  const paths = new Set<string>();
+  let match: RegExpExecArray | null;
+  const pattern = new RegExp(INVENTORY_PATH_PATTERN.source, 'g');
+  while ((match = pattern.exec(inventoryContent)) !== null) {
+    paths.add(match[1]);
+  }
+  return paths;
 }
 
 export function formatJsonReport(findings: DriftFinding[]): string {

@@ -11,6 +11,7 @@ import {
   formatJsonReport,
   checkAgentSpecRoles,
   checkControlCompleteness,
+  extractInventoryControlPaths,
   type AgentSpecEntry,
 } from '../lib/drift-parser.js';
 
@@ -501,7 +502,7 @@ describe('checkControlCompleteness', () => {
   it('reports unlisted-control for an agent file absent from the inventory', () => {
     const findings = checkControlCompleteness(
       ['.claude/agents/orphan.md'],
-      new Set(['some-other-agent']),
+      new Set(['.claude/agents/some-other-agent.md']),
     );
     expect(findings).toContainEqual({ kind: 'unlisted-control', file: '.claude/agents/orphan.md' });
   });
@@ -512,7 +513,7 @@ describe('checkControlCompleteness', () => {
   it('reports unlisted-control for a command file absent from the inventory', () => {
     const findings = checkControlCompleteness(
       ['.claude/commands/orphan-playbook.md'],
-      new Set(['some-other-command']),
+      new Set(['.claude/commands/some-other-command.md']),
     );
     expect(findings).toContainEqual({ kind: 'unlisted-control', file: '.claude/commands/orphan-playbook.md' });
   });
@@ -520,8 +521,39 @@ describe('checkControlCompleteness', () => {
   it('reports nothing when every file has an inventory entry', () => {
     const findings = checkControlCompleteness(
       ['.claude/agents/known.md'],
-      new Set(['known']),
+      new Set(['.claude/agents/known.md']),
     );
     expect(findings).toHaveLength(0);
+  });
+});
+
+describe('extractInventoryControlPaths', () => {
+  // fails if the inventory-path scan misses a `.claude/agents/*.md` path
+  // fenced in backticks in the "Where" column — the completeness diff would
+  // then false-positive every registered agent as unlisted.
+  it('extracts .claude/agents/ paths fenced in backticks', () => {
+    const inventory = '| sonnet-implementer | `.claude/agents/sonnet-implementer.md` | doer |\n';
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/agents/sonnet-implementer.md')).toBe(true);
+  });
+
+  // fails if the scan silently skips .claude/commands/ rows — the plan's
+  // stated failure mode applied to the extraction side of the diff.
+  it('extracts .claude/commands/ paths fenced in backticks', () => {
+    const inventory = '| model-session | `.claude/commands/model-session.md` | playbook |\n';
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/commands/model-session.md')).toBe(true);
+  });
+
+  it('returns an empty set when no control paths are present', () => {
+    expect(extractInventoryControlPaths('# No controls here.\n').size).toBe(0);
+  });
+
+  // fails if the pattern also greedily matches an unrelated backtick-fenced
+  // path (e.g. a CLAUDE.md § 8 reference) — only .claude/agents|commands
+  // paths belong in the completeness diff.
+  it('does not match unrelated backtick-fenced paths', () => {
+    const inventory = '| R1 | `docs/retrospectives/story-2.2.md` | guide |\n';
+    expect(extractInventoryControlPaths(inventory).size).toBe(0);
   });
 });

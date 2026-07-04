@@ -10,9 +10,14 @@ import {
   extractEnumeratedRuleRanges,
   extractClaudeTagRefs,
   composeClaudeDrift,
+  checkAgentSpecRoles,
+  checkControlCompleteness,
+  extractInventoryControlPaths,
   formatJsonReport,
   type DriftFinding,
+  type AgentSpecEntry,
 } from './lib/drift-parser.js';
+import { parseAgentSpecFrontmatter } from '../lib/agent-spec.js';
 
 function runRuleCheck(repoRoot: string): DriftFinding[] {
   const claudeMd = fs.readFileSync(path.join(repoRoot, 'CLAUDE.md'), 'utf8');
@@ -125,6 +130,35 @@ function runClaudeCheck(repoRoot: string): DriftFinding[] {
   return findings;
 }
 
+function getAgentSpecFiles(repoRoot: string): string[] {
+  const agentsDir = path.join(repoRoot, '.claude', 'agents');
+  if (!fs.existsSync(agentsDir)) return [];
+  return fs
+    .readdirSync(agentsDir)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => path.join('.claude', 'agents', f));
+}
+
+function runAgentSpecCheck(repoRoot: string): DriftFinding[] {
+  const agentSpecFiles = getAgentSpecFiles(repoRoot);
+
+  const entries: AgentSpecEntry[] = agentSpecFiles.map((specFile) => {
+    const content = fs.readFileSync(path.join(repoRoot, specFile), 'utf8');
+    const parsed = parseAgentSpecFrontmatter(content);
+    return { file: specFile, role: parsed.role, tools: parsed.tools };
+  });
+  const roleFindings = checkAgentSpecRoles(entries);
+
+  const inventoryPath = path.join(repoRoot, 'docs', 'harness', 'control-inventory.md');
+  const inventoryPaths = fs.existsSync(inventoryPath)
+    ? extractInventoryControlPaths(fs.readFileSync(inventoryPath, 'utf8'))
+    : new Set<string>();
+  const allControlFiles = getClaudeSpecFiles(repoRoot);
+  const completenessFindings = checkControlCompleteness(allControlFiles, inventoryPaths);
+
+  return [...roleFindings, ...completenessFindings];
+}
+
 function formatHumanReport(findings: DriftFinding[]): string {
   const lines: string[] = [];
   const ruleFindings = findings.filter(
@@ -133,6 +167,12 @@ function formatHumanReport(findings: DriftFinding[]): string {
   const pathFindings = findings.filter((f) => f.kind === 'missing-path');
   const claudeFindings = findings.filter(
     (f) => f.kind === 'claude-range' || f.kind === 'claude-stale-tag',
+  );
+  const agentSpecFindings = findings.filter(
+    (f) =>
+      f.kind === 'missing-role' ||
+      f.kind === 'role-tools-violation' ||
+      f.kind === 'unlisted-control',
   );
 
   if (ruleFindings.length > 0) {
@@ -163,6 +203,18 @@ function formatHumanReport(findings: DriftFinding[]): string {
       }
     }
   }
+  if (agentSpecFindings.length > 0) {
+    lines.push('Check F — agent-spec role conformance:');
+    for (const f of agentSpecFindings) {
+      if (f.kind === 'missing-role') {
+        lines.push(`  missing-role: ${f.file} (${f.detail})`);
+      } else if (f.kind === 'role-tools-violation') {
+        lines.push(`  role-tools-violation: ${f.tool} (in ${f.file}, non-doer role carries a mutation tool)`);
+      } else if (f.kind === 'unlisted-control') {
+        lines.push(`  unlisted-control: ${f.file} (no row in docs/harness/control-inventory.md)`);
+      }
+    }
+  }
   return lines.join('\n');
 }
 
@@ -177,7 +229,8 @@ function main(): void {
   const planFiles = getPlanFiles(repoRoot, all);
   const planFindings = runPlanCheck(repoRoot, planFiles);
   const claudeFindings = runClaudeCheck(repoRoot);
-  const findings = [...ruleFindings, ...planFindings, ...claudeFindings];
+  const agentSpecFindings = runAgentSpecCheck(repoRoot);
+  const findings = [...ruleFindings, ...planFindings, ...claudeFindings, ...agentSpecFindings];
 
   if (json) {
     process.stdout.write(formatJsonReport(findings) + '\n');

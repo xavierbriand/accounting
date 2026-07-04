@@ -127,8 +127,18 @@ describe('drift-scan integration', () => {
       if (kind === 'retro-only' || kind === 'table-only') {
         expect(typeof finding['tag']).toBe('string');
         expect(finding['path']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
       } else if (kind === 'missing-path') {
         expect(typeof finding['path']).toBe('string');
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+      } else if (kind === 'claude-stale-tag') {
+        expect(typeof finding['tag']).toBe('string');
+        expect(finding['path']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+      } else if (kind === 'claude-range') {
+        expect(typeof finding['range']).toBe('string');
+        expect(finding['path']).toBeUndefined();
         expect(finding['tag']).toBeUndefined();
       } else {
         throw new Error(`unexpected finding kind: ${String(kind)}`);
@@ -199,5 +209,32 @@ describe('drift-scan integration', () => {
 
     const result = runScanner();
     expect(result.stderr).not.toContain('R95');
+  });
+
+  // fails if a legit spec tag or a marked R22 is flagged, or the JSON
+  // discriminated-union shape drops range/tag/file for the new Check D kinds
+  // (Gherkin scenario 4: clean repo passes, and --json carries new kinds).
+  it('--json emits valid claude-range and claude-stale-tag findings for injected fixtures', () => {
+    const rangeSpec = tempClaudeAgentPath('story-test-json-range.md');
+    TEMP_RETRO_FILES.push(rangeSpec);
+    fs.writeFileSync(rangeSpec, '# Test agent\n\nWalk rules R1..R15 in order.\n');
+
+    const result = runScanner(['--json']);
+    expect(result.status).toBe(1);
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+
+    const rangeFinding = parsed.findings.find((f) => f['kind'] === 'claude-range');
+    expect(rangeFinding).toBeDefined();
+    expect(rangeFinding?.['range']).toBe('R1..R15');
+    expect(typeof rangeFinding?.['file']).toBe('string');
+    expect(rangeFinding?.['tag']).toBeUndefined();
+    expect(rangeFinding?.['path']).toBeUndefined();
+  });
+
+  it('clean repo produces no Check D finding after R22 mentions are marked *(hole)*', () => {
+    const result = runScanner();
+    expect(result.stderr).not.toContain('Check D');
+    expect(result.stderr).not.toContain('claude-range:');
+    expect(result.stderr).not.toContain('claude-stale-tag:');
   });
 });

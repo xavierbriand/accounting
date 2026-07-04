@@ -1,8 +1,11 @@
 # harness/dod-check
 
 Deterministic Definition-of-Done gates, moved out of the P1/P2/P3 reviewer prompts (story-h6, #144).
+Widened with four honesty gates (story-h11, #163) that verify the *expensive* DoD claims — no
+dressed-up placeholders, a ticked merge checklist, evidenced Phase-4 runs, a fresh loop.csv — rather
+than only the cheap-to-fake commit-subject/TBD/envelope surface.
 
-Four checks, one findings union:
+Seven checks, one findings union:
 
 - **Commit subjects** — every commit subject in `origin/main...HEAD` must reference the current
   story id (bracket `[story-<id>]`, bare `story-<id>`, or capitalized `Story <id>`); commit count is
@@ -15,9 +18,26 @@ Four checks, one findings union:
   commits are excluded from the scan entirely (`git log --no-merges`): they never carry the story-id
   convention, and a GitHub `pull_request` build checks out a synthetic merge commit (`Merge <sha>
   into <base>`) that would otherwise be a false `missing-story-id`.
-- **TODO / TBD** — `TODO` comments anywhere in tracked `src/`, `tests/`, `harness/` source; `TBD` left
-  in a PR body section (excluding the § 10 merge checklist, which legitimately uses placeholder
-  language).
+- **TODO / TBD** — `TODO` comments anywhere in tracked `src/`, `tests/`, `harness/` source; `TBD` (or
+  a standalone `Pending...` line — #152's `_Pending Phase 3/5_` regression) left in a PR body section
+  (excluding the § 10 merge checklist, which legitimately uses placeholder language). This check key
+  also runs the merge-checklist scan (below) — both consume the same resolved PR body.
+- **Merge checklist** — counts unticked (`- [ ]`) rows in the § 10 merge checklist, **excluding** the
+  two rows that are unticked by construction at CI time (`PR out of draft`, `User approval` — matched
+  case-insensitively as substrings, not exact text, since template wording may drift). Catches the
+  #149 regression (§ 10 merged entirely unticked). Draft-aware: advisory while the PR is a draft, hard
+  once ready-for-review.
+- **Phase evidence** — pairs a *ticked* § 10 box mentioning phase-4 with a § 7 suggestion-log row
+  carrying `P4` in the Phase column. Fires `phase-evidence-missing` iff the claim is ticked and no P4
+  row evidences it. Catches the ddd-1/#153 regression (Phase-4 gate ticked with no code-reviewer run
+  evidenced anywhere). Always-advisory — the newest check, highest false-positive risk; in particular
+  a legitimate R9 trivial-inline-fix carve-out (no Phase-4 review needed) has no way to signal that
+  today and will show this finding — a future promotion story may add a `P4: none — carve-out`
+  sentinel row as accepted evidence.
+- **Loop-csv freshness** — every `docs/plans/story-<id>.md` file should have a matching row in
+  `docs/metrics/loop.csv` (regenerated via `npm run metrics:loop`); a plan id absent from the csv,
+  other than the current story's own not-yet-generated row, reports `loop-csv-stale`. Catches missed
+  manual `loop.csv` regenerations (F7, #157). Always-advisory.
 - **Gherkin↔step mapping** — every `tests/features/*.feature` scenario step must resolve against a
   `tests/features/steps/*.ts` step definition (string cucumber-expression or regex literal); every
   Gherkin scenario declared in the current story's plan (inside a ` ```gherkin ` fenced block) must
@@ -39,6 +59,8 @@ npx tsx harness/dod-check/dod-check.ts --check commits
 npx tsx harness/dod-check/dod-check.ts --check todo-tbd
 npx tsx harness/dod-check/dod-check.ts --check gherkin
 npx tsx harness/dod-check/dod-check.ts --check weight-ratio
+npx tsx harness/dod-check/dod-check.ts --check phase-evidence
+npx tsx harness/dod-check/dod-check.ts --check loop-freshness
 
 # Machine-readable output
 npx tsx harness/dod-check/dod-check.ts --json
@@ -54,11 +76,14 @@ Three tiers:
 | `todo-comment` | **hard** — always exit 1 |
 | `unmapped-scenario` / `orphan-step` | **hard** — always exit 1 |
 | `pr-tbd` | **draft-aware** — advisory while the PR is a draft, hard once ready-for-review |
+| `merge-checklist-unticked` | **draft-aware** — same as `pr-tbd`; the `PR out of draft` / `User approval` rows are excluded from the count (see below) |
 | `commit-envelope`, count **over** the declared max | **draft-aware** — same as `pr-tbd` |
 | `commit-envelope`, count **under** the declared min | **always-advisory** — reported, never gates |
 | `commit-envelope`, rule **not declared** in the plan | **always-advisory** — reported, never gates |
 | `story-id-unresolved` (non-story PR — Dependabot/chore) | **always-advisory** — reported, never gates |
 | `weight-ratio-heavy` (plan LOC exceeds shipped diff LOC) | **always-advisory** — reported, never gates |
+| `phase-evidence-missing` (ticked phase-4 box, no § 7 P4 row) | **always-advisory** — reported, never gates |
+| `loop-csv-stale` (plan id missing from `docs/metrics/loop.csv`) | **always-advisory** — reported, never gates |
 
 Exit code: `1` iff a **hard** finding exists, **or** a **draft-aware** finding exists and the PR is
 out of draft. **Always-advisory** findings never affect the exit code — a non-story PR, an
@@ -67,6 +92,20 @@ envelope's job is to cap stories that are *too big* (§ 6.6 sizing); being small
 all, is not a merge blocker. Human report lines distinguish the three envelope cases: `over the
 R<n> (min–max) envelope`, `under the R<n> (min–max) target (advisory)`, and `envelope not declared in
 plan (advisory)`.
+
+Two coupling nuances worth flagging explicitly:
+
+- **`merge-checklist-unticked` exclusion is text-matched, not positional.** The two rows unticked by
+  construction at CI time — `PR out of draft` and `User approval` — are excluded via a
+  case-insensitive substring match (`/out of draft/i`, `/user approval/i`), not by row index. If the
+  PR template's § 10 wording drifts, the exclusion (or the check itself) may silently stop matching;
+  any drift surfaces as advisory noise in draft, never a silently-passed hard gate once ready.
+- **`phase-evidence-missing` has a known R9 carve-out false positive.** A story that legitimately
+  used the R9 trivial-inline-fix carve-out (≤5 LOC, single file, pre-specified — no Phase-4 review
+  needed) has no way to signal that today; ticking the phase-4 box with zero `P4` suggestion-log rows
+  will still fire this finding. It's always-advisory, so it never blocks — but expect the noise on
+  R9-carve-out stories until a future promotion story adds an explicit `P4: none — carve-out`
+  sentinel row as accepted evidence.
 
 ## Draft-state resolution
 
@@ -109,8 +148,10 @@ findings are still computed and reported regardless of any degradation. Degradat
 
 ## Output
 
-Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`,
-followed by any ungrouped `weight-ratio-heavy` lines. Draft-aware findings carry an
+Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`
+(the `TODO/TBD:` group also carries `merge-checklist-unticked` lines, since both checks share the
+`todo-tbd` key and PR-body resolution), followed by any ungrouped `weight-ratio-heavy`,
+`phase-evidence-missing`, and `loop-csv-stale` lines. Draft-aware findings carry an
 `(advisory — PR is draft)` suffix while the PR is a draft; always-advisory findings carry a bare
 `(advisory)` suffix regardless of draft state. `--json` sends
 `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.

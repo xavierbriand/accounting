@@ -743,10 +743,39 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     git(tmpDir, ['add', 'tests']);
     git(tmpDir, ['commit', '-q', '-m', 'test(harness): widget — failing [story-zz]']);
 
+    // A second plan file (story-xx) with no docs/metrics/loop.csv row, plus a
+    // loop.csv that only covers a third, unrelated id — feeds loop-csv-stale.
+    writePlan(tmpDir, 'xx', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    const metricsDir = path.join(tmpDir, 'docs', 'metrics');
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, 'loop.csv'),
+      ['story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics', 'aa,10,10,1.0,true'].join('\n') +
+        '\n',
+      'utf8',
+    );
+    git(tmpDir, ['add', 'docs/plans/story-xx.md', 'docs/metrics/loop.csv']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): loop-csv fixture — failing [story-zz]']);
+
     bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
     fs.writeFileSync(
       bodyFile,
-      ['## 1. Story', '', 'TBD', '', '## 10. Merge checklist', '', '- [ ] done'].join('\n'),
+      [
+        '## 1. Story',
+        '',
+        'TBD',
+        '',
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P1 | some finding | adopted | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] done',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
       'utf8',
     );
   });
@@ -755,11 +784,12 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
   // or a finding's kind-specific fields deviate from the discriminated
   // union — guards R8 mock-diversity across this fixture's finding-kind set
   // (missing-story-id, commit-envelope, todo-comment, pr-tbd,
-  // unmapped-scenario, orphan-step). The two remaining kinds are covered
-  // elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the S3
-  // "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape by
-  // the dedicated describe block further down — together the three blocks
-  // cover the full DodFinding union.
+  // unmapped-scenario, orphan-step, merge-checklist-unticked,
+  // phase-evidence-missing, loop-csv-stale). The two remaining kinds are
+  // covered elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the
+  // S3 "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape
+  // by the dedicated describe block further down — together the three
+  // blocks cover the full DodFinding union.
   it('emits every non-story-id-unresolved DodFinding kind with its documented shape', () => {
     const result = runDodCheck(tmpDir, ['--json'], {
       DOD_PR_DRAFT: 'false',
@@ -803,6 +833,18 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     expect(orphanStep).toBeDefined();
     expect(typeof orphanStep?.['pattern']).toBe('string');
     expect(typeof orphanStep?.['file']).toBe('string');
+
+    const mergeChecklistUnticked = byKind('merge-checklist-unticked');
+    expect(mergeChecklistUnticked).toBeDefined();
+    expect(typeof mergeChecklistUnticked?.['uncheckedCount']).toBe('number');
+
+    const phaseEvidenceMissing = byKind('phase-evidence-missing');
+    expect(phaseEvidenceMissing).toBeDefined();
+    expect(typeof phaseEvidenceMissing?.['claim']).toBe('string');
+
+    const loopCsvStale = byKind('loop-csv-stale');
+    expect(loopCsvStale).toBeDefined();
+    expect(typeof loopCsvStale?.['storyId']).toBe('string');
   });
 });
 

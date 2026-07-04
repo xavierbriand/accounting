@@ -26,7 +26,7 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 ### Doing well (these are not common; lead with them when teaching)
 
 - **Agent specialization with restricted tools.** plan-reviewer / code-reviewer / sonnet-implementer each have a tight tool list and a precise spec. Most teams build one "do-everything" agent. ([.claude/agents/](../../.claude/agents/))
-- **Rule-provenance table (R1–R19).** Every process rule traces to the retro that birthed it. Real workflow version control. ([CLAUDE.md § 8](../../CLAUDE.md))
+- **Rule-provenance table (CLAUDE.md § 8).** Every process rule traces to the retro that birthed it. Real workflow version control. ([CLAUDE.md § 8](../../CLAUDE.md))
 - **Plan-as-contract.** Per-story plan files in [docs/plans/](../plans/) are the artefact reviewers audit against. The Phase-4 retro-check uses the plan as ground truth. Rare.
 - **Canon-doc layering** (architecture / engineering-standards / quality-assurance / security-checklist) with explicit precedence. Reviewers route to the right doc instead of arguing.
 - **Phase-4 retro-check has measurable ROI.** maint-01 and 2.5 retros document concrete bugs caught (timeout removal, TOCTOU race, missing Gherkin mapping). Not theatre.
@@ -40,8 +40,8 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 ### Doing wrong / risk areas
 
-- **Process cost ≫ story value for tiny stories.** maint-01 = 21 type errors fixed via a 276-line plan + full 5-phase gate + 7 commits. R16 collapses commits but the *gates* still run. No formal ratio guard.
-- **DoD item 10 is hand-policed.** [docs/retrospectives/README.md](../retrospectives/README.md) mentions a drift-scan that doesn't exist. Story-2.5 added a shim rule to sonnet-implementer.md and not to § 8 — exactly the drift the rule was meant to prevent.
+- **Process cost ≫ story value for tiny stories.** maint-01 = 21 type errors fixed via a 276-line plan + full 5-phase gate + 7 commits. R16 collapses commits but the *gates* still run. No formal ratio guard. — **Closed by story-h8** (risk-based Full/Reduced/Light lanes, R26): the gate itself now right-sizes by risk surface.
+- **DoD item 10 is hand-policed.** [docs/retrospectives/README.md](../retrospectives/README.md) mentions a drift-scan that doesn't exist. Story-2.5 added a shim rule to sonnet-implementer.md and not to § 8 — exactly the drift the rule was meant to prevent. — **Closed by story-h1/h2** (drift-scan ships, enforcing § 8 ↔ retro consistency at write/CI time, R21); **story-h10b** extends it over `.claude/` agent specs.
 - **"Deviations" boundary in sonnet-implementer is fuzzy.** "Judgment-call vs structural" lacks worked examples; a Sonnet executor will guess differently than a human would.
 - **Rule R4 (composition-root subprocess test) has no template.** A one-line invocation of a concept that needs a worked example to be teachable.
 
@@ -52,7 +52,7 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 - **No agent-output evals.** Zero golden tests for plan-reviewer / code-reviewer.
 - **No cost/token telemetry.** No statusline metric, no JSONL session log parsing, no per-story budget.
 - **No CI gate on agent-spec changes.** Editing `code-reviewer.md` triggers nothing.
-- **No sibling-overlap detection at plan time.** R19 says "check open PRs/issues" — manually.
+- **No sibling-overlap detection at plan time.** R19 says "check open PRs/issues" — manually. — **Closed by story-h3** (the `sibling-overlap` agent now runs at Phase 2, automated).
 
 ---
 
@@ -72,7 +72,7 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 6. **Specs are code; agents are functions.** A `sonnet-implementer.md` change is a deploy. It deserves a changelog, a test, and CI. Today this repo has none of those — this is the core gap.
 
-7. **Rules crystallize the *current model's* failure modes.** R8 (mock diversity) fixes a class of mistakes Sonnet 4.5 made. Sonnet 4.6 may not. Without periodic *rule-expiry review*, the workflow accretes cargo-cult overhead. **Action: every 6 months, walk R1–R19 and ask "is this still load-bearing?"** Retire what isn't. This is harder than adding rules and twice as important.
+7. **Rules crystallize the *current model's* failure modes.** R8 (mock diversity) fixes a class of mistakes Sonnet 4.5 made. Sonnet 4.6 may not. Without periodic *rule-expiry review*, the workflow accretes cargo-cult overhead. **Action: every 6 months, walk every § 8 row and ask "is this still load-bearing?"** Retire what isn't. This is harder than adding rules and twice as important.
 
 8. **Evals are not optional once the harness gates production.** If `code-reviewer` decides whether refactors land, a silent prompt regression silently regresses the codebase. The eval suite for agents *is* the test suite for the test suite.
 
@@ -151,7 +151,7 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 
 - **Concept:** load-bearing weight ratio (Principle § Heuristic). Ceremony tax.
 - **Exercise:** propose a CLAUDE.md amendment introducing a **trivial-story lane** (≤20 LOC, single file, no Core/DB/Infra touch): plan-doc-in-PR-template, skip plan-reviewer, code-reviewer only, target 3 commits. Add as the next R-tag with a **retroactive maint-01 comparison** showing the savings. Pair with a sibling-overlap detector that runs at plan time (greps in-flight stories from `docs/status.d/`).
-- **Teach-back:** "every gate has a cost — and rules expire" (Principle 7). Walk R1–R19 and tag each as *load-bearing now / candidate for retirement / unverified*.
+- **Teach-back:** "every gate has a cost — and rules expire" (Principle 7). Walk every § 8 row and tag each as *load-bearing now / candidate for retirement / unverified*.
 
 ### Module 4 — Eval-driven agent engineering + prompt engineering *(centerpiece)*
 
@@ -210,7 +210,7 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 
 - **The real evaluation:** *a colleague forks the starter template and ships their first story without me intervening.* That is the end-state test. A talk and a glossary serve it.
 - **Starter-repo template (the load-bearing artefact).** Strip this repo to a teachable seed. **What's removed is more interesting than what stays:**
-  - Removed: domain code (couples-expense), 16 retros, 28 plans, R1–R19, the canon docs.
+  - Removed: domain code (couples-expense), 16 retros, 28 plans, the § 8 rule table, the canon docs.
   - Kept: `.claude/agents/` (3 specs, generic-ified), CLAUDE.md skeleton with placeholder sections, `scripts/drift-scan.ts`, `evals/` with one fixture, a `PR_TEMPLATE` with the 10 DoD items, a `docs/templates/` for plan + retro + status fragment.
   - Added: a `STARTER.md` with the *first three steps* a colleague takes after forking. Not "read these 12 docs."
 - **Talk outline (45 min).** Six sections, each grounded in *one* repo file as evidence:

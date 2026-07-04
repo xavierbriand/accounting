@@ -11,7 +11,7 @@ You are the implementation leg of a two-model development loop. Opus planned the
 
 - The plan you were handed is **authoritative**. Do not expand scope.
 - Read these first, before touching code:
-  1. CLAUDE.md § 6 (Development workflow) and § 7 (BDD & TDD rules)
+  1. CLAUDE.md § 5 (Testing — BDD & TDD rules) and § 6 (Development workflow); § 7 (Definition of Done)
   2. `docs/engineering-standards.md`, `docs/security-checklist.md`, `docs/quality-assurance.md` — scope your read to the sections your slice actually touches (e.g. a CLI-only slice reads the CLI/security sections of engineering-standards, not the whole doc), read at walk entry — lazy per-phase, not upfront-bulk.
   3. The PR description — sections 1 through 6 are your full spec.
 - If something in the plan genuinely blocks progress, stop and ask. Do not guess at intent.
@@ -50,9 +50,35 @@ When you finish, return **exactly** this structure. No preamble, no trailing com
 
 ## Deviations from plan
 <Each deviation in one bullet: what · why · what the alternative would have been.
-If none, write "None.">
+If none, write "None." The four case-law tests in § 4a decide what counts as a
+deviation that MUST appear here.>
 
-**Shim-for-tests compromises must be flagged here (retro finding, Story 2.5).**
+## Gherkin coverage checklist
+<Tick every Gherkin scenario in the plan against the test it maps to, one line each:
+`✓ <scenario name> → <test file>:<describe name>` — or `✗ <scenario name> → not covered: <rationale>`.
+If all scenarios are covered, still list them (cheap; catches "scenario-drop" regressions
+per Story 2.5 retro action C). Missing scenarios without rationale are a stop condition —
+fix before returning.>
+
+## Unknowns encountered
+<Things you couldn't resolve from the plan + docs alone. If none, write "None.">
+
+## Proposed follow-ups
+<Work you noticed but did not do because it was out of scope. Each becomes a candidate
+for a deferred-suggestion issue. If none, write "None.">
+
+## Files touched
+<Path · one-line purpose, for every file changed or created.>
+```
+
+## 4a. Deviation case law — what MUST surface in "Deviations from plan"
+
+These four retro-derived tests decide whether a change is a structural deviation you
+must record in the "Deviations from plan" section above (or, where noted, escalate via
+§ 1's "stop and ask" rule). They are the case law, not the template — kept out of the
+fenced return format so the template stays copy-pasteable.
+
+**Shim-for-tests compromises (retro finding, Story 2.5).**
 When the plan says "keep X for test compatibility" or "X stays as-is for now", and
 you add a shim (optional parameter with fallback, default placeholder value, or
 backwards-compat branch) rather than tightening the contract and updating the
@@ -71,7 +97,7 @@ a shim that violates a Core architectural invariant. If the shim breaks any of:
 (3) CLAUDE.md § 2 dependency rule: "Core depends on nothing — no Node APIs, no
     `better-sqlite3`, no `commander`, no `process.exit`",
 then the shim is a structural deviation and triggers § 1's "stop and ask" rule, not
-this section's "flag-in-Deviations" rule. Visibility is necessary but not sufficient.
+the flag-in-Deviations rule. Visibility is necessary but not sufficient.
 **Example (story-maint-08):** rewriting `Money` for dinero.js v2, the test helper
 `Money.zero(currency)` lookup needed currency validation. Sonnet added a `throw` to
 keep the return type stable for two test call sites. The throw violated § 2; the
@@ -107,24 +133,6 @@ story-maint-04's `feat(db): validateDbPath implementation — minimal green` com
 shipped a vitest-config exclude alongside the helper code; the exclude
 should have been a sibling `chore(test):` or merged with the earlier `chore(lint):`
 baseline commit.
-
-## Gherkin coverage checklist
-<Tick every Gherkin scenario in the plan against the test it maps to, one line each:
-`✓ <scenario name> → <test file>:<describe name>` — or `✗ <scenario name> → not covered: <rationale>`.
-If all scenarios are covered, still list them (cheap; catches "scenario-drop" regressions
-per Story 2.5 retro action C). Missing scenarios without rationale are a stop condition —
-fix before returning.>
-
-## Unknowns encountered
-<Things you couldn't resolve from the plan + docs alone. If none, write "None.">
-
-## Proposed follow-ups
-<Work you noticed but did not do because it was out of scope. Each becomes a candidate
-for a deferred-suggestion issue. If none, write "None.">
-
-## Files touched
-<Path · one-line purpose, for every file changed or created.>
-```
 
 ## 5. Stop conditions
 

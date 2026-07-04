@@ -27,7 +27,7 @@ You are **scanning the actual code**, not the plan. The plan is your map; the di
 
 Walk these sub-questions against the diff and tests:
 
-- **Gherkin-to-test mapping audit (R5).** For every Gherkin scenario in the plan (`docs/plans/story-<id>.md` § "Gherkin acceptance scenarios"), locate at least one corresponding test file/case in the diff. Report missing scenarios as P1 findings tagged R5. Per CLAUDE.md, "Missing scenarios are P1 blockers — file them as in-PR fixes, not follow-up issues." **Carve-out:** for a zero-code / process story with no test files (the plan's Acceptance-scenarios preamble says so explicitly), R5 evidence may instead be the verification-step grep/manual checks named in that preamble — locate each scenario's named verification step and confirm it was actually run (e.g. quoted grep output, or a manual-check confirmation in the return report).
+- **Gherkin-to-test mapping audit (R5).** For every Gherkin scenario in the plan (`docs/plans/story-<id>.md` § "Gherkin acceptance scenarios"), locate at least one corresponding test file/case in the diff. Report missing scenarios as P1 findings tagged R5 — treat them as in-PR blockers (fixed in this PR), not follow-up issues. **Carve-out:** for a zero-code / process story with no test files (the plan's Acceptance-scenarios preamble says so explicitly), R5 evidence may instead be the verification-step grep/manual checks named in that preamble — locate each scenario's named verification step and confirm it was actually run (e.g. quoted grep output, or a manual-check confirmation in the return report).
 - **`fails if` honesty (R6).** For every new test in the diff (and every materially-modified existing test), grep the source for a `// fails if …` comment. Confirm the comment names the production path it guards (e.g., "fails if validateDbPath is not called in program.ts ingest action"). Reject vague forms ("fails if the test breaks", "fails if X stops working"). Report missing or vague clauses as P1 findings tagged R6.
 - **Test-mechanism honesty (R7).** For each test, classify as in-process (mocked deps, direct service call, `runIngestCommand({...})`) or subprocess (`spawnCli`, `execFileSync`, `tsx src/cli/program.ts`). Confirm the test's `fails if` claim does not exceed the chosen mechanism's reach. Specifically: in-process test cannot regress on wiring through `program.ts`; only a subprocess test can. Report mismatched scope as P1 findings tagged R7.
 - **Composition-root subprocess test required (R4).** Did the diff touch `src/cli/program.ts`? If yes, confirm at least one new or existing subprocess-tier integration test in the diff exercises the new wiring path. Report absence as a P1 finding tagged R4.
@@ -56,7 +56,7 @@ Walk `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-che
 - **Function size.** New or substantially-modified functions ≤ 50 LOC? Note any > 50 LOC; classify as a P3 violation OR naturally-coarse (router, action-callback, schema-builder where a single declaration spans).
 - **Core layer purity.** Code in `src/core/` free of Node APIs (`fs`, `path`, `process`), `better-sqlite3`, `commander`, `process.exit`? Constructor DI only? `Result<T, E>` discipline (no throw in Core)?
 - **Comments.** New comments in the diff fall in the "non-obvious why" category (CLAUDE.md § 4)? Flag any "what does this code do" comments as P3.
-- **Trivial inline fix carve-out (R9).** Does the diff include any inline-Opus-executed refactor (commit subject pattern: `refactor(...)` authored by Opus, not Sonnet)? If yes, confirm carve-out criteria are met (≤ 5 LOC, single file, fix coordinates pre-specified in the plan or a Phase-4 finding). Report violations as P3 findings tagged R9.
+- **Trivial inline fix carve-out (R9).** Does the diff include any inline-Opus-executed refactor (commit subject pattern: `refactor(...)` authored by Opus, not Sonnet)? If yes, confirm the R9 carve-out criteria are met — per CLAUDE.md § 8: **≤5 LOC, single file, pre-specified** (coordinates fixed in the plan or a Phase-4 finding). Report violations as P3 findings tagged R9.
 - **Empty refactor (R11).** If the diff includes an empty refactor commit, does the commit body have a justification (the canonical pattern from CLAUDE.md § 6.4)? Report empty-no-justification as P3 finding tagged R11.
 - **Commit subject health (R12).** Diff's commit subjects use summary verbs (e.g., `test(cli): ingest end-to-end wiring against real CSV — failing`), not enumeration of every assertion (e.g., `test(cli): exits 2, stderr Found 5, no Build failed`)? Report enumeration-style as P3 findings tagged R12.
 - **Slice-plan execution match.** Does the diff's commit sequence match the plan's slice plan? Note any slices that landed differently (bundled, split, reordered, missing). Flag green-on-landing patterns (a `test:` commit that passes against the prior `feat:`) per CLAUDE.md § 6.4 / R10.
@@ -118,19 +118,16 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk R1..R15 from CLAUDE.md § 8. For each tag, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range: § 8 skips R22 (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
-- R1 — [applies / N/A] — [reason]
-- R2 — [applies / N/A] — [reason]
-- ...
-- R15 — [applies / N/A] — [reason]
+- R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
 ## Counters
 
 - P1 findings: N
 - P2 findings: N
 - P3 findings: N (of which M are soft)
-- Rule-tag applies: M / 15
+- Rule-tag applies: M / <§ 8 row count>
 - Total findings: N
 ```
 

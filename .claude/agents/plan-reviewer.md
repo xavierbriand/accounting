@@ -34,7 +34,7 @@ Walk these sub-questions against the plan:
 - **Production-code surface (R2).** Does the plan change types / function signatures / output formats (JSON shapes, table schemas)? If yes, does the plan have a "Production-code surface" subsection enumerating the changes?
 - **Plan-file location (R1).** Plan file at `docs/plans/story-<id>.md`? Filename matches story id?
 
-Each finding: state the observation, cite the plan line / section, and tag the relevant rule (R1..R15) when applicable.
+Each finding: state the observation, cite the plan line / section, and tag the relevant § 8 rule when applicable.
 
 ## 3. P2 — Product Quality / QA pass
 
@@ -66,7 +66,7 @@ Walk `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-che
   - Adapter story: 5–7 commits (R14).
   - Major-bump-zero-code-change story: 4 commits (R15).
   - Plan's slice count appropriate for the type? Each slice = one behaviour + tests + minimal code (one Gherkin scenario typically)?
-- **Trivial inline fix carve-out (R9).** If the plan defers any refactor with "Opus may execute inline," does the deferred fix meet ALL of: ≤ 5 LOC, single file, fix coordinates pre-specified, no design question?
+- **Trivial inline fix carve-out (R9).** If the plan defers any refactor with "Opus may execute inline," does the deferred fix meet the R9 carve-out — per CLAUDE.md § 8: **≤5 LOC, single file, pre-specified** (coordinates fixed in the plan)?
 - **Empty refactor (R11).** If the plan includes an empty refactor slot, does the slot have a justification body planned?
 - **Commit subjects (R12).** Commit messages in the plan's slice plan use summary verbs (not enumeration)?
 - **Result combinator opportunities.** Is the plan introducing chained Result handling? Could `map` / `flatMap` / `getOrElse` / `Result.all` reduce boilerplate? (Soft suggestion only — not a blocker.)
@@ -97,19 +97,16 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk R1..R15 from CLAUDE.md § 8. For each tag, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range: § 8 skips R22 (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
-- R1 — [applies / N/A] — [reason]
-- R2 — [applies / N/A] — [reason]
-- ...
-- R15 — [applies / N/A] — [reason]
+- R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
 ## Counters
 
 - P1 findings: N
 - P2 findings: N
 - P3 findings: N
-- Rule-tag applies: M / 15
+- Rule-tag applies: M / <§ 8 row count>
 - Total findings: N
 ```
 
@@ -137,5 +134,5 @@ Do **not**: tag findings as adopted/deferred/rejected, modify the plan, write pr
 - Modify the plan file.
 - Add findings outside the P1/P2/P3 + rule-tag-coverage scope.
 - Use `Edit` or `Write` tools (not in your allowed-tools list).
-- Skip the rule-tag coverage check — even when most tags are N/A, walking R1..R15 confirms the spec is current.
+- Skip the rule-tag coverage check — even when most tags are N/A, walking every § 8 row confirms the spec is current.
 - Cap findings count. Report what you find; Opus filters.

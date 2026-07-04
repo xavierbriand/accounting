@@ -76,8 +76,8 @@ Every story is routed into one of three lanes at Phase 1, selected by risk surfa
 | Lane | Trigger | Phase 0 | Phase 2 review | Phase 4 review | Envelope | Plan location |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Full** | Touches `src/core/`, DB schema, or migrations | Required (if Core domain concept changes) | `plan-reviewer` + `sibling-overlap` | `code-reviewer` + `ddd-modeler` (Mode B, if model note) | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
-| **Reduced** | Infra-only (`src/infra`/`src/cli`) or behavior-changing `harness/` code | Skipped | `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
-| **Light** | Docs/process/`.claude` specs/harness doc-only | Skipped | Skipped | `code-reviewer` only | R16 | Plan folded into the PR body |
+| **Reduced** | Infra-only (`src/infra`/`src/cli`), behavior-changing `harness/` code, or any `.claude/agents`, `.claude/commands`, or skill spec | Skipped | `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
+| **Light** | Docs/process/harness doc-only | Skipped | Skipped | `code-reviewer` only | R16 | Plan folded into the PR body |
 
 See § 8: **R26** lane provenance.
 
@@ -184,4 +184,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R23 | Maintenance sub-loop checks story-id uniqueness (`docs/plans/`, `docs/retrospectives/`, `docs/status.d/` on `origin/main`, plus open PR branch names) before a new story id is chosen | [story-maint-18](docs/retrospectives/story-maint-18.md) |
 | R24 | Stories touching Core domain concepts require a Phase-0 model note at `docs/domain/model-notes/story-<id>.md`; the plan's Domain-model section derives from it; no-model-impact stories declare it with a reason | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
 | R25 | Model-conformance review at Phase 4 (`ddd-modeler` Mode B): code identifiers use glossary terms; new domain vocabulary updates `docs/domain/glossary.md` in the same PR | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
-| R26 | Risk-based lanes — Full/Reduced/Light selected by risk surface; each lane fixes its Phase-0 / review / commit-envelope / plan-location shape | [story-h8](docs/retrospectives/story-h8.md) |
+| R26 | Risk-based lanes — Full/Reduced/Light selected by risk surface; each lane fixes its Phase-0 / review / commit-envelope / plan-location shape. `.claude/agents`, `.claude/commands`, and skill specs are harness → Reduced, not Light (Light is docs/process/harness doc-only) | [story-h8](docs/retrospectives/story-h8.md) |

@@ -119,6 +119,18 @@ export function extractPlanSurfacePaths(planContent: string): string[] {
   return paths;
 }
 
+const RANGE_PATTERN = /\bR\d+(?:\.\.|–|—|-|…)R\d+\b/g;
+
+export function extractEnumeratedRuleRanges(content: string): string[] {
+  const ranges: string[] = [];
+  let match: RegExpExecArray | null;
+  const pattern = new RegExp(RANGE_PATTERN.source, 'g');
+  while ((match = pattern.exec(content)) !== null) {
+    ranges.push(match[0]);
+  }
+  return ranges;
+}
+
 export function formatJsonReport(findings: DriftFinding[]): string {
   return JSON.stringify({ findings });
 }

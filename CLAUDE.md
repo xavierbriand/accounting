@@ -92,13 +92,16 @@ See § 8: **R26** lane provenance.
 
 ### 6.2 Model tier
 
-- **Opus:** domain modeling (`ddd-modeler`), planning, critical review, code review, refactor planning, retrospective synthesis.
-- **Sonnet:** failing tests, implementation, refactor execution.
+The split is **scan/execute (Sonnet) vs judge/decide (Opus)** — *not* "reviews are Opus." The review agents are pinned `model: sonnet` and produce *findings*; Opus consumes them and owns every *disposition* (adopt/defer/reject at Phase 2; fix-now/defer-issue/acknowledge at Phase 4). Each agent's tier is fixed in its `.claude/agents/*.md` frontmatter — that frontmatter is the source of truth.
+
+- **Opus (main loop):** planning, disposition of review findings, refactor planning, retrospective synthesis, and the Phase-0 domain-modeling dialogue.
+- **Opus agent — `ddd-modeler`** (`model: opus`): Phase-0 candidate model shapes (Mode A), Phase-4 model-conformance findings (Mode B).
+- **Sonnet agents (scan/execute legs, all `model: sonnet`):** `plan-reviewer` (Phase-2 scan), `sibling-overlap` (Phase-2 + Phase-4 scan), `code-reviewer` (Phase-4 scan), `backlog-refiner` (backlog-hygiene scan), `sonnet-implementer` (implementation: failing tests, minimal green, refactor execution). All produce findings/code; none decide.
 - **Haiku:** not used yet.
 
 ### 6.3 Sonnet return format
 
-Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md). Sections in order: `What was built` · `Red → green sequence` · `Deviations` · `Unknowns` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model. **New custom agents** added to `.claude/agents/*.md` require a session restart to register with the harness Agent tool. For same-session verification, invoke `general-purpose` with the spec file's contents inline as the prompt.
+Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-implementer.md) § 4. Seven sections, in order: `What was built` · `Red → green sequence` · `Deviations from plan` · `Gherkin coverage checklist` · `Unknowns encountered` · `Proposed follow-ups` · `Files touched`. Invoke with `subagent_type: "sonnet-implementer"`; frontmatter supplies the model. **New custom agents** added to `.claude/agents/*.md` require a session restart to register with the harness Agent tool. For same-session verification, invoke `general-purpose` with the spec file's contents inline as the prompt.
 
 ### 6.4 Commit convention
 

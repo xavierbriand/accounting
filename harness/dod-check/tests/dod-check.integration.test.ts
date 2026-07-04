@@ -354,6 +354,58 @@ describe('dod-check integration — pr-tbd via DOD_PR_BODY_FILE seam (F5)', () =
   });
 });
 
+describe('dod-check integration — pr-tbd catches the "Pending" placeholder variant (#152 regression)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 8. Sonnet learnings',
+        '',
+        '_Pending Phase 3/5_',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] lint / build / test green on CI',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: the widened TBD_PLACEHOLDER_LINE regex misses a standalone
+  // "_Pending Phase 3/5_" placeholder at the subprocess tier — guards the
+  // #152 regression end-to-end via the real CLI and DOD_PR_BODY_FILE seam.
+  it('hard pr-tbd fires for "_Pending Phase 3/5_" once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).toContain('8. Sonnet learnings');
+  });
+
+  it('advisory pr-tbd for "_Pending Phase 3/5_" while the PR is a draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'true',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).toContain('(advisory — PR is draft)');
+  });
+});
+
 describe('dod-check integration — degradation reporting (F4)', () => {
   let tmpDir: string;
 

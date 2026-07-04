@@ -30,7 +30,7 @@ export function scanTodoComments(files: SourceFile[]): TodoCommentFinding[] {
 }
 
 const SECTION_HEADING = /^## (\d+)\. (.+)$/gm;
-const TBD_PLACEHOLDER_LINE = /^\s*[*_`]*TBD[*_`]*\s*$/m;
+const TBD_PLACEHOLDER_LINE = /^\s*[*_`]*(?:TBD|Pending(?:\b[^\n]*)?)[*_`]*\s*$/im;
 const MERGE_CHECKLIST_SECTION_NUMBER = '10';
 
 export function scanPrBodyTbd(body: string): PrTbdFinding[] {

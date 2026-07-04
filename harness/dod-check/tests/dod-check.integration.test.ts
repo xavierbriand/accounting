@@ -354,6 +354,284 @@ describe('dod-check integration — pr-tbd via DOD_PR_BODY_FILE seam (F5)', () =
   });
 });
 
+describe('dod-check integration — pr-tbd catches the "Pending" placeholder variant (#152 regression)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 8. Sonnet learnings',
+        '',
+        '_Pending Phase 3/5_',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] lint / build / test green on CI',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: the widened TBD_PLACEHOLDER_LINE regex misses a standalone
+  // "_Pending Phase 3/5_" placeholder at the subprocess tier — guards the
+  // #152 regression end-to-end via the real CLI and DOD_PR_BODY_FILE seam.
+  it('hard pr-tbd fires for "_Pending Phase 3/5_" once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).toContain('8. Sonnet learnings');
+  });
+
+  it('advisory pr-tbd for "_Pending Phase 3/5_" while the PR is a draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'true',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('pr-tbd');
+    expect(result.stderr).toContain('(advisory — PR is draft)');
+  });
+});
+
+describe('dod-check integration — merge-checklist-unticked draft-aware (#149 regression, scenario 3)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 1. Story',
+        '',
+        'filled in',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] `lint` / `build` / `test` green on CI',
+        '- [ ] Retrospective file committed',
+        '- [ ] PR out of draft',
+        '- [ ] User approval',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: an unticked substantive § 10 row does not fire
+  // merge-checklist-unticked, or the check fails to gate the exit code once
+  // the PR is ready-for-review — guards the #149 regression end-to-end.
+  it('fires and exits 1 once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('merge-checklist-unticked');
+  });
+
+  // fails if: the same finding wrongly gates the exit code while the PR is
+  // still a draft, or drops the draft-aware suffix — guards draft-awareness.
+  it('is advisory and exits 0 while the PR is a draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'true',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('merge-checklist-unticked');
+    expect(result.stderr).toContain('(advisory — PR is draft)');
+  });
+});
+
+describe('dod-check integration — merge-checklist § 10 fully ticked except construction rows (scenario 4)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 1. Story',
+        '',
+        'filled in',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] `lint` / `build` / `test` green on CI',
+        '- [ ] PR out of draft',
+        '- [x] Retrospective file committed',
+        '- [x] All suggestion-log items resolved',
+        '- [x] All phase-4 retro-checks pass',
+        '- [ ] User approval',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: the exclusion of the two construction-unticked rows breaks and
+  // a ready PR whose only unticked rows are "PR out of draft" / "User
+  // approval" false-hard-fails — guards the exact regression a draft-aware
+  // hard gate would otherwise cause (h7's "never ship a hard gate cold").
+  it('reports no merge-checklist-unticked finding and exits 0 once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('merge-checklist-unticked');
+  });
+});
+
+describe('dod-check integration — phase-evidence-missing advisory check (ddd-1/#153 regression, scenario 5)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+  });
+
+  // fails if: a ticked § 10 phase-4 box with zero § 7 P4 rows fails to fire,
+  // or the finding gates the exit code — guards the ddd-1/#153 regression
+  // (phase-4 ticked with no code-reviewer run evidenced) end-to-end, while
+  // staying always-advisory.
+  it('fires (advisory) and exits 0 when no § 7 P4 row evidences the ticked phase-4 claim', () => {
+    const bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P1 | some finding | adopted | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = runDodCheck(tmpDir, ['--check', 'phase-evidence'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('phase-evidence-missing');
+    expect(result.stderr).toContain('(advisory)');
+  });
+
+  // fails if: a § 7 row carrying `| P4 |` in the Phase column is not
+  // recognized as evidence, wrongly still firing the finding.
+  it('reports nothing when a § 7 P4 suggestion-log row is present', () => {
+    const bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P4 | code-reviewer finding | fix-now | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = runDodCheck(tmpDir, ['--check', 'phase-evidence'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('phase-evidence-missing');
+  });
+});
+
+describe('dod-check integration — loop-csv-stale advisory freshness check (F7, scenario 6)', () => {
+  let tmpDir: string;
+
+  function writeLoopCsv(dir: string, rows: string[]): void {
+    const metricsDir = path.join(dir, 'docs', 'metrics');
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, 'loop.csv'),
+      ['story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics', ...rows].join('\n') + '\n',
+      'utf8',
+    );
+  }
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+  });
+
+  // fails if: the set difference inverts or self-exclusion breaks — guards
+  // F7 end-to-end: a stale plan id (not the current story) is flagged, and
+  // the current story's own not-yet-generated row is not.
+  it('flags a plan id missing from loop.csv while excluding the current story id', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-yy']);
+    writePlan(tmpDir, 'yy', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    writePlan(tmpDir, 'xx', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    writeLoopCsv(tmpDir, ['aa,10,10,1.0,true']);
+    git(tmpDir, ['add', 'docs/plans/story-yy.md', 'docs/plans/story-xx.md', 'docs/metrics/loop.csv']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-yy]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'loop-freshness'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('loop-csv-stale');
+    expect(result.stderr).toContain('story-xx');
+    expect(result.stderr).not.toContain('story-yy has no docs/metrics/loop.csv row');
+  });
+
+  // fails if: a temp repo without docs/metrics/loop.csv throws instead of
+  // degrading gracefully — guards the "never error" contract for the csv read.
+  it('degrades gracefully (no throw) when docs/metrics/loop.csv is absent', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-yy']);
+    writePlan(tmpDir, 'yy', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-yy.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-yy]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'loop-freshness'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('degraded:');
+    expect(result.stderr.toLowerCase()).toContain('loop.csv');
+  });
+});
+
 describe('dod-check integration — degradation reporting (F4)', () => {
   let tmpDir: string;
 
@@ -465,10 +743,39 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     git(tmpDir, ['add', 'tests']);
     git(tmpDir, ['commit', '-q', '-m', 'test(harness): widget — failing [story-zz]']);
 
+    // A second plan file (story-xx) with no docs/metrics/loop.csv row, plus a
+    // loop.csv that only covers a third, unrelated id — feeds loop-csv-stale.
+    writePlan(tmpDir, 'xx', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    const metricsDir = path.join(tmpDir, 'docs', 'metrics');
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, 'loop.csv'),
+      ['story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics', 'aa,10,10,1.0,true'].join('\n') +
+        '\n',
+      'utf8',
+    );
+    git(tmpDir, ['add', 'docs/plans/story-xx.md', 'docs/metrics/loop.csv']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): loop-csv fixture — failing [story-zz]']);
+
     bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
     fs.writeFileSync(
       bodyFile,
-      ['## 1. Story', '', 'TBD', '', '## 10. Merge checklist', '', '- [ ] done'].join('\n'),
+      [
+        '## 1. Story',
+        '',
+        'TBD',
+        '',
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P1 | some finding | adopted | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] done',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
       'utf8',
     );
   });
@@ -477,11 +784,12 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
   // or a finding's kind-specific fields deviate from the discriminated
   // union — guards R8 mock-diversity across this fixture's finding-kind set
   // (missing-story-id, commit-envelope, todo-comment, pr-tbd,
-  // unmapped-scenario, orphan-step). The two remaining kinds are covered
-  // elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the S3
-  // "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape by
-  // the dedicated describe block further down — together the three blocks
-  // cover the full DodFinding union.
+  // unmapped-scenario, orphan-step, merge-checklist-unticked,
+  // phase-evidence-missing, loop-csv-stale). The two remaining kinds are
+  // covered elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the
+  // S3 "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape
+  // by the dedicated describe block further down — together the three
+  // blocks cover the full DodFinding union.
   it('emits every non-story-id-unresolved DodFinding kind with its documented shape', () => {
     const result = runDodCheck(tmpDir, ['--json'], {
       DOD_PR_DRAFT: 'false',
@@ -525,6 +833,18 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     expect(orphanStep).toBeDefined();
     expect(typeof orphanStep?.['pattern']).toBe('string');
     expect(typeof orphanStep?.['file']).toBe('string');
+
+    const mergeChecklistUnticked = byKind('merge-checklist-unticked');
+    expect(mergeChecklistUnticked).toBeDefined();
+    expect(typeof mergeChecklistUnticked?.['uncheckedCount']).toBe('number');
+
+    const phaseEvidenceMissing = byKind('phase-evidence-missing');
+    expect(phaseEvidenceMissing).toBeDefined();
+    expect(typeof phaseEvidenceMissing?.['claim']).toBe('string');
+
+    const loopCsvStale = byKind('loop-csv-stale');
+    expect(loopCsvStale).toBeDefined();
+    expect(typeof loopCsvStale?.['storyId']).toBe('string');
   });
 });
 

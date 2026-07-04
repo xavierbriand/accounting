@@ -145,6 +145,8 @@ Runs **at the start of each new planning session**, treating the check as a read
 
 ## 7. Definition of Done
 
+Items 4, 5, 6, 7, and 11 are enforced deterministically by [`harness/dod-check`](harness/dod-check/README.md) (see its README for the hard / draft-aware / advisory tiers).
+
 1. `npm run lint && npm run build && npm test` — green on CI.
 2. Migrations idempotent.
 3. Every new invariant in Core has a property test.

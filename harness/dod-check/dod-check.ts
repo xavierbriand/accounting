@@ -15,9 +15,11 @@ import {
 import {
   scanTodoComments,
   scanPrBodyTbd,
+  scanMergeChecklist,
   type SourceFile,
   type TodoCommentFinding,
   type PrTbdFinding,
+  type MergeChecklistFinding,
 } from './lib/todo-tbd.js';
 import {
   parseFeatureScenarios,
@@ -39,6 +41,7 @@ export type DodFinding =
   | CommitEnvelopeFinding
   | TodoCommentFinding
   | PrTbdFinding
+  | MergeChecklistFinding
   | GherkinMapFinding
   | StoryIdUnresolvedFinding
   | WeightRatioHeavyFinding;
@@ -262,13 +265,13 @@ function resolvePrBody(repoRoot: string): PrBodyResolution {
   }
 }
 
-function runPrTbdCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+function runPrBodyHonestyChecks(repoRoot: string, degraded: string[]): DodFinding[] {
   const resolution = resolvePrBody(repoRoot);
   if ('unavailable' in resolution) {
     degraded.push(`resolvePrBody: could not resolve PR body (${resolution.unavailable})`);
     return [];
   }
-  return scanPrBodyTbd(resolution.body);
+  return [...scanPrBodyTbd(resolution.body), ...scanMergeChecklist(resolution.body)];
 }
 
 const GHERKIN_FENCE_PATTERN = /```gherkin\n([\s\S]*?)```/g;
@@ -391,15 +394,18 @@ function formatCommitSubjectLines(findings: DodFinding[], isDraft: boolean): str
 
 function formatTodoTbdLines(findings: DodFinding[], isDraft: boolean): string[] {
   const todoTbdFindings = findings.filter(
-    (f): f is TodoCommentFinding | PrTbdFinding => f.kind === 'todo-comment' || f.kind === 'pr-tbd',
+    (f): f is TodoCommentFinding | PrTbdFinding | MergeChecklistFinding =>
+      f.kind === 'todo-comment' || f.kind === 'pr-tbd' || f.kind === 'merge-checklist-unticked',
   );
   if (todoTbdFindings.length === 0) return [];
   const lines = ['TODO/TBD:'];
   for (const f of todoTbdFindings) {
     if (f.kind === 'todo-comment') {
       lines.push(`  todo-comment: ${f.file}:${f.line}`);
-    } else {
+    } else if (f.kind === 'pr-tbd') {
       lines.push(`  pr-tbd: section "${f.section}"${draftSuffix(f, isDraft)}`);
+    } else {
+      lines.push(`  merge-checklist-unticked: ${f.uncheckedCount} row(s)${draftSuffix(f, isDraft)}`);
     }
   }
   return lines;
@@ -456,7 +462,7 @@ function main(): void {
 
   const checks: Record<string, () => DodFinding[]> = {
     commits: () => runCommitSubjectCheck(repoRoot, degraded),
-    'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrTbdCheck(repoRoot, degraded)],
+    'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrBodyHonestyChecks(repoRoot, degraded)],
     gherkin: () => runGherkinMapCheck(repoRoot, degraded),
     'weight-ratio': () => runWeightRatioCheck(repoRoot, degraded),
   };

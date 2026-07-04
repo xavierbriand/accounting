@@ -406,6 +406,109 @@ describe('dod-check integration — pr-tbd catches the "Pending" placeholder var
   });
 });
 
+describe('dod-check integration — merge-checklist-unticked draft-aware (#149 regression, scenario 3)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 1. Story',
+        '',
+        'filled in',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [ ] `lint` / `build` / `test` green on CI',
+        '- [ ] Retrospective file committed',
+        '- [ ] PR out of draft',
+        '- [ ] User approval',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: an unticked substantive § 10 row does not fire
+  // merge-checklist-unticked, or the check fails to gate the exit code once
+  // the PR is ready-for-review — guards the #149 regression end-to-end.
+  it('fires and exits 1 once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('merge-checklist-unticked');
+  });
+
+  // fails if: the same finding wrongly gates the exit code while the PR is
+  // still a draft, or drops the draft-aware suffix — guards draft-awareness.
+  it('is advisory and exits 0 while the PR is a draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'true',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('merge-checklist-unticked');
+    expect(result.stderr).toContain('(advisory — PR is draft)');
+  });
+});
+
+describe('dod-check integration — merge-checklist § 10 fully ticked except construction rows (scenario 4)', () => {
+  let tmpDir: string;
+  let bodyFile: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+
+    bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 1. Story',
+        '',
+        'filled in',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] `lint` / `build` / `test` green on CI',
+        '- [ ] PR out of draft',
+        '- [x] Retrospective file committed',
+        '- [x] All suggestion-log items resolved',
+        '- [x] All phase-4 retro-checks pass',
+        '- [ ] User approval',
+      ].join('\n'),
+      'utf8',
+    );
+  });
+
+  // fails if: the exclusion of the two construction-unticked rows breaks and
+  // a ready PR whose only unticked rows are "PR out of draft" / "User
+  // approval" false-hard-fails — guards the exact regression a draft-aware
+  // hard gate would otherwise cause (h7's "never ship a hard gate cold").
+  it('reports no merge-checklist-unticked finding and exits 0 once the PR is out of draft', () => {
+    const result = runDodCheck(tmpDir, ['--check', 'todo-tbd'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('merge-checklist-unticked');
+  });
+});
+
 describe('dod-check integration — degradation reporting (F4)', () => {
   let tmpDir: string;
 

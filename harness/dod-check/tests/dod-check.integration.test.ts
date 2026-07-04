@@ -581,6 +581,57 @@ describe('dod-check integration — phase-evidence-missing advisory check (ddd-1
   });
 });
 
+describe('dod-check integration — loop-csv-stale advisory freshness check (F7, scenario 6)', () => {
+  let tmpDir: string;
+
+  function writeLoopCsv(dir: string, rows: string[]): void {
+    const metricsDir = path.join(dir, 'docs', 'metrics');
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, 'loop.csv'),
+      ['story_id,plan_loc,diff_loc,weight_ratio,retro_loop_metrics', ...rows].join('\n') + '\n',
+      'utf8',
+    );
+  }
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+  });
+
+  // fails if: the set difference inverts or self-exclusion breaks — guards
+  // F7 end-to-end: a stale plan id (not the current story) is flagged, and
+  // the current story's own not-yet-generated row is not.
+  it('flags a plan id missing from loop.csv while excluding the current story id', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-yy']);
+    writePlan(tmpDir, 'yy', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    writePlan(tmpDir, 'xx', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    writeLoopCsv(tmpDir, ['aa,10,10,1.0,true']);
+    git(tmpDir, ['add', 'docs/plans/story-yy.md', 'docs/plans/story-xx.md', 'docs/metrics/loop.csv']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-yy]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'loop-freshness'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('loop-csv-stale');
+    expect(result.stderr).toContain('story-xx');
+    expect(result.stderr).not.toContain('story-yy has no docs/metrics/loop.csv row');
+  });
+
+  // fails if: a temp repo without docs/metrics/loop.csv throws instead of
+  // degrading gracefully — guards the "never error" contract for the csv read.
+  it('degrades gracefully (no throw) when docs/metrics/loop.csv is absent', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-yy']);
+    writePlan(tmpDir, 'yy', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-yy.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-yy]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'loop-freshness'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('degraded:');
+    expect(result.stderr.toLowerCase()).toContain('loop.csv');
+  });
+});
+
 describe('dod-check integration — degradation reporting (F4)', () => {
   let tmpDir: string;
 

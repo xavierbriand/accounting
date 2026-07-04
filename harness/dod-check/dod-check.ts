@@ -30,6 +30,7 @@ import {
 } from './lib/gherkin-map.js';
 import { checkWeightRatio, type WeightRatioHeavyFinding } from './lib/weight-ratio.js';
 import { checkPhaseEvidence, type PhaseEvidenceFinding } from './lib/phase-evidence.js';
+import { checkLoopFreshness, type LoopFreshnessFinding } from './lib/loop-freshness.js';
 import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 export type StoryIdUnresolvedFinding = {
@@ -46,7 +47,8 @@ export type DodFinding =
   | GherkinMapFinding
   | StoryIdUnresolvedFinding
   | WeightRatioHeavyFinding
-  | PhaseEvidenceFinding;
+  | PhaseEvidenceFinding
+  | LoopFreshnessFinding;
 
 const HARD_KINDS: ReadonlySet<DodFinding['kind']> = new Set([
   'missing-story-id',
@@ -63,6 +65,7 @@ export function isAlwaysAdvisory(finding: DodFinding): boolean {
   if (finding.kind === 'story-id-unresolved') return true;
   if (finding.kind === 'weight-ratio-heavy') return true;
   if (finding.kind === 'phase-evidence-missing') return true;
+  if (finding.kind === 'loop-csv-stale') return true;
   if (finding.kind === 'commit-envelope') {
     return finding.rule === null || (finding.min !== null && finding.count < finding.min);
   }
@@ -286,6 +289,39 @@ function runPhaseEvidenceCheck(repoRoot: string, degraded: string[]): DodFinding
   return checkPhaseEvidence(resolution.body);
 }
 
+function getPlanStoryIds(repoRoot: string): string[] {
+  const plansDir = path.join(repoRoot, 'docs', 'plans');
+  if (!fs.existsSync(plansDir)) return [];
+  return fs
+    .readdirSync(plansDir)
+    .filter((f) => f.startsWith('story-') && f.endsWith('.md'))
+    .map((f) => f.slice('story-'.length, -'.md'.length));
+}
+
+function getLoopCsvStoryIds(repoRoot: string, degraded: string[]): string[] {
+  const csvPath = path.join(repoRoot, 'docs', 'metrics', 'loop.csv');
+  let content: string;
+  try {
+    content = fs.readFileSync(csvPath, 'utf8');
+  } catch (err) {
+    degraded.push(`getLoopCsvStoryIds: could not read docs/metrics/loop.csv (${errorMessage(err)})`);
+    return [];
+  }
+  return content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('story_id'))
+    .map((l) => l.split(',')[0]);
+}
+
+function runLoopFreshnessCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+  const planStoryIds = getPlanStoryIds(repoRoot);
+  const csvStoryIds = getLoopCsvStoryIds(repoRoot, degraded);
+  const resolution = resolveStoryId(repoRoot, degraded);
+  const currentStoryId = 'storyId' in resolution ? resolution.storyId : null;
+  return checkLoopFreshness(planStoryIds, csvStoryIds, currentStoryId);
+}
+
 const GHERKIN_FENCE_PATTERN = /```gherkin\n([\s\S]*?)```/g;
 const GHERKIN_SCENARIO_LINE = /^\s*Scenario(?: Outline)?:\s*(.+)$/gm;
 
@@ -460,6 +496,16 @@ function formatPhaseEvidenceLines(findings: DodFinding[]): string[] {
   );
 }
 
+function formatLoopFreshnessLines(findings: DodFinding[]): string[] {
+  const loopFreshnessFindings = findings.filter(
+    (f): f is LoopFreshnessFinding => f.kind === 'loop-csv-stale',
+  );
+  if (loopFreshnessFindings.length === 0) return [];
+  return loopFreshnessFindings.map(
+    (f) => `  loop-csv-stale: story-${f.storyId} has no docs/metrics/loop.csv row (advisory)`,
+  );
+}
+
 function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
   return [
     ...formatCommitSubjectLines(findings, isDraft),
@@ -467,6 +513,7 @@ function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
     ...formatGherkinLines(findings),
     ...formatWeightRatioLines(findings),
     ...formatPhaseEvidenceLines(findings),
+    ...formatLoopFreshnessLines(findings),
   ].join('\n');
 }
 
@@ -489,6 +536,7 @@ function main(): void {
     gherkin: () => runGherkinMapCheck(repoRoot, degraded),
     'weight-ratio': () => runWeightRatioCheck(repoRoot, degraded),
     'phase-evidence': () => runPhaseEvidenceCheck(repoRoot, degraded),
+    'loop-freshness': () => runLoopFreshnessCheck(repoRoot, degraded),
   };
 
   const selectedChecks = onlyCheck ? [onlyCheck] : Object.keys(checks);

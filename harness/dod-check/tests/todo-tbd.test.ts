@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { scanTodoComments, scanPrBodyTbd, type SourceFile } from '../lib/todo-tbd.js';
+import {
+  scanTodoComments,
+  scanPrBodyTbd,
+  extractSectionRegion,
+  scanMergeChecklist,
+  type SourceFile,
+} from '../lib/todo-tbd.js';
 
 describe('scanTodoComments', () => {
   // fails if: a TODO comment is missed — guards Scenario B's core invariant
@@ -192,5 +198,76 @@ describe('scanPrBodyTbd', () => {
       '- [ ] done',
     ].join('\n');
     expect(scanPrBodyTbd(body)).toEqual([]);
+  });
+});
+
+describe('extractSectionRegion', () => {
+  const body = [
+    '## 1. Story',
+    '',
+    'filled in',
+    '',
+    '## 10. Merge checklist',
+    '',
+    '- [ ] lint / build / test green on CI',
+    '- [ ] User approval',
+  ].join('\n');
+
+  // fails if: the extractor fails to isolate the § 10 body between its
+  // heading and the next heading (or EOF) — guards the shared
+  // heading-region machinery both scanPrBodyTbd and scanMergeChecklist rely on.
+  it('returns the body between the numbered heading and the next heading', () => {
+    const region = extractSectionRegion(body, '10');
+    expect(region).toContain('lint / build / test green on CI');
+    expect(region).toContain('User approval');
+    expect(region).not.toContain('## 10. Merge checklist');
+  });
+
+  // fails if: a missing section number returns something other than null —
+  // guards scanMergeChecklist's "no § 10 → []" short-circuit.
+  it('returns null when the section number is absent', () => {
+    expect(extractSectionRegion(body, '99')).toBeNull();
+  });
+});
+
+describe('scanMergeChecklist', () => {
+  // fails if: an unticked substantive § 10 row is missed — guards the #149
+  // regression (§ 10 merged entirely unticked).
+  it('reports uncheckedCount for unticked substantive § 10 rows', () => {
+    const body = [
+      '## 10. Merge checklist',
+      '',
+      '- [ ] `lint` / `build` / `test` green on CI',
+      '- [ ] Retrospective file committed',
+    ].join('\n');
+    expect(scanMergeChecklist(body)).toEqual([{ kind: 'merge-checklist-unticked', uncheckedCount: 2 }]);
+  });
+
+  // fails if: the exclusion of "PR out of draft" / "User approval" rows
+  // breaks — guards scenario 4 (those two rows are unticked by construction
+  // at CI time and must never count toward the finding).
+  it('excludes "PR out of draft" and "User approval" rows from the count', () => {
+    const body = [
+      '## 10. Merge checklist',
+      '',
+      '- [x] `lint` / `build` / `test` green on CI',
+      '- [ ] PR out of draft',
+      '- [x] Retrospective file committed',
+      '- [ ] User approval',
+    ].join('\n');
+    expect(scanMergeChecklist(body)).toEqual([]);
+  });
+
+  // fails if: a fully ticked § 10 still reports a finding.
+  it('reports nothing when every § 10 row is ticked', () => {
+    const body = ['## 10. Merge checklist', '', '- [x] done', '- [x] also done'].join('\n');
+    expect(scanMergeChecklist(body)).toEqual([]);
+  });
+
+  // fails if: the check runs when § 10 is entirely absent (e.g. malformed
+  // PR body) instead of short-circuiting to [].
+  it('reports nothing when § 10 is absent from the body', () => {
+    const body = ['## 1. Story', '', 'filled in'].join('\n');
+    expect(scanMergeChecklist(body)).toEqual([]);
   });
 });

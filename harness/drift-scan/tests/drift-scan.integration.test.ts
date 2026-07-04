@@ -17,6 +17,10 @@ function tempRetroPath(name: string): string {
   return path.join(REPO_ROOT, 'docs', 'retrospectives', name);
 }
 
+function tempClaudeAgentPath(name: string): string {
+  return path.join(REPO_ROOT, '.claude', 'agents', name);
+}
+
 const TEMP_RETRO_FILES: string[] = [];
 let CLAUDE_MD_SNAPSHOT: string | null = null;
 
@@ -156,5 +160,19 @@ describe('drift-scan integration', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('R96');
     expect(result.stderr).toContain('table-only:');
+  });
+
+  // fails if runClaudeCheck/extractEnumeratedRuleRanges doesn't detect the
+  // enumerated-range antipattern in a .claude/ spec (Gherkin scenario 1:
+  // enumerated range in a spec fails the scan).
+  it('exits 1 and names the range when a .claude/ spec hard-codes R1..R15', () => {
+    const specFile = tempClaudeAgentPath('story-test-range.md');
+    TEMP_RETRO_FILES.push(specFile);
+    fs.writeFileSync(specFile, '# Test agent\n\nWalk rules R1..R15 in order.\n');
+
+    const result = runScanner();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check D');
+    expect(result.stderr).toContain('R1..R15');
   });
 });

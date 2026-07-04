@@ -5,6 +5,7 @@ import {
   extractRetroTags,
   composeDrift,
   extractPlanSurfacePaths,
+  extractEnumeratedRuleRanges,
   formatJsonReport,
 } from '../lib/drift-parser.js';
 
@@ -222,6 +223,55 @@ Some text.
     const paths = extractPlanSurfacePaths(plan);
     expect(paths).not.toContain('../etc/passwd');
     expect(paths).toContain('src/core/good.ts');
+  });
+});
+
+describe('extractEnumeratedRuleRanges', () => {
+  // fails if the range regex misses a separator variant (dash/en-dash/em-dash/
+  // ellipsis) that a spec could plausibly use to re-freeze the R1..R15
+  // antipattern F5 named (Gherkin scenario 1: enumerated range fails the scan).
+  it('detects a double-dot range', () => {
+    const ranges = extractEnumeratedRuleRanges('Walk rules R1..R15 in order.');
+    expect(ranges).toContain('R1..R15');
+  });
+
+  it('detects an en-dash range', () => {
+    const ranges = extractEnumeratedRuleRanges('See R2–R9 for details.');
+    expect(ranges).toContain('R2–R9');
+  });
+
+  it('detects an em-dash range', () => {
+    const ranges = extractEnumeratedRuleRanges('See R2—R9 for details.');
+    expect(ranges).toContain('R2—R9');
+  });
+
+  it('detects a hyphen range', () => {
+    const ranges = extractEnumeratedRuleRanges('See R2-R9 for details.');
+    expect(ranges).toContain('R2-R9');
+  });
+
+  it('detects an ellipsis range', () => {
+    const ranges = extractEnumeratedRuleRanges('See R2…R9 for details.');
+    expect(ranges).toContain('R2…R9');
+  });
+
+  it('returns empty array when there is no range', () => {
+    expect(extractEnumeratedRuleRanges('No ranges here, just R5.')).toHaveLength(0);
+  });
+
+  // fails if the regex over-matches prose enumerations like "R2 and R3" or
+  // "R2, R3" as a range — these are legitimate references to two distinct
+  // tags, not a frozen enumeration (plan Risks table: range regex over-broad).
+  it('does not match "R2 and R3" as a range', () => {
+    expect(extractEnumeratedRuleRanges('Applies to R2 and R3.')).toHaveLength(0);
+  });
+
+  it('does not match "R2, R3" as a range', () => {
+    expect(extractEnumeratedRuleRanges('Applies to R2, R3.')).toHaveLength(0);
+  });
+
+  it('does not match a regex literal like R[0-9]+', () => {
+    expect(extractEnumeratedRuleRanges('grep -nE \'^\\| R[0-9]+ \\|\'')).toHaveLength(0);
   });
 });
 

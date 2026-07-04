@@ -161,4 +161,36 @@ describe('scanPrBodyTbd', () => {
     );
     expect(scanPrBodyTbd(body)).toEqual([{ kind: 'pr-tbd', section: '1. Story' }]);
   });
+
+  // fails if: the widened TBD_PLACEHOLDER_LINE regex misses a standalone
+  // "Pending..." placeholder — guards the #152 regression (§ 8/§ 9 shipped
+  // as a permanent "_Pending Phase 3/5_" line).
+  it('reports pr-tbd for a standalone "Pending Phase 3/5" placeholder wrapped in emphasis', () => {
+    const body = [
+      '## 8. Sonnet learnings',
+      '',
+      '_Pending Phase 3/5_',
+      '',
+      '## 10. Merge checklist',
+      '',
+      '- [ ] done',
+    ].join('\n');
+    expect(scanPrBodyTbd(body)).toEqual([{ kind: 'pr-tbd', section: '8. Sonnet learnings' }]);
+  });
+
+  // fails if: the full-line anchor is dropped and mid-sentence prose
+  // containing "pending" is falsely flagged — guards against the widened
+  // regex over-triggering on ordinary English.
+  it('does not flag mid-sentence prose containing "pending"', () => {
+    const body = [
+      '## 4. Selected solution',
+      '',
+      'The design is pending review.',
+      '',
+      '## 10. Merge checklist',
+      '',
+      '- [ ] done',
+    ].join('\n');
+    expect(scanPrBodyTbd(body)).toEqual([]);
+  });
 });

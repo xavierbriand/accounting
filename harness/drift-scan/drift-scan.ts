@@ -7,6 +7,9 @@ import {
   extractRetroTags,
   composeDrift,
   extractPlanSurfacePaths,
+  extractEnumeratedRuleRanges,
+  extractClaudeTagRefs,
+  composeClaudeDrift,
   formatJsonReport,
   type DriftFinding,
 } from './lib/drift-parser.js';
@@ -83,12 +86,54 @@ function runPlanCheck(repoRoot: string, planFiles: string[]): DriftFinding[] {
   return findings;
 }
 
+function getClaudeSpecFiles(repoRoot: string): string[] {
+  const dirs = [
+    path.join('.claude', 'agents'),
+    path.join('.claude', 'commands'),
+  ];
+  const files: string[] = [];
+  for (const dir of dirs) {
+    const fullDir = path.join(repoRoot, dir);
+    if (!fs.existsSync(fullDir)) continue;
+    for (const f of fs.readdirSync(fullDir)) {
+      if (f.endsWith('.md')) {
+        files.push(path.join(dir, f));
+      }
+    }
+  }
+  return files;
+}
+
+function runClaudeCheck(repoRoot: string): DriftFinding[] {
+  const claudeMd = fs.readFileSync(path.join(repoRoot, 'CLAUDE.md'), 'utf8');
+  const sectionEightTags = extractSectionEightTags(claudeMd);
+
+  const findings: DriftFinding[] = [];
+  for (const specFile of getClaudeSpecFiles(repoRoot)) {
+    const content = fs.readFileSync(path.join(repoRoot, specFile), 'utf8');
+
+    for (const range of extractEnumeratedRuleRanges(content)) {
+      findings.push({ kind: 'claude-range', range, file: specFile });
+    }
+
+    const tagRefs = extractClaudeTagRefs(content);
+    const staleTags = composeClaudeDrift(tagRefs, sectionEightTags);
+    for (const tag of staleTags) {
+      findings.push({ kind: 'claude-stale-tag', tag, file: specFile });
+    }
+  }
+  return findings;
+}
+
 function formatHumanReport(findings: DriftFinding[]): string {
   const lines: string[] = [];
   const ruleFindings = findings.filter(
     (f) => f.kind === 'retro-only' || f.kind === 'table-only',
   );
   const pathFindings = findings.filter((f) => f.kind === 'missing-path');
+  const claudeFindings = findings.filter(
+    (f) => f.kind === 'claude-range' || f.kind === 'claude-stale-tag',
+  );
 
   if (ruleFindings.length > 0) {
     lines.push('Check A — R-tag drift:');
@@ -108,6 +153,16 @@ function formatHumanReport(findings: DriftFinding[]): string {
       }
     }
   }
+  if (claudeFindings.length > 0) {
+    lines.push('Check D — `.claude/` rule-tag drift:');
+    for (const f of claudeFindings) {
+      if (f.kind === 'claude-range') {
+        lines.push(`  claude-range: ${f.range} (in ${f.file}, enumerated range antipattern)`);
+      } else if (f.kind === 'claude-stale-tag') {
+        lines.push(`  claude-stale-tag: ${f.tag} (in ${f.file}, not in CLAUDE.md § 8)`);
+      }
+    }
+  }
   return lines.join('\n');
 }
 
@@ -121,7 +176,8 @@ function main(): void {
   const ruleFindings = runRuleCheck(repoRoot);
   const planFiles = getPlanFiles(repoRoot, all);
   const planFindings = runPlanCheck(repoRoot, planFiles);
-  const findings = [...ruleFindings, ...planFindings];
+  const claudeFindings = runClaudeCheck(repoRoot);
+  const findings = [...ruleFindings, ...planFindings, ...claudeFindings];
 
   if (json) {
     process.stdout.write(formatJsonReport(findings) + '\n');

@@ -114,7 +114,7 @@ You are done when:
 
 ## 5. Never
 
-- **Never mutate the tracker.** No `gh issue close`, `gh issue edit`, `gh issue comment`, `gh issue reopen`, `gh issue delete`, `gh issue transfer`, `gh label`, `gh pr merge`, `gh pr edit`, or any other write subcommand. Read-only always. Mutations happen later, user-gated, in the `/refine-backlog` main-session step.
+- **Never mutate the tracker.** No `gh issue close`, `gh issue edit`, `gh issue comment`, `gh issue reopen`, `gh issue delete`, `gh issue transfer`, `gh issue pin`, `gh issue unpin`, `gh issue lock`, `gh issue unlock`, `gh label`, `gh pr merge`, `gh pr edit`, `gh pr ready`, `gh pr review`, `gh pr lock`, `gh pr unlock`, or any other state-changing subcommand — read-only always, even for a subcommand not named here. Mutations happen later, user-gated, in the `/refine-backlog` main-session step.
 - Use `Edit` or `Write` (not in your allowed-tools list); modify any repo file; run `git` commands that change state.
 - Use the GitHub MCP server or any tool outside your declared grant.
 - Tag your own findings adopt/defer/reject, or decide which actions to take — that is the user's call.

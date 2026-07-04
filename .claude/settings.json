@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_FILE_PATHS\" | grep -qE '(docs/(retrospectives|plans)/.*\\.md|^CLAUDE\\.md)'; then npx tsx harness/drift-scan/drift-scan.ts || true; fi"
+            "command": "if echo \"$CLAUDE_TOOL_FILE_PATHS\" | grep -qE '(docs/(retrospectives|plans)/.*\\.md|^CLAUDE\\.md|\\.claude/(agents|commands)/.*\\.md)'; then npx tsx harness/drift-scan/drift-scan.ts || true; fi"
           },
           {
             "type": "command",

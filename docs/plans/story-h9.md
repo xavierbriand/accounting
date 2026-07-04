@@ -66,21 +66,12 @@ Add a checklist line: run `/refine-backlog` (or review the latest Backlog refine
 
 **None** (no `src/` change, no type/signature/format change). Files: `.claude/agents/backlog-refiner.md` (new), `.claude/commands/refine-backlog.md` (new), `docs/templates/maintenance-sub-loop.md` (+1 line), `CLAUDE.md` (R26 lane-table clarification + § 8 R26 row), `docs/plans/story-h9.md` (new, R1), `docs/retrospectives/story-h9.md` (Phase 5), `docs/status.d/` fragment. New agent file needs a session restart to register with the Agent tool (§ 6.3).
 
-## Gherkin acceptance scenarios
+## Acceptance scenario (manual — no feature file)
 
-Spec/prompt artifacts have no automated tests; the acceptance scenario is the first run, validated by inspection (in-process, via `general-purpose` + inline spec — R7 in-process classification).
+Spec/prompt artifacts have no automated Gherkin test, so this story declares **no `tests/features/*.feature` scenario** — and deliberately writes the acceptance below as prose rather than a ` ```gherkin ` `Scenario:` block, since dod-check's Gherkin↔step gate hard-fails a plan-declared scenario that has no backing feature file. Acceptance is one manual check, run in-process via `general-purpose` + inline spec (§ 6.3 workaround; R7 in-process classification):
 
-```gherkin
-Scenario: First backlog refinement run surfaces the reset inventory
-  Given the backlog-refiner spec exists and the tracker is in its 2026-07-04 state
-  When the refiner is invoked read-only against the live tracker
-  Then the Backlog refinement report independently surfaces at least the 9-item
-       reset inventory from the health-check appendix
-  And the report proposes no mutation itself — only a tagged proposed-actions table
-  # fails if: the agent spec omits a report section that would surface an inventory
-  #           item, OR instructs a mutating gh call (guards the propose-only contract
-  #           in .claude/agents/backlog-refiner.md and the six-section Return format).
-```
+- **Given** the `backlog-refiner` spec exists and the tracker is in its 2026-07-04 state, **when** the refiner is invoked read-only against the live tracker, **then** the Backlog refinement report independently surfaces at least the 9-item reset inventory from the health-check appendix, **and** proposes no mutation itself — only a tagged proposed-actions table.
+- **fails if** the agent spec omits a report section that would surface an inventory item, OR instructs a mutating `gh` call — this guards the propose-only contract in `.claude/agents/backlog-refiner.md` and the six-section Return format.
 
 ## Slice plan (R13 — Reduced, target 6–10 commits)
 

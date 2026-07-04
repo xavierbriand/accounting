@@ -97,7 +97,7 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -n "| R" CLAUDE.md` — never hard-code a range: § 8 skips R22 (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range: § 8 skips R22 (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
 - R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 

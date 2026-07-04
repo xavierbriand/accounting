@@ -136,4 +136,4 @@ Deferred follow-ups are created at Phase-2 tagging (each gets an issue): judge-B
 - [x] Phase 0 (Model): model note signed off (Xavier Briand, 2026-07-04) — voluntary for this Reduced-lane story (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — sibling-overlap; plan-reviewer dropped per R26 Reduced lane): 7 findings triaged above, no un-tagged rows, no deferred items requiring issues.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled ([#174](https://github.com/xavierbriand/accounting/pull/174)).

@@ -3,6 +3,12 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initTempRepo, writeAndCommit, cleanupTempDirs } from '../../lib/temp-git-repo.js';
+import { parseAgentSpecFrontmatter } from '../../lib/agent-spec.js';
+import {
+  checkAgentSpecRoles,
+  checkControlCompleteness,
+  extractInventoryControlPaths,
+} from '../lib/drift-parser.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const SCANNER = path.join(REPO_ROOT, 'harness', 'drift-scan', 'drift-scan.ts');
@@ -108,6 +114,44 @@ describe('drift-scan integration', () => {
     expect(result.stderr).not.toContain('retro-only:');
     expect(result.stderr).not.toContain('missing-path:');
     expect(result.stderr).not.toContain('table-only:');
+    expect(result.stderr).not.toContain('missing-role:');
+    expect(result.stderr).not.toContain('role-tools-violation:');
+    expect(result.stderr).not.toContain('unlisted-control:');
+  });
+
+  // (Gherkin scenario: real registry conforms.) In-process: composes the
+  // exported Check F functions against the live tree — the same composition
+  // runAgentSpecCheck performs inside main(); the CLI wiring itself is
+  // covered by the subprocess outline tests below.
+  // fails if a real spec false-positives (absent optional frontmatter keys
+  // trip the parser) or the committed inventory misses a real agent/command
+  // file.
+  it('real registry conforms — composed Check F functions return zero findings', () => {
+    const agentsDir = path.join(REPO_ROOT, '.claude', 'agents');
+    const commandsDir = path.join(REPO_ROOT, '.claude', 'commands');
+    const listMd = (dir: string): string[] =>
+      fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+
+    const entries = listMd(agentsDir).map((f) => {
+      const frontmatter = parseAgentSpecFrontmatter(
+        fs.readFileSync(path.join(agentsDir, f), 'utf8'),
+      );
+      return { file: `.claude/agents/${f}`, role: frontmatter.role, tools: frontmatter.tools };
+    });
+    const controlFiles = [
+      ...listMd(agentsDir).map((f) => `.claude/agents/${f}`),
+      ...listMd(commandsDir).map((f) => `.claude/commands/${f}`),
+    ];
+    const inventory = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs', 'harness', 'control-inventory.md'),
+      'utf8',
+    );
+
+    const findings = [
+      ...checkAgentSpecRoles(entries),
+      ...checkControlCompleteness(controlFiles, extractInventoryControlPaths(inventory)),
+    ];
+    expect(findings).toEqual([]);
   });
 
   // fails if --all flag handling in main() does not bypass the diff-scope

@@ -249,10 +249,17 @@ const INVENTORY_PATH_PATTERN = /`(\.claude\/(?:agents|commands)\/[^`\s]+\.md)`/g
 
 export function extractInventoryControlPaths(inventoryContent: string): Set<string> {
   const paths = new Set<string>();
-  let match: RegExpExecArray | null;
-  const pattern = new RegExp(INVENTORY_PATH_PATTERN.source, 'g');
-  while ((match = pattern.exec(inventoryContent)) !== null) {
-    paths.add(match[1]);
+  for (const line of inventoryContent.split('\n')) {
+    if (!line.trimStart().startsWith('|')) {
+      continue;
+    }
+    const pattern = new RegExp(INVENTORY_PATH_PATTERN.source, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(line)) !== null) {
+      if (!match[1].split('/').includes('..')) {
+        paths.add(match[1]);
+      }
+    }
   }
   return paths;
 }

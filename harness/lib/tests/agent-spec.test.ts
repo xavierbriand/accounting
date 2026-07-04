@@ -153,6 +153,24 @@ role: this too
     expect(parsed.role).toBeUndefined();
   });
 
+  // fails if an unclosed frontmatter fence is parsed as if valid — the
+  // degrade must stay fail-safe for Check F: role comes back undefined so
+  // missing-role fires downstream, even though the tools grant becomes
+  // invisible to the role-tools invariant on the same malformed file.
+  it('degrades an unclosed fence to empty frontmatter (fail-safe: missing-role still fires)', () => {
+    const spec = '---\nrole: judge\ntools: Read, Edit\n\nThis fence never closes.\n';
+    const parsed = parseAgentSpecFrontmatter(spec);
+    expect(parsed.role).toBeUndefined();
+    expect(parsed.tools).toEqual([]);
+  });
+
+  // fails if duplicate keys stop resolving last-wins — undocumented input,
+  // but the parser's verdict feeding Check F must stay deterministic.
+  it('resolves duplicate frontmatter keys last-wins', () => {
+    const spec = '---\nrole: doer\nrole: judge\ntools: Read\n---\n\nBody.\n';
+    expect(parseAgentSpecFrontmatter(spec).role).toBe('judge');
+  });
+
   // property: for any well-formed tools: line built from a known tool-name
   // alphabet, joined with variable whitespace around commas, the parser
   // recovers exactly the same ordered list of tool names — guards against

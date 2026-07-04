@@ -556,4 +556,29 @@ describe('extractInventoryControlPaths', () => {
     const inventory = '| R1 | `docs/retrospectives/story-2.2.md` | guide |\n';
     expect(extractInventoryControlPaths(inventory).size).toBe(0);
   });
+
+  // fails if the scan matches paths mentioned in prose or a Gaps-section
+  // bullet — a future Gaps note naming an unregistered file in backticks
+  // would silently satisfy the completeness diff without a real row,
+  // breaking Check F's enforced-registry property.
+  it('ignores control paths mentioned outside table rows', () => {
+    const inventory = [
+      'The file `.claude/agents/prose-mention.md` is discussed here.',
+      '- Gap: `.claude/commands/gap-example.md` has no paired sensor.',
+      '| known | `.claude/agents/known.md` | judge |',
+    ].join('\n');
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/agents/prose-mention.md')).toBe(false);
+    expect(paths.has('.claude/commands/gap-example.md')).toBe(false);
+    expect(paths.has('.claude/agents/known.md')).toBe(true);
+  });
+
+  // fails if the pattern admits `..` traversal segments — sibling
+  // extractPlanSurfacePaths rejects them (house precedent). The extracted
+  // set is membership-only today; the guard keeps the invariant if a future
+  // caller resolves these paths against the filesystem.
+  it('rejects inventory paths containing traversal segments', () => {
+    const inventory = '| evil | `.claude/agents/../../../etc/passwd.md` | doer |\n';
+    expect(extractInventoryControlPaths(inventory).size).toBe(0);
+  });
 });

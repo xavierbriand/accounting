@@ -509,6 +509,78 @@ describe('dod-check integration — merge-checklist § 10 fully ticked except co
   });
 });
 
+describe('dod-check integration — phase-evidence-missing advisory check (ddd-1/#153 regression, scenario 5)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nbody\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+  });
+
+  // fails if: a ticked § 10 phase-4 box with zero § 7 P4 rows fails to fire,
+  // or the finding gates the exit code — guards the ddd-1/#153 regression
+  // (phase-4 ticked with no code-reviewer run evidenced) end-to-end, while
+  // staying always-advisory.
+  it('fires (advisory) and exits 0 when no § 7 P4 row evidences the ticked phase-4 claim', () => {
+    const bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P1 | some finding | adopted | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = runDodCheck(tmpDir, ['--check', 'phase-evidence'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('phase-evidence-missing');
+    expect(result.stderr).toContain('(advisory)');
+  });
+
+  // fails if: a § 7 row carrying `| P4 |` in the Phase column is not
+  // recognized as evidence, wrongly still firing the finding.
+  it('reports nothing when a § 7 P4 suggestion-log row is present', () => {
+    const bodyFile = path.join(tmpDir, 'pr-body-fixture.md');
+    fs.writeFileSync(
+      bodyFile,
+      [
+        '## 7. Suggestion log',
+        '',
+        '| Phase | Suggestion | Resolution | Link / Reason |',
+        '| --- | --- | --- | --- |',
+        '| P4 | code-reviewer finding | fix-now | - |',
+        '',
+        '## 10. Merge checklist',
+        '',
+        '- [x] All phase-4 retro-checks pass (P1 + P2 + P3 against the implementation)',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = runDodCheck(tmpDir, ['--check', 'phase-evidence'], {
+      DOD_PR_DRAFT: 'false',
+      DOD_PR_BODY_FILE: bodyFile,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('phase-evidence-missing');
+  });
+});
+
 describe('dod-check integration — degradation reporting (F4)', () => {
   let tmpDir: string;
 

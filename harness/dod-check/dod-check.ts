@@ -29,6 +29,7 @@ import {
   type GherkinMapFinding,
 } from './lib/gherkin-map.js';
 import { checkWeightRatio, type WeightRatioHeavyFinding } from './lib/weight-ratio.js';
+import { checkPhaseEvidence, type PhaseEvidenceFinding } from './lib/phase-evidence.js';
 import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 export type StoryIdUnresolvedFinding = {
@@ -44,7 +45,8 @@ export type DodFinding =
   | MergeChecklistFinding
   | GherkinMapFinding
   | StoryIdUnresolvedFinding
-  | WeightRatioHeavyFinding;
+  | WeightRatioHeavyFinding
+  | PhaseEvidenceFinding;
 
 const HARD_KINDS: ReadonlySet<DodFinding['kind']> = new Set([
   'missing-story-id',
@@ -60,6 +62,7 @@ function isHardFinding(finding: DodFinding): boolean {
 export function isAlwaysAdvisory(finding: DodFinding): boolean {
   if (finding.kind === 'story-id-unresolved') return true;
   if (finding.kind === 'weight-ratio-heavy') return true;
+  if (finding.kind === 'phase-evidence-missing') return true;
   if (finding.kind === 'commit-envelope') {
     return finding.rule === null || (finding.min !== null && finding.count < finding.min);
   }
@@ -274,6 +277,15 @@ function runPrBodyHonestyChecks(repoRoot: string, degraded: string[]): DodFindin
   return [...scanPrBodyTbd(resolution.body), ...scanMergeChecklist(resolution.body)];
 }
 
+function runPhaseEvidenceCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+  const resolution = resolvePrBody(repoRoot);
+  if ('unavailable' in resolution) {
+    degraded.push(`resolvePrBody: could not resolve PR body (${resolution.unavailable})`);
+    return [];
+  }
+  return checkPhaseEvidence(resolution.body);
+}
+
 const GHERKIN_FENCE_PATTERN = /```gherkin\n([\s\S]*?)```/g;
 const GHERKIN_SCENARIO_LINE = /^\s*Scenario(?: Outline)?:\s*(.+)$/gm;
 
@@ -438,12 +450,23 @@ function formatWeightRatioLines(findings: DodFinding[]): string[] {
   );
 }
 
+function formatPhaseEvidenceLines(findings: DodFinding[]): string[] {
+  const phaseEvidenceFindings = findings.filter(
+    (f): f is PhaseEvidenceFinding => f.kind === 'phase-evidence-missing',
+  );
+  if (phaseEvidenceFindings.length === 0) return [];
+  return phaseEvidenceFindings.map(
+    (f) => `  phase-evidence-missing: claim "${f.claim}" has no § 7 P4 suggestion-log row (advisory)`,
+  );
+}
+
 function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
   return [
     ...formatCommitSubjectLines(findings, isDraft),
     ...formatTodoTbdLines(findings, isDraft),
     ...formatGherkinLines(findings),
     ...formatWeightRatioLines(findings),
+    ...formatPhaseEvidenceLines(findings),
   ].join('\n');
 }
 
@@ -465,6 +488,7 @@ function main(): void {
     'todo-tbd': () => [...runTodoCheck(repoRoot), ...runPrBodyHonestyChecks(repoRoot, degraded)],
     gherkin: () => runGherkinMapCheck(repoRoot, degraded),
     'weight-ratio': () => runWeightRatioCheck(repoRoot, degraded),
+    'phase-evidence': () => runPhaseEvidenceCheck(repoRoot, degraded),
   };
 
   const selectedChecks = onlyCheck ? [onlyCheck] : Object.keys(checks);

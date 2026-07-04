@@ -27,7 +27,7 @@ The user has decided to treat the dev harness as a **second parallel core domain
 Model note: [docs/domain/model-notes/story-ddd-2.md](../domain/model-notes/story-ddd-2.md) *(Phase 0 sign-off pending — this plan is not DoR-complete until the note's sign-off line is filled)*.
 
 - **Terms added** (harness glossary, new file — full-expansion decision at Phase 0): harness, control, guide, sensor, computational, inferential, gate, doer, judge, advisor, roles, lane, envelope, drift, tripwire, braided control, disposition record, meta-control, authorization boundary, playbook, control inventory.
-- **Invariants** (each carried by a drift-scan Check C test): every agent spec declares `role: doer|judge|advisor`; only doers carry file-mutation tools (`Write`, `Edit`, `NotebookEdit`, `MultiEdit`); every `.claude/agents/*.md` and `.claude/commands/*.md` file has a control-inventory row. Playbooks (`.claude/commands/`) carry no role — completeness check only.
+- **Invariants** (each carried by a drift-scan Check F test): every agent spec declares `role: doer|judge|advisor`; only doers carry file-mutation tools (`Write`, `Edit`, `NotebookEdit`, `MultiEdit`); every `.claude/agents/*.md` and `.claude/commands/*.md` file has a control-inventory row. Playbooks (`.claude/commands/`) carry no role — completeness check only.
 - **Process invariant** (not machine-checkable): harness glossary and context map are user-owned; agents propose deltas only.
 - **Events:** none — drift findings are check output, not domain events.
 - Roles are **orthogonal to § 6.2 model tiers**: scan/execute vs judge/decide splits *who runs on what model*; doer/judge/advisor splits *what an agent may author*. Judges and advisors return findings/proposals, never dispositions — consistent with § 6.2's "all produce findings; none decide."
@@ -70,9 +70,9 @@ Given a repo whose `.claude/` contains `<defect>`, when `drift-scan` runs, then 
 *Fails if:* `runAgentSpecCheck` is never wired into `main()`; the parser silently skips malformed frontmatter; the tools invariant misses `NotebookEdit`/`MultiEdit`; the completeness diff ignores `.claude/commands/`. **Subprocess** (temp git repo via hoisted helper — R7: exercises the real CLI exit path).
 
 **Scenario: real registry conforms.**
-Given the six real agent specs with their assigned roles and the committed control inventory, when `runAgentSpecCheck(repoRoot)` runs against this repo, then it returns zero findings.
+Given the six real agent specs with their assigned roles and the committed control inventory, when the exported Check F functions (`checkAgentSpecRoles` + `checkControlCompleteness` — the composition `runAgentSpecCheck` performs inside `main()`) run against this repo, then they return zero findings.
 
-*Fails if:* the check false-positives on real specs (absent optional frontmatter keys trip the parser) or the inventory misses a real control file. **In-process** (R7: pure function against the live tree; the CLI path is covered by the outline above and by CI running drift-scan on this very branch).
+*Fails if:* the check false-positives on real specs (absent optional frontmatter keys trip the parser) or the inventory misses a real control file. **In-process** (R7: exported check functions composed against the live tree in `drift-scan.integration.test.ts`; the CLI wiring is covered by the outline's subprocess tests and by CI running drift-scan on this branch — `runAgentSpecCheck` itself is unexported, matching its unexported siblings).
 
 ## Slice plan
 

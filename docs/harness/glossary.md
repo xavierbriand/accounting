@@ -158,7 +158,7 @@ Seeded 2026-07-04 (story-ddd-2) from the 2026 harness-engineering literature. De
 
 **Example.** `.claude/settings.json` permissions deciding which commands run without asking; the rule that only doers get `Write`/`Edit`.
 
-**Technical notes.** Operates at the capability layer, not the artifact layer — neither advice (guide) nor detection (sensor). The role→tools invariant (Check C) is the spec-frontmatter instance of the same idea. Ours.
+**Technical notes.** Operates at the capability layer, not the artifact layer — neither advice (guide) nor detection (sensor). The role→tools invariant (Check F) is the spec-frontmatter instance of the same idea. Ours.
 
 ## Playbook
 

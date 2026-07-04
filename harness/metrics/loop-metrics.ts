@@ -7,12 +7,12 @@ import {
   formatCsv,
   formatTop3Report,
   formatSkipReport,
-  countStoryCommits,
   hasRetroLoopMetrics,
   type CommitLogEntry,
   type LoopRow,
   type SkipEntry,
 } from './lib/loop-metrics.js';
+import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 function getPlanStoryIds(repoRoot: string): string[] {
   const plansDir = path.join(repoRoot, 'docs', 'plans');
@@ -43,16 +43,7 @@ function diffLocForSha(repoRoot: string, sha: string): number | null {
       cwd: repoRoot,
       encoding: 'utf8',
     });
-    let total = 0;
-    for (const line of output.split('\n')) {
-      if (line.trim().length === 0) continue;
-      const [added, deleted] = line.split('\t');
-      const addedNum = Number.parseInt(added, 10);
-      const deletedNum = Number.parseInt(deleted, 10);
-      if (Number.isFinite(addedNum)) total += addedNum;
-      if (Number.isFinite(deletedNum)) total += deletedNum;
-    }
-    return total;
+    return sumShippedDiffLoc(output);
   } catch {
     return null;
   }
@@ -60,11 +51,7 @@ function diffLocForSha(repoRoot: string, sha: string): number | null {
 
 function planLocFor(repoRoot: string, storyId: string): number {
   const planPath = path.join(repoRoot, 'docs', 'plans', `story-${storyId}.md`);
-  const content = fs.readFileSync(planPath, 'utf8');
-  if (content.length === 0) {
-    return 0;
-  }
-  return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+  return countLoc(fs.readFileSync(planPath, 'utf8'));
 }
 
 function retroLoopMetricsFor(repoRoot: string, storyId: string): boolean {
@@ -85,14 +72,12 @@ function main(): void {
 
   for (const storyId of storyIds) {
     const planLoc = planLocFor(repoRoot, storyId);
-    const commits = countStoryCommits(commitLog, storyId);
     const retroLoopMetrics = retroLoopMetricsFor(repoRoot, storyId);
 
     const { row, skipReason } = buildLoopRow({
       storyId,
       planLoc,
       commitLog,
-      commits,
       retroLoopMetrics,
       diffStatLookup: (sha) => diffLocForSha(repoRoot, sha),
     });

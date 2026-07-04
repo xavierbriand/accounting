@@ -2,7 +2,7 @@
 
 Deterministic Definition-of-Done gates, moved out of the P1/P2/P3 reviewer prompts (story-h6, #144).
 
-Three checks, one findings union:
+Four checks, one findings union:
 
 - **Commit subjects** — every commit subject in `origin/main...HEAD` must reference the current
   story id (bracket `[story-<id>]`, bare `story-<id>`, or capitalized `Story <id>`); commit count is
@@ -22,6 +22,11 @@ Three checks, one findings union:
   `tests/features/steps/*.ts` step definition (string cucumber-expression or regex literal); every
   Gherkin scenario declared in the current story's plan (inside a ` ```gherkin ` fenced block) must
   exist in the feature files.
+- **Weight ratio** — compares the current story's plan LOC (line count of `docs/plans/story-<id>.md`)
+  against the shipped diff LOC since `origin/main` (`git diff --numstat`, filtered through the shared
+  process-artifact filter so plan/retro/status-fragment churn doesn't count as "shipped"). A ratio
+  above 1.0 (plan bigger than what shipped) reports a `weight-ratio-heavy` finding — a signal the plan
+  over-specified relative to the actual change, never a merge blocker.
 
 ## Invocation
 
@@ -33,6 +38,7 @@ npx tsx harness/dod-check/dod-check.ts
 npx tsx harness/dod-check/dod-check.ts --check commits
 npx tsx harness/dod-check/dod-check.ts --check todo-tbd
 npx tsx harness/dod-check/dod-check.ts --check gherkin
+npx tsx harness/dod-check/dod-check.ts --check weight-ratio
 
 # Machine-readable output
 npx tsx harness/dod-check/dod-check.ts --json
@@ -52,6 +58,7 @@ Three tiers:
 | `commit-envelope`, count **under** the declared min | **always-advisory** — reported, never gates |
 | `commit-envelope`, rule **not declared** in the plan | **always-advisory** — reported, never gates |
 | `story-id-unresolved` (non-story PR — Dependabot/chore) | **always-advisory** — reported, never gates |
+| `weight-ratio-heavy` (plan LOC exceeds shipped diff LOC) | **always-advisory** — reported, never gates |
 
 Exit code: `1` iff a **hard** finding exists, **or** a **draft-aware** finding exists and the PR is
 out of draft. **Always-advisory** findings never affect the exit code — a non-story PR, an
@@ -102,9 +109,10 @@ findings are still computed and reported regardless of any degradation. Degradat
 
 ## Output
 
-Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`.
-Draft-aware findings carry an `(advisory — PR is draft)` suffix while the PR is a draft; always-advisory
-findings carry a bare `(advisory)` suffix regardless of draft state. `--json` sends
+Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`,
+followed by any ungrouped `weight-ratio-heavy` lines. Draft-aware findings carry an
+`(advisory — PR is draft)` suffix while the PR is a draft; always-advisory findings carry a bare
+`(advisory)` suffix regardless of draft state. `--json` sends
 `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.
 
 ## Story-id resolution

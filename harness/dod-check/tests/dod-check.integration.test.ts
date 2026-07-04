@@ -475,9 +475,13 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
 
   // fails if: any DodFinding kind is missing from the --json findings array,
   // or a finding's kind-specific fields deviate from the discriminated
-  // union — guards R8 mock-diversity across the full finding-kind set
+  // union — guards R8 mock-diversity across this fixture's finding-kind set
   // (missing-story-id, commit-envelope, todo-comment, pr-tbd,
-  // unmapped-scenario, orphan-step).
+  // unmapped-scenario, orphan-step). The two remaining kinds are covered
+  // elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the S3
+  // "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape by
+  // the dedicated describe block further down — together the three blocks
+  // cover the full DodFinding union.
   it('emits every non-story-id-unresolved DodFinding kind with its documented shape', () => {
     const result = runDodCheck(tmpDir, ['--json'], {
       DOD_PR_DRAFT: 'false',
@@ -521,6 +525,79 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
     expect(orphanStep).toBeDefined();
     expect(typeof orphanStep?.['pattern']).toBe('string');
     expect(typeof orphanStep?.['file']).toBe('string');
+  });
+});
+
+describe('dod-check integration — weight-ratio-heavy advisory finding (S3/S4)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+  });
+
+  // fails if: the finding is dropped from isAlwaysAdvisory (exit would flip
+  // to 1 out of draft) or runWeightRatioCheck is unregistered — guards S3
+  // end-to-end via the real CLI.
+  it('emits weight-ratio-heavy as advisory (exit 0) when plan LOC exceeds shipped diff LOC', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    // Large plan (many lines), tiny shipped diff (one src line changed).
+    const planLines = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
+    writePlan(tmpDir, 'zz', `## Slice plan (R13: target 6-10 commits)\n\n${planLines}\n`);
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'src', 'thing.ts'), 'export const x = 1;\n');
+    git(tmpDir, ['add', 'src/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): thing — green [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'weight-ratio'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('weight-ratio-heavy');
+    expect(result.stderr).toContain('advisory');
+  });
+
+  // fails if: the --json shape for weight-ratio-heavy deviates from the
+  // documented discriminated union ({ kind, planLoc, shippedLoc, ratio }) —
+  // this is the --json coverage for the one DodFinding kind the "every kind"
+  // fixture above cannot produce (R8 mock-diversity completeness).
+  it('emits weight-ratio-heavy with its documented shape via --json', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    const planLines = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
+    writePlan(tmpDir, 'zz', `## Slice plan (R13: target 6-10 commits)\n\n${planLines}\n`);
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'src', 'thing.ts'), 'export const x = 1;\n');
+    git(tmpDir, ['add', 'src/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): thing — green [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'weight-ratio', '--json'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+    const finding = parsed.findings.find((f) => f['kind'] === 'weight-ratio-heavy');
+    expect(finding).toBeDefined();
+    expect(typeof finding?.['planLoc']).toBe('number');
+    expect(typeof finding?.['shippedLoc']).toBe('number');
+    expect(typeof finding?.['ratio']).toBe('number');
+  });
+
+  // fails if: the ratio > 1.0 guard is inverted or dropped — guards S4 end
+  // to end: a plan ≤ shipped emits no finding.
+  it('emits no finding when plan LOC is less than or equal to shipped diff LOC', () => {
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+    writePlan(tmpDir, 'zz', '## Slice plan (R13: target 6-10 commits)\n\nshort plan\n');
+    git(tmpDir, ['add', 'docs/plans/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): plan — failing [story-zz]']);
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    const bigContent = Array.from({ length: 50 }, (_, i) => `export const v${i} = ${i};`).join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'src', 'thing.ts'), bigContent + '\n');
+    git(tmpDir, ['add', 'src/thing.ts']);
+    git(tmpDir, ['commit', '-q', '-m', 'feat(harness): thing — green [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'weight-ratio'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('weight-ratio-heavy');
   });
 });
 

@@ -69,6 +69,18 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 
 Two formal gates: **DoR** (phases 0–2 complete) · **DoD** (phases 3–5 complete, merge checklist — see § 7).
 
+### Risk-based lanes
+
+Every story is routed into one of three lanes at Phase 1, selected by risk surface, not by size. The lane is recorded in the plan (or, for Light stories, in the PR body — see the Light row below) and fixes that story's Phase-0 requirement, review-agent set, commit envelope, and plan-file location. Phases § 6.1, the commit convention § 6.4, story sizing § 6.6, and the DoR/DoD phase numbering are unchanged by lane selection — a lane only selects *which* existing envelope tag (R13/R14/R16) and *which* review agents a story invokes; no new envelope tag is minted.
+
+| Lane | Trigger | Phase 0 | Phase 2 review | Phase 4 review | Envelope | Plan location |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Full** | Touches `src/core/`, DB schema, or migrations | Required (if Core domain concept changes) | `plan-reviewer` + `sibling-overlap` | `code-reviewer` + `ddd-modeler` (Mode B, if model note) | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
+| **Reduced** | Infra-only (`src/infra`/`src/cli`) or behavior-changing `harness/` code | Skipped | `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
+| **Light** | Docs/process/`.claude` specs/harness doc-only | Skipped | Skipped | `code-reviewer` only | R16 | Plan folded into the PR body |
+
+See § 8: **R26** lane provenance.
+
 ### 6.1 Phases
 
 0. **Model** (user + Opus, `ddd-modeler` in support): for any story that adds or changes a Core domain concept, run the `model-session` skill — frame the domain question → `ddd-modeler` (Mode A) proposes 2–3 candidate shapes → converge with the user in dialogue → model note at `docs/domain/model-notes/story-<id>.md` (template: [docs/templates/model-note.md](docs/templates/model-note.md)) → user signs off glossary/context-map deltas (user authors those files; agents propose only). *Exit:* model note committed with the plan; glossary/context-map deltas staged on the same branch; the plan's `## Domain model` section derives from the note (R24). Stories with no model impact skip Phase 0 by declaring `No model impact — <reason>` in the plan (maint/process/docs stories qualify by default).
@@ -122,6 +134,8 @@ Local cleanups (rename, extract small helper, collapse literal) allowed while gr
 
 One PR per story. >~3 Gherkin scenarios or >1 Sonnet Task round → split. See § 8: **R14** adapter stories coarser slices.
 
+Lane (Full/Reduced/Light — see § 6 "Risk-based lanes") is chosen at Phase 1 and recorded in the plan (or the PR body for Light stories); it does not change this sizing rule.
+
 ### 6.7 Maintenance sub-loop
 
 Runs **at the start of each new planning session**, treating the check as a read-only snapshot — no blocking on sibling stories in flight. Run the [maintenance-sub-loop checklist](docs/templates/maintenance-sub-loop.md). **Major-bump-zero-code subcase:** collapse to 4 commits (`chore(docs)` + `chore(deps)` + `refactor:` empty + `chore(retro)`). See § 8: **R15**.
@@ -170,3 +184,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R23 | Maintenance sub-loop checks story-id uniqueness (`docs/plans/`, `docs/retrospectives/`, `docs/status.d/` on `origin/main`, plus open PR branch names) before a new story id is chosen | [story-maint-18](docs/retrospectives/story-maint-18.md) |
 | R24 | Stories touching Core domain concepts require a Phase-0 model note at `docs/domain/model-notes/story-<id>.md`; the plan's Domain-model section derives from it; no-model-impact stories declare it with a reason | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
 | R25 | Model-conformance review at Phase 4 (`ddd-modeler` Mode B): code identifiers use glossary terms; new domain vocabulary updates `docs/domain/glossary.md` in the same PR | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
+| R26 | Risk-based lanes — Full/Reduced/Light selected by risk surface; each lane fixes its Phase-0 / review / commit-envelope / plan-location shape | [story-h8](docs/retrospectives/story-h8.md) |

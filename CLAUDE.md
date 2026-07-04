@@ -31,6 +31,7 @@ Full decisions in [docs/architecture.md](docs/architecture.md). Quick reference:
 - **Append-only ledger.** No `UPDATE`/`DELETE` on ledger rows — corrections are new balancing entries.
 - Port interfaces are PascalCase without an `I` prefix (`TransactionRepository`). Repositories map snake_case DB columns to camelCase domain fields at the boundary.
 - **Domain model is explicit and user-owned.** Ubiquitous language in [docs/domain/glossary.md](docs/domain/glossary.md), strategic view in [docs/domain/context-map.md](docs/domain/context-map.md). Code identifiers use glossary terms; new domain vocabulary updates the glossary in the same PR (R25). Agents propose glossary/context-map deltas, never rewrite those files.
+- **The dev harness is a second bounded context.** Its ubiquitous language lives in [docs/harness/glossary.md](docs/harness/glossary.md) (user-owned; agents propose, never rewrite — same rule as the product glossary), its control classification in [docs/harness/control-inventory.md](docs/harness/control-inventory.md). Strategic view: [docs/domain/context-map.md](docs/domain/context-map.md).
 
 ## 3. Money & precision (most-forgotten rules)
 
@@ -61,7 +62,7 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 | Property | colocated with unit | `fast-check` for financial invariants |
 | Integration | `tests/integration/` | Real SQLite/FS |
 
-- **100% branch coverage** on `src/core/`. Infra/CLI lower. Coverage targets apply to `src/`; `harness/` is exempt — harness code is tooling, not domain logic.
+- **100% branch coverage** on `src/core/`. Infra/CLI lower. Coverage targets apply to `src/`; `harness/` is exempt — the Dev Harness is its own bounded context (§ 2). Harness code is exercised by focused unit tests + one integration test per tool.
 - **TDD rhythm (outside-in):** failing acceptance → failing unit → minimal green → acceptance green → refactor. See § 6.4 for commits.
 - **Batch ingestion — two stages.** *Parse:* malformed rows skipped, reported individually; valid siblings proceed. *Commit:* valid rows in one SQL transaction — all-or-nothing. Authoritative policy in [docs/prd.md](docs/prd.md) and [docs/quality-assurance.md](docs/quality-assurance.md).
 
@@ -78,6 +79,8 @@ Every story is routed into one of three lanes at Phase 1, selected by risk surfa
 | **Full** | Touches `src/core/`, DB schema, or migrations | Required (if Core domain concept changes) | `plan-reviewer` + `sibling-overlap` | `code-reviewer` + `ddd-modeler` (Mode B, if model note) | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
 | **Reduced** | Infra-only (`src/infra`/`src/cli`), behavior-changing `harness/` code, or any `.claude/agents`, `.claude/commands`, or skill spec | Skipped | `sibling-overlap` (plan-reviewer dropped) | `code-reviewer` + `sibling-overlap` | R13 (or R14 adapter) | `docs/plans/story-<id>.md` |
 | **Light** | Docs/process/harness doc-only | Skipped | Skipped | `code-reviewer` only | R16 | Plan folded into the PR body |
+
+A Reduced-lane story introducing a novel harness-domain concept may voluntarily run Phase 0 (precedent: story-ddd-2).
 
 See § 8: **R26** lane provenance.
 
@@ -190,3 +193,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R24 | Stories touching Core domain concepts require a Phase-0 model note at `docs/domain/model-notes/story-<id>.md`; the plan's Domain-model section derives from it; no-model-impact stories declare it with a reason | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
 | R25 | Model-conformance review at Phase 4 (`ddd-modeler` Mode B): code identifiers use glossary terms; new domain vocabulary updates `docs/domain/glossary.md` in the same PR | [story-ddd-1](docs/retrospectives/story-ddd-1.md) |
 | R26 | Risk-based lanes — Full/Reduced/Light selected by risk surface; each lane fixes its Phase-0 / review / commit-envelope / plan-location shape. `.claude/agents`, `.claude/commands`, and skill specs are harness → Reduced, not Light (Light is docs/process/harness doc-only) | [story-h8](docs/retrospectives/story-h8.md) |
+| R27 | Dev harness is a second bounded context: user-owned ubiquitous language in docs/harness/glossary.md + control inventory; agent specs declare role: doer\|judge\|advisor; only doers carry file-mutation tools — enforced by drift-scan Check F | [story-ddd-2](docs/retrospectives/story-ddd-2.md) |

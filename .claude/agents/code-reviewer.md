@@ -118,19 +118,16 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk R1..R15 from CLAUDE.md § 8. For each tag, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -n "| R" CLAUDE.md` — never hard-code a range: § 8 skips R22 (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
-- R1 — [applies / N/A] — [reason]
-- R2 — [applies / N/A] — [reason]
-- ...
-- R15 — [applies / N/A] — [reason]
+- R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
 ## Counters
 
 - P1 findings: N
 - P2 findings: N
 - P3 findings: N (of which M are soft)
-- Rule-tag applies: M / 15
+- Rule-tag applies: M / <§ 8 row count>
 - Total findings: N
 ```
 

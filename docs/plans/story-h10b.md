@@ -178,6 +178,10 @@ Filled at Phase 2 (Reduced lane → `sibling-overlap` only).
 | 3 | sibling-overlap: **#164** owns R22 numbering-integrity / tombstone rows. | ACKNOWLEDGE | h10b works around the hole with `*(hole)*` (forward-compatible); numbering-integrity stays #164's. No block (also gated post-Epic-4). |
 | 4 | sibling-overlap: **#119** (drift-scan diff-scope subprocess tests) touches the same file, disjoint concern (Check B `getPlanFiles`, not Check D). | ACKNOWLEDGE | No scope/code overlap — different functions, no in-flight branch. No action. |
 | 5 | Plan (deferred): §6.2-tier-list-vs-frontmatter drift check (h10a retro Try) — distinct mechanism, out of h10b scope. | DEFER | Filed as [#172](https://github.com/xavierbriand/accounting/issues/172) (drift-scan Check E). |
+| 6 | **Phase 4 code-reviewer (P2 R8):** the `--json` shape test injects only a `claude-range` fixture; after slice 6 marks R22 `*(hole)*`, the clean repo has zero live `claude-stale-tag` findings, so that JSON shape branch is never exercised against a truthy member (defaults-only gap). | **FIX-NOW** | Fixed in `0f4e9a3` (Sonnet, delegated — exceeds R9 ≤5 LOC inline carve-out): added an unmarked `R94` stale-tag fixture alongside the range fixture, asserting `tag='R94'`, `file` string, `range`/`path` undefined. |
+| 7 | Phase 4 code-reviewer (P3 soft): `formatHumanReport` branches over 5 kinds / 3 checks in one fn — a per-check formatter map might read cleaner if a Check E lands. | ACKNOWLEDGE → note on #172 | Still <50 LOC and readable; revisit when #172's Check E adds a 4th section. |
+| 8 | Phase 4 code-reviewer (P3 soft): the clean-repo Check-D test slightly overlaps the general clean-repo + marker tests. | ACKNOWLEDGE | Harmless targeted guard; keep. |
+| 9 | Phase 4 sibling-overlap: no new overlap since planning; #154/#164 coordination holds. | ACKNOWLEDGE | Confirms Phase-2 log. |
 
 ## DoR checklist
 

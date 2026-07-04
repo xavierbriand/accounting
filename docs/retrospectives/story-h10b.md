@@ -23,7 +23,13 @@ writing the bare tag id, which Check A would otherwise read as an undocumented-r
   real Sonnet TDD loop (h10a's Opus-only run had muddied the Sonnet/Opus tier split); Phase 4 =
   `code-reviewer` + `sibling-overlap`.
 - **Commits:** prep (`chore(docs)`, not counted) + 6 body slices (2 `test:`, 3 `feat:`, 1 `chore:`)
-  + 1 empty `refactor:` (R11) + this retro = 8 body commits total, inside the R13 6–10 envelope.
+  + 1 empty `refactor:` (R11) + retro + 1 Phase-4 fixup (`test:`, R8 fix) = 9 body commits, inside
+  the R13 6–10 envelope.
+- **Phase 4:** `code-reviewer` (0 P1 / 1 P2 / 0 P3 / 2 soft) + `sibling-overlap` (no change since
+  Phase 2). The one P2 was an R8 mock-diversity gap (below); delegated to Sonnet (`0f4e9a3`) rather
+  than fixed inline, since it exceeded R9's ≤5 LOC carve-out and the story is Sonnet-authored —
+  keeping the tier split clean (the exact separation h10a's Opus-only run had muddied). Both soft
+  suggestions acknowledged (formatter-map idea noted on #172; the redundant clean-repo test kept).
 - **Sibling coordination (Phase 1 maintenance sub-loop):** #154 (Check C, glossary conformance)
   shares the scan-and-cross-ref mechanism but a different corpus/function — h10b took the next
   label, **Check D**, as a sibling, not a widen. #164 owns § 8 numbering-integrity/tombstone rows;
@@ -58,6 +64,16 @@ writing the bare tag id, which Check A would otherwise read as an undocumented-r
   dedicated unit test and a manual `node -e` check of `RANGE_PATTERN`/`extractClaudeTagRefs`
   against the exact literal from the reviewer specs). Naming the risk in the plan turned a subtle
   regex-engineering trap into a checklist item instead of a Phase-4 surprise.
+
+- **R8 caught a defaults-only gap in Check D's own `--json` test — the mock-diversity rule dogfooded
+  on the check whose whole job is guarding drift.** The shape test injected only a `claude-range`
+  fixture; because slice 6 marks both numbering-hole mentions `*(hole)*`, the clean repo has zero live
+  `claude-stale-tag` findings, so that JSON branch was asserted in code but never exercised against a
+  truthy member — exactly the `duplicates: []`-only pattern R8 exists to catch. code-reviewer flagged
+  it; the fix injected a second fixture citing an unmarked non-§8 tag so both kinds appear in one run.
+  A check that guards against drift still needed its own diversity check. (Mirrors h10a, where the
+  reviewer caught a defect in the very mechanism that story shipped — Phase-4 review earning its keep
+  two stories running.)
 
 ## Change
 

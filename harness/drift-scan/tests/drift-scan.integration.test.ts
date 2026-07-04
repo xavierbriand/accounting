@@ -219,6 +219,10 @@ describe('drift-scan integration', () => {
     TEMP_RETRO_FILES.push(rangeSpec);
     fs.writeFileSync(rangeSpec, '# Test agent\n\nWalk rules R1..R15 in order.\n');
 
+    const staleTagSpec = tempClaudeAgentPath('story-test-json-stale-tag.md');
+    TEMP_RETRO_FILES.push(staleTagSpec);
+    fs.writeFileSync(staleTagSpec, '# Test agent\n\nApplies R94 unconditionally.\n');
+
     const result = runScanner(['--json']);
     expect(result.status).toBe(1);
     const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
@@ -229,6 +233,14 @@ describe('drift-scan integration', () => {
     expect(typeof rangeFinding?.['file']).toBe('string');
     expect(rangeFinding?.['tag']).toBeUndefined();
     expect(rangeFinding?.['path']).toBeUndefined();
+
+    const staleTagFinding = parsed.findings.find(
+      (f) => f['kind'] === 'claude-stale-tag' && f['tag'] === 'R94',
+    );
+    expect(staleTagFinding).toBeDefined();
+    expect(typeof staleTagFinding?.['file']).toBe('string');
+    expect(staleTagFinding?.['range']).toBeUndefined();
+    expect(staleTagFinding?.['path']).toBeUndefined();
   });
 
   it('clean repo produces no Check D finding after R22 mentions are marked *(hole)*', () => {

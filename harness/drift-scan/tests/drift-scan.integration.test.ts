@@ -2,9 +2,45 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { initTempRepo, writeAndCommit, cleanupTempDirs } from '../../lib/temp-git-repo.js';
+import { parseAgentSpecFrontmatter } from '../../lib/agent-spec.js';
+import {
+  checkAgentSpecRoles,
+  checkControlCompleteness,
+  extractInventoryControlPaths,
+} from '../lib/drift-parser.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const SCANNER = path.join(REPO_ROOT, 'harness', 'drift-scan', 'drift-scan.ts');
+
+const MINIMAL_CLAUDE_MD = `# CLAUDE.md\n\n## 8. Rule provenance\n\n| Tag | Rule (one-line) | Originating retro |\n| --- | --- | --- |\n| R1 | Placeholder rule | [story-fixture](docs/retrospectives/story-fixture.md) |\n`;
+
+function runScannerAt(cwd: string, extraArgs: string[] = []): SpawnSyncReturns<string> {
+  return spawnSync('npx', ['tsx', SCANNER, ...extraArgs], { cwd, encoding: 'utf8' });
+}
+
+function inventoryRow(controlPath: string): string {
+  return `| \`${controlPath}\` |\n`;
+}
+
+function buildAgentSpecFixtureRepo(): string {
+  const tmpDir = initTempRepo();
+  writeAndCommit(tmpDir, 'CLAUDE.md', MINIMAL_CLAUDE_MD, 'chore: fixture CLAUDE.md');
+  fs.mkdirSync(path.join(tmpDir, 'docs', 'plans'), { recursive: true });
+  writeAndCommit(
+    tmpDir,
+    'docs/retrospectives/story-fixture.md',
+    '# Fixture retro\n\nApplied R1.\n',
+    'chore: fixture retro backing R1',
+  );
+  writeAndCommit(
+    tmpDir,
+    'docs/harness/control-inventory.md',
+    `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}`,
+    'chore: fixture control inventory',
+  );
+  return tmpDir;
+}
 
 function runScanner(extraArgs: string[] = []): SpawnSyncReturns<string> {
   return spawnSync('npx', ['tsx', SCANNER, ...extraArgs], {
@@ -78,6 +114,44 @@ describe('drift-scan integration', () => {
     expect(result.stderr).not.toContain('retro-only:');
     expect(result.stderr).not.toContain('missing-path:');
     expect(result.stderr).not.toContain('table-only:');
+    expect(result.stderr).not.toContain('missing-role:');
+    expect(result.stderr).not.toContain('role-tools-violation:');
+    expect(result.stderr).not.toContain('unlisted-control:');
+  });
+
+  // (Gherkin scenario: real registry conforms.) In-process: composes the
+  // exported Check F functions against the live tree — the same composition
+  // runAgentSpecCheck performs inside main(); the CLI wiring itself is
+  // covered by the subprocess outline tests below.
+  // fails if a real spec false-positives (absent optional frontmatter keys
+  // trip the parser) or the committed inventory misses a real agent/command
+  // file.
+  it('real registry conforms — composed Check F functions return zero findings', () => {
+    const agentsDir = path.join(REPO_ROOT, '.claude', 'agents');
+    const commandsDir = path.join(REPO_ROOT, '.claude', 'commands');
+    const listMd = (dir: string): string[] =>
+      fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+
+    const entries = listMd(agentsDir).map((f) => {
+      const frontmatter = parseAgentSpecFrontmatter(
+        fs.readFileSync(path.join(agentsDir, f), 'utf8'),
+      );
+      return { file: `.claude/agents/${f}`, role: frontmatter.role, tools: frontmatter.tools };
+    });
+    const controlFiles = [
+      ...listMd(agentsDir).map((f) => `.claude/agents/${f}`),
+      ...listMd(commandsDir).map((f) => `.claude/commands/${f}`),
+    ];
+    const inventory = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs', 'harness', 'control-inventory.md'),
+      'utf8',
+    );
+
+    const findings = [
+      ...checkAgentSpecRoles(entries),
+      ...checkControlCompleteness(controlFiles, extractInventoryControlPaths(inventory)),
+    ];
+    expect(findings).toEqual([]);
   });
 
   // fails if --all flag handling in main() does not bypass the diff-scope
@@ -140,6 +214,24 @@ describe('drift-scan integration', () => {
         expect(typeof finding['range']).toBe('string');
         expect(finding['path']).toBeUndefined();
         expect(finding['tag']).toBeUndefined();
+      } else if (kind === 'missing-role') {
+        expect(typeof finding['detail']).toBe('string');
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['tool']).toBeUndefined();
+      } else if (kind === 'role-tools-violation') {
+        expect(typeof finding['tool']).toBe('string');
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['detail']).toBeUndefined();
+      } else if (kind === 'unlisted-control') {
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['detail']).toBeUndefined();
+        expect(finding['tool']).toBeUndefined();
       } else {
         throw new Error(`unexpected finding kind: ${String(kind)}`);
       }
@@ -248,5 +340,138 @@ describe('drift-scan integration', () => {
     expect(result.stderr).not.toContain('Check D');
     expect(result.stderr).not.toContain('claude-range:');
     expect(result.stderr).not.toContain('claude-stale-tag:');
+  });
+});
+
+describe('drift-scan Check F — agent-spec role + control completeness (temp repo)', () => {
+  const TEMP_DIRS: string[] = [];
+
+  afterEach(() => {
+    cleanupTempDirs(TEMP_DIRS);
+  });
+
+  // fails if runAgentSpecCheck is never wired into main(), or the parser
+  // silently skips a spec with no role: key (Gherkin outline row 1: agent
+  // spec without role: -> missing-role).
+  it('exits 1 and names the file + missing-role when an agent spec has no role: key', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/agents/no-role.md',
+      '---\nname: no-role\ntools: Read\n---\nBody.\n',
+      'chore: fixture agent spec without role',
+    );
+    writeAndCommit(
+      tmpDir,
+      'docs/harness/control-inventory.md',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/no-role.md')}`,
+      'chore: register no-role in inventory',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check F');
+    expect(result.stderr).toContain('missing-role');
+    expect(result.stderr).toContain('.claude/agents/no-role.md');
+  });
+
+  // fails if the parser coerces an invalid role value into a valid one
+  // instead of reporting it (Gherkin outline row 2: role: reviewer (invalid
+  // value) -> missing-role).
+  it('exits 1 and names missing-role when an agent spec has role: reviewer (invalid value)', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/agents/bad-role.md',
+      '---\nname: bad-role\ntools: Read\nrole: reviewer\n---\nBody.\n',
+      'chore: fixture agent spec with invalid role',
+    );
+    writeAndCommit(
+      tmpDir,
+      'docs/harness/control-inventory.md',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/bad-role.md')}`,
+      'chore: register bad-role in inventory',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check F');
+    expect(result.stderr).toContain('missing-role');
+    expect(result.stderr).toContain('.claude/agents/bad-role.md');
+  });
+
+  // fails if the tools invariant misses Edit, or does not distinguish judge
+  // from doer (Gherkin outline row 3: role: judge spec listing Edit ->
+  // role-tools-violation).
+  it('exits 1 and names role-tools-violation when a judge spec lists Edit', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/agents/judge-with-edit.md',
+      '---\nname: judge-with-edit\ntools: Read, Edit\nrole: judge\n---\nBody.\n',
+      'chore: fixture judge spec listing Edit',
+    );
+    writeAndCommit(
+      tmpDir,
+      'docs/harness/control-inventory.md',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/judge-with-edit.md')}`,
+      'chore: register judge-with-edit in inventory',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check F');
+    expect(result.stderr).toContain('role-tools-violation');
+    expect(result.stderr).toContain('.claude/agents/judge-with-edit.md');
+  });
+
+  // fails if the completeness diff ignores .claude/commands/ (Gherkin
+  // outline row 4: agent or command file with no inventory row ->
+  // unlisted-control).
+  it('exits 1 and names unlisted-control when a command playbook has no inventory row', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/commands/orphan-playbook.md',
+      'WHEN_TO_USE: fixture playbook with no inventory row.\n',
+      'chore: fixture orphan command playbook',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check F');
+    expect(result.stderr).toContain('unlisted-control');
+    expect(result.stderr).toContain('.claude/commands/orphan-playbook.md');
+  });
+
+  it('exits 0 when every agent spec has a valid role, no non-doer lists a mutation tool, and every file is registered', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/agents/clean-doer.md',
+      '---\nname: clean-doer\ntools: Read, Write, Edit\nrole: doer\n---\nBody.\n',
+      'chore: fixture clean doer spec',
+    );
+    writeAndCommit(
+      tmpDir,
+      '.claude/commands/clean-playbook.md',
+      'WHEN_TO_USE: fixture clean playbook.\n',
+      'chore: fixture clean command playbook',
+    );
+    writeAndCommit(
+      tmpDir,
+      'docs/harness/control-inventory.md',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/clean-doer.md')}${inventoryRow('.claude/commands/clean-playbook.md')}`,
+      'chore: register clean fixtures in inventory',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('Check F');
   });
 });

@@ -46,7 +46,7 @@ Add a small shared helper, `harness/metrics/tests/_helpers/temp-git-repo.ts`, co
 
 ## Production-code surface (R2)
 
-None. Files touched: `harness/metrics/tests/loop-metrics.integration.test.ts`, `harness/metrics/tests/usage-reader.integration.test.ts` (one test block), new `harness/metrics/tests/_helpers/temp-git-repo.ts`. No changes to `harness/metrics/loop-metrics.ts`, `harness/metrics/usage-reader.ts`, or any `src/` file.
+None. Files touched: `harness/metrics/tests/loop-metrics.integration.test.ts`, `harness/metrics/tests/usage-reader.integration.test.ts` (one test block), new `harness/metrics/tests/_helpers/temp-git-repo.ts` *(removed)* (hoisted to `harness/lib/temp-git-repo.ts` by story-ddd-2). No changes to `harness/metrics/loop-metrics.ts`, `harness/metrics/usage-reader.ts`, or any `src/` file.
 
 ## Gherkin acceptance scenarios
 

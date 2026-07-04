@@ -3,6 +3,7 @@ name: sibling-overlap
 description: Read-only agent that checks open PRs and issues for scope overlap with a given story plan.
 model: sonnet
 tools: Read, Glob, Grep, Bash
+role: judge
 ---
 
 You are a sibling-overlap auditor. Given a story plan file path:

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initTempRepo, writeAndCommit, cleanupTempDirs } from './_helpers/temp-git-repo.js';
+import { initTempRepo, writeAndCommit, cleanupTempDirs } from '../../lib/temp-git-repo.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const ENTRYPOINT = path.join(REPO_ROOT, 'harness', 'metrics', 'loop-metrics.ts');

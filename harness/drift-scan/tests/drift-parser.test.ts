@@ -9,6 +9,10 @@ import {
   extractClaudeTagRefs,
   composeClaudeDrift,
   formatJsonReport,
+  checkAgentSpecRoles,
+  checkControlCompleteness,
+  extractInventoryControlPaths,
+  type AgentSpecEntry,
 } from '../lib/drift-parser.js';
 
 const CLAUDE_MD_FIXTURE = `
@@ -380,5 +384,201 @@ describe('formatJsonReport', () => {
     const second = parsed.findings[1] as Record<string, unknown>;
     expect(second.kind).toBe('missing-path');
     expect(second.path).toBe('src/core/gone.ts');
+  });
+
+  // fails if formatJsonReport special-cases finding kinds rather than
+  // serializing generically — the new Check F kinds (missing-role,
+  // role-tools-violation, unlisted-control) must round-trip without a code
+  // change to the formatter itself (plan Risk: "formatJsonReport may
+  // special-case kinds").
+  it('emits the three new Check F finding kinds without a formatter change', () => {
+    const findings = [
+      { kind: 'missing-role' as const, file: '.claude/agents/bad.md', detail: 'absent' },
+      { kind: 'role-tools-violation' as const, file: '.claude/agents/bad.md', tool: 'Edit' },
+      { kind: 'unlisted-control' as const, file: '.claude/agents/orphan.md' },
+    ];
+    const output = formatJsonReport(findings);
+    const parsed = JSON.parse(output) as { findings: Array<Record<string, unknown>> };
+    expect(parsed.findings).toHaveLength(3);
+    expect(parsed.findings[0].kind).toBe('missing-role');
+    expect(parsed.findings[0].detail).toBe('absent');
+    expect(parsed.findings[1].kind).toBe('role-tools-violation');
+    expect(parsed.findings[1].tool).toBe('Edit');
+    expect(parsed.findings[2].kind).toBe('unlisted-control');
+  });
+});
+
+const VALID_ROLES = new Set(['doer', 'judge', 'advisor']);
+const MUTATION_TOOLS = ['Write', 'Edit', 'NotebookEdit', 'MultiEdit'];
+
+function entry(file: string, role: string | undefined, tools: string[]): AgentSpecEntry {
+  return { file, role, tools };
+}
+
+describe('checkAgentSpecRoles', () => {
+  // fails if the check does not fire when role: is entirely absent from a
+  // spec's parsed frontmatter (Gherkin outline: agent spec without role: ->
+  // missing-role).
+  it('reports missing-role when role is undefined', () => {
+    const findings = checkAgentSpecRoles([entry('.claude/agents/a.md', undefined, ['Read'])]);
+    expect(findings).toContainEqual({ kind: 'missing-role', file: '.claude/agents/a.md', detail: 'absent' });
+  });
+
+  // fails if the check accepts any string as a valid role instead of
+  // validating against the closed doer|judge|advisor set (Gherkin outline:
+  // role: reviewer (invalid value) -> missing-role).
+  it('reports missing-role with detail "invalid" when role is present but not one of doer|judge|advisor', () => {
+    const findings = checkAgentSpecRoles([entry('.claude/agents/a.md', 'reviewer', ['Read'])]);
+    expect(findings).toContainEqual({ kind: 'missing-role', file: '.claude/agents/a.md', detail: 'invalid: reviewer' });
+  });
+
+  // fails if the check does not distinguish doer from judge/advisor when
+  // scanning for mutation tools (Gherkin outline: role: judge spec listing
+  // Edit -> role-tools-violation).
+  it('reports role-tools-violation when a judge spec lists Edit', () => {
+    const findings = checkAgentSpecRoles([entry('.claude/agents/a.md', 'judge', ['Read', 'Edit'])]);
+    expect(findings).toContainEqual({ kind: 'role-tools-violation', file: '.claude/agents/a.md', tool: 'Edit' });
+  });
+
+  // fails if the check misses NotebookEdit or MultiEdit — the plan's stated
+  // failure mode ("the tools invariant misses NotebookEdit/MultiEdit").
+  it('reports role-tools-violation for NotebookEdit and MultiEdit on a non-doer spec', () => {
+    const findings = checkAgentSpecRoles([
+      entry('.claude/agents/a.md', 'advisor', ['NotebookEdit', 'MultiEdit']),
+    ]);
+    const tools = findings.filter((f) => f.kind === 'role-tools-violation').map((f) => (f as { tool: string }).tool);
+    expect(tools).toContain('NotebookEdit');
+    expect(tools).toContain('MultiEdit');
+  });
+
+  // fails if a doer spec listing Write/Edit is incorrectly flagged — doers
+  // are the only role allowed file-mutation tools (Gherkin: real registry
+  // conforms — sonnet-implementer carries Write, Edit).
+  it('does not flag a doer spec listing Write and Edit', () => {
+    const findings = checkAgentSpecRoles([
+      entry('.claude/agents/sonnet-implementer.md', 'doer', ['Read', 'Write', 'Edit']),
+    ]);
+    expect(findings).toHaveLength(0);
+  });
+
+  // fails if a judge/advisor spec keeping Bash (the documented residual) is
+  // incorrectly flagged — Bash is not a file-mutation tool per the model
+  // note's invariant 2.
+  it('does not flag a judge spec that keeps Bash', () => {
+    const findings = checkAgentSpecRoles([entry('.claude/agents/a.md', 'judge', ['Read', 'Grep', 'Bash'])]);
+    expect(findings).toHaveLength(0);
+  });
+
+  // property: for any role×tools combination, a role-tools-violation finding
+  // exists for a mutation tool iff the role is not doer — the exact
+  // invariant the model note declares (Check F: role-tools-violation).
+  it('property: violation exists for a mutation tool iff role is not doer', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...VALID_ROLES, 'reviewer', undefined),
+        fc.uniqueArray(fc.constantFrom(...MUTATION_TOOLS, 'Read', 'Grep', 'Bash'), { maxLength: 7 }),
+        (role, tools) => {
+          const findings = checkAgentSpecRoles([entry('.claude/agents/x.md', role, tools)]);
+          const violationTools = new Set(
+            findings.filter((f) => f.kind === 'role-tools-violation').map((f) => (f as { tool: string }).tool),
+          );
+          for (const tool of tools) {
+            const isMutationTool = MUTATION_TOOLS.includes(tool);
+            const isDoer = role === 'doer';
+            const shouldViolate = isMutationTool && !isDoer;
+            if (violationTools.has(tool) !== shouldViolate) return false;
+          }
+          return true;
+        },
+      ),
+    );
+  });
+});
+
+describe('checkControlCompleteness', () => {
+  // fails if a `.claude/agents/*.md` file with no inventory row is not
+  // reported (Gherkin outline: agent/command file with no inventory row ->
+  // unlisted-control).
+  it('reports unlisted-control for an agent file absent from the inventory', () => {
+    const findings = checkControlCompleteness(
+      ['.claude/agents/orphan.md'],
+      new Set(['.claude/agents/some-other-agent.md']),
+    );
+    expect(findings).toContainEqual({ kind: 'unlisted-control', file: '.claude/agents/orphan.md' });
+  });
+
+  // fails if the completeness diff silently skips .claude/commands/ files —
+  // the plan's stated failure mode ("the completeness diff ignores
+  // .claude/commands/").
+  it('reports unlisted-control for a command file absent from the inventory', () => {
+    const findings = checkControlCompleteness(
+      ['.claude/commands/orphan-playbook.md'],
+      new Set(['.claude/commands/some-other-command.md']),
+    );
+    expect(findings).toContainEqual({ kind: 'unlisted-control', file: '.claude/commands/orphan-playbook.md' });
+  });
+
+  it('reports nothing when every file has an inventory entry', () => {
+    const findings = checkControlCompleteness(
+      ['.claude/agents/known.md'],
+      new Set(['.claude/agents/known.md']),
+    );
+    expect(findings).toHaveLength(0);
+  });
+});
+
+describe('extractInventoryControlPaths', () => {
+  // fails if the inventory-path scan misses a `.claude/agents/*.md` path
+  // fenced in backticks in the "Where" column — the completeness diff would
+  // then false-positive every registered agent as unlisted.
+  it('extracts .claude/agents/ paths fenced in backticks', () => {
+    const inventory = '| sonnet-implementer | `.claude/agents/sonnet-implementer.md` | doer |\n';
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/agents/sonnet-implementer.md')).toBe(true);
+  });
+
+  // fails if the scan silently skips .claude/commands/ rows — the plan's
+  // stated failure mode applied to the extraction side of the diff.
+  it('extracts .claude/commands/ paths fenced in backticks', () => {
+    const inventory = '| model-session | `.claude/commands/model-session.md` | playbook |\n';
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/commands/model-session.md')).toBe(true);
+  });
+
+  it('returns an empty set when no control paths are present', () => {
+    expect(extractInventoryControlPaths('# No controls here.\n').size).toBe(0);
+  });
+
+  // fails if the pattern also greedily matches an unrelated backtick-fenced
+  // path (e.g. a CLAUDE.md § 8 reference) — only .claude/agents|commands
+  // paths belong in the completeness diff.
+  it('does not match unrelated backtick-fenced paths', () => {
+    const inventory = '| R1 | `docs/retrospectives/story-2.2.md` | guide |\n';
+    expect(extractInventoryControlPaths(inventory).size).toBe(0);
+  });
+
+  // fails if the scan matches paths mentioned in prose or a Gaps-section
+  // bullet — a future Gaps note naming an unregistered file in backticks
+  // would silently satisfy the completeness diff without a real row,
+  // breaking Check F's enforced-registry property.
+  it('ignores control paths mentioned outside table rows', () => {
+    const inventory = [
+      'The file `.claude/agents/prose-mention.md` is discussed here.',
+      '- Gap: `.claude/commands/gap-example.md` has no paired sensor.',
+      '| known | `.claude/agents/known.md` | judge |',
+    ].join('\n');
+    const paths = extractInventoryControlPaths(inventory);
+    expect(paths.has('.claude/agents/prose-mention.md')).toBe(false);
+    expect(paths.has('.claude/commands/gap-example.md')).toBe(false);
+    expect(paths.has('.claude/agents/known.md')).toBe(true);
+  });
+
+  // fails if the pattern admits `..` traversal segments — sibling
+  // extractPlanSurfacePaths rejects them (house precedent). The extracted
+  // set is membership-only today; the guard keeps the invariant if a future
+  // caller resolves these paths against the filesystem.
+  it('rejects inventory paths containing traversal segments', () => {
+    const inventory = '| evil | `.claude/agents/../../../etc/passwd.md` | doer |\n';
+    expect(extractInventoryControlPaths(inventory).size).toBe(0);
   });
 });

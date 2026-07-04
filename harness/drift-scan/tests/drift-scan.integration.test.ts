@@ -175,4 +175,29 @@ describe('drift-scan integration', () => {
     expect(result.stderr).toContain('Check D');
     expect(result.stderr).toContain('R1..R15');
   });
+
+  // fails if extractClaudeTagRefs/composeClaudeDrift doesn't surface a
+  // non-§8 reference (Gherkin scenario 2: a tag not in § 8 fails the scan).
+  it('exits 1 and names R95 as a stale tag when a .claude/ spec cites it', () => {
+    const specFile = tempClaudeAgentPath('story-test-r95.md');
+    TEMP_RETRO_FILES.push(specFile);
+    fs.writeFileSync(specFile, '# Test agent\n\nApplies R95 unconditionally.\n');
+
+    const result = runScanner();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check D');
+    expect(result.stderr).toContain('R95');
+  });
+
+  // fails if the suppression regex in extractClaudeTagRefs is missing/too
+  // narrow (the R22-hole mentions would then break a clean scan) (Gherkin
+  // scenario 3: *(hole)* marker suppresses a deliberate non-§8 reference).
+  it('does not flag R95 when marked *(hole)*', () => {
+    const specFile = tempClaudeAgentPath('story-test-r95-hole.md');
+    TEMP_RETRO_FILES.push(specFile);
+    fs.writeFileSync(specFile, '# Test agent\n\nApplies R95 *(hole)* unconditionally.\n');
+
+    const result = runScanner();
+    expect(result.stderr).not.toContain('R95');
+  });
 });

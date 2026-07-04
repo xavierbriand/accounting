@@ -6,6 +6,8 @@ import {
   composeDrift,
   extractPlanSurfacePaths,
   extractEnumeratedRuleRanges,
+  extractClaudeTagRefs,
+  composeClaudeDrift,
   formatJsonReport,
 } from '../lib/drift-parser.js';
 
@@ -272,6 +274,88 @@ describe('extractEnumeratedRuleRanges', () => {
 
   it('does not match a regex literal like R[0-9]+', () => {
     expect(extractEnumeratedRuleRanges('grep -nE \'^\\| R[0-9]+ \\|\'')).toHaveLength(0);
+  });
+});
+
+describe('extractClaudeTagRefs', () => {
+  // fails if extractClaudeTagRefs misses a bare R-tag reference in a spec —
+  // Check D would then silently fail to surface a non-§8 tag (Gherkin
+  // scenario 2: a tag not in § 8 fails the scan — parser side).
+  it('extracts bare R-tag references', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R95 (no tombstone row).');
+    expect(tags.has('R95')).toBe(true);
+  });
+
+  it('returns empty set when there are no R-tag references', () => {
+    expect(extractClaudeTagRefs('No tags mentioned here.').size).toBe(0);
+  });
+
+  // fails if the *(hole)* suppression regex is missing or too narrow — the
+  // R22-hole mentions h10a authored would then break a clean scan (Gherkin
+  // scenario 3: *(hole)* marker suppresses a deliberate non-§8 reference).
+  it('suppresses tags with *(hole)* marker', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R22 *(hole)* (no tombstone row).');
+    expect(tags.has('R22')).toBe(false);
+  });
+
+  it('suppresses tags with _(hole)_ marker', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R22 _(hole)_ (no tombstone row).');
+    expect(tags.has('R22')).toBe(false);
+  });
+
+  it('suppresses tags with (Hole) case variant', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R22 (Hole) (no tombstone row).');
+    expect(tags.has('R22')).toBe(false);
+  });
+
+  it('does not suppress a different tag that appears without a hole marker', () => {
+    const tags = extractClaudeTagRefs('R22 *(hole)*\nR13 is applied.');
+    expect(tags.has('R22')).toBe(false);
+    expect(tags.has('R13')).toBe(true);
+  });
+
+  it('does not match a regex literal like R[0-9]+', () => {
+    expect(extractClaudeTagRefs("grep -nE '^\\| R[0-9]+ \\|'").size).toBe(0);
+  });
+});
+
+describe('composeClaudeDrift', () => {
+  it('reports tag refs not present in the § 8 set', () => {
+    const sectionEight = new Set(['R1', 'R2', 'R13']);
+    const refs = new Set(['R1', 'R13', 'R95']);
+    const result = composeClaudeDrift(refs, sectionEight);
+    expect(result).toContain('R95');
+    expect(result.size).toBe(1);
+  });
+
+  it('returns empty set when all refs are live § 8 tags', () => {
+    const sectionEight = new Set(['R1', 'R2']);
+    const refs = new Set(['R1', 'R2']);
+    expect(composeClaudeDrift(refs, sectionEight).size).toBe(0);
+  });
+
+  it('property: every element of the result is a ref not in sectionEightTags', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 1, max: 50 }).map((n) => `R${n}`)).map(
+          (arr) => new Set(arr),
+        ),
+        fc.array(fc.integer({ min: 1, max: 50 }).map((n) => `R${n}`)).map(
+          (arr) => new Set(arr),
+        ),
+        (refs, sectionEightTags) => {
+          const result = composeClaudeDrift(refs, sectionEightTags);
+          for (const tag of result) {
+            if (!refs.has(tag)) return false;
+            if (sectionEightTags.has(tag)) return false;
+          }
+          for (const tag of refs) {
+            if (!sectionEightTags.has(tag) && !result.has(tag)) return false;
+          }
+          return true;
+        },
+      ),
+    );
   });
 });
 

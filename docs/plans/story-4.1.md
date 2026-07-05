@@ -167,21 +167,28 @@ Feature file: `tests/features/audit-trail.feature`. The `correct`/read surfaces 
 is observed by inspecting the `domain_events` table after a real ingest.
 
 ```gherkin
-Scenario: Ingesting a statement records a TransactionIngested event
-  Given a fresh migrated database and a valid single-row BPCE statement
-  When I ingest it non-interactively
-  Then the audit trail holds one TransactionIngested event
-  And its payload lists the committed transaction id and source account
+Scenario: Committing an ingest batch records a TransactionIngested event
+  Given a fresh migrated database and a valid BPCE statement
+  When I ingest it and confirm the batch
+  Then the audit trail holds a TransactionIngested event
+  And its payload lists the committed transaction ids and source account
 ```
 - **fails if:** the ingest path does not call `recorder.record(...)` after `saveBatch` succeeds
   (guards the B1 wiring in `commitBatch` + the `program.ts` composition-root construction).
 - **classification:** **subprocess** (real CLI via `program.ts`, real SQLite) — this is the R4
   composition-root test.
-- **fixture note (R6/R7 honesty):** the existing `ingest-end-to-end-wiring.test.ts` uses a
-  low-confidence fixture and asserts **exit 2** — it never reaches `commitBatch`. This scenario
-  needs a **new single-row fixture whose row auto-tags high-confidence** (matches an auto-tag rule
-  in the stub `accounting.yaml`) so `ingest --non-interactive` reaches a successful commit
-  (**exit 0**) and thus `record()`. Without that, the `fails if` clause is never exercised.
+- **commit-path note (Phase-3 discovery — R6/R7 honesty).** `commitBatch`/`saveBatch` is reached
+  **only via the interactive confirm path** (`ingest-command.ts:164`, after
+  `prompt.confirmBatch`). `runNonInteractive` (taken for `--non-interactive` **or** `--json`)
+  prints a preview and exits **without persisting** — it never calls `commitBatch` for any fixture
+  or confidence level. So the acceptance test drives the **interactive** path via
+  `--scripted-prompts '[…confirmBatch:true…]'` (NODE_ENV=test), reusing the existing
+  `bpce-valid.csv` fixture — **no new fixture needed**. Precedent: subprocess+scripted+commit in
+  `tests/integration/cli/ingest-remember-rule-wiring.test.ts`; in-process real-infra commit in
+  `tests/integration/cli/ingest-commit.test.ts`. The `runNonInteractive`-never-commits behavior is
+  **pre-existing and out of scope** for 4.1 (see Risks). This corrects the plan's earlier
+  `--non-interactive` wording (adopted-finding #2 was a fixture problem; Phase 3 found the deeper
+  path gap).
 
 ```gherkin
 Scenario: A failed batch commit records no event
@@ -208,7 +215,7 @@ Full lane, target 6–10 commits (R13); one slice = one behaviour. Subjects carr
 1. `test/feat(db): story-4.1 domain_events append-only table — migration 005` — migration + idempotent-apply integration test, `user_version = 5`.
 2. `test/feat(core): story-4.1 TransactionIngested event + DomainEventRecorder port` — Core value object + port; unit test on event shape + a Core-purity assertion (no forbidden imports).
 3. `test/feat(infra): story-4.1 SqliteDomainEventRecorder append-only, ordered, UTC-stamped` — integration test (real SQLite): record two events → strictly increasing `seq`, UTC `recorded_at`, JSON payload round-trips (no raw PII); insert-only.
-4. `test/feat(cli): story-4.1 ingest records TransactionIngested on successful commit` — **subprocess** acceptance (R4): new high-confidence single-row fixture → exit 0 → one `domain_events` row; wire `SqliteDomainEventRecorder` through `program.ts` + thread `sourceAccount`/recorder into `commitBatch`.
+4. `test/feat(cli): story-4.1 ingest records TransactionIngested on successful commit` — **subprocess** acceptance (R4) via the interactive confirm path (`--scripted-prompts` confirmBatch, NODE_ENV=test), reusing `bpce-valid.csv` → a `domain_events` row; wire `SqliteDomainEventRecorder` through `program.ts` + thread `sourceAccount`/recorder into `commitBatch`. Also an **in-process** real-infra assertion (following `ingest-commit.test.ts`) that `record()` fires on the successful commit with the right ids.
 5. `test/feat(cli): story-4.1 no event on failed batch commit` — **in-process** `commitBatch` unit with a failing `transactionRepository` stub + spy recorder → recorder never called (the success-ordering guard, unbundled from slice 4).
 6. `refactor(events): story-4.1 <cleanup>` — or empty slot with justification (R11) if none needed.
 7. `chore(retro): story-4.1 Keep/Change/Try + status fragment` — retro + `docs/status.d/` fragment (advances the "Next" line → status.md edit; R17).
@@ -223,6 +230,7 @@ Full lane, target 6–10 commits (R13); one slice = one behaviour. Subjects carr
 | Migration ordering quirk (001/002 don't bump `user_version`; 003/004 do) | 005 sets `PRAGMA user_version = 5` like 003/004; idempotent-apply test asserts no re-run. |
 | PII leaking into `payload` | Payload carries only `transactionIds` + `sourceAccount` (account id, not a name/IBAN); no descriptions. Assert in the recorder test. |
 | `program.ts` regression (R4) | Composition-root subprocess acceptance test exercises the wired recorder end-to-end. |
+| **Pre-existing gap (Phase-3 discovery):** `ingest --non-interactive`/`--json` never persists (`runNonInteractive` skips `commitBatch`) | **Out of scope** for 4.1 — this story only wires the recorder into the *existing* `commitBatch` (interactive path). Acceptance test uses the interactive scripted-confirm path accordingly. Filed as [#181](https://github.com/xavierbriand/accounting/issues/181) (bug) per user decision; not silently ridden into this story. |
 
 Deferred follow-ups each get a GitHub issue at Phase-2 tagging.
 

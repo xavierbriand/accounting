@@ -62,7 +62,7 @@ describe('TransactionIngested — value object shape', () => {
 describe('DomainEventRecorder — port shape', () => {
   it('a conforming implementation returns Result<void>', () => {
     const recorder: DomainEventRecorder = {
-      record: (_event: DomainEvent): Result<void> => Result.ok(),
+      record: (): Result<void> => Result.ok(),
     };
 
     const result = recorder.record({

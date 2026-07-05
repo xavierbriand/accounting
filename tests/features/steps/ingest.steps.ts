@@ -12,6 +12,7 @@ import { IdempotencyService } from '../../../src/core/ingest/idempotency-service
 import { TransactionBuilder } from '../../../src/core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../../../src/infra/db/repositories/sqlite-hash-repository.js';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
+import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { NodeSqliteSnapshotService } from '../../../src/infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../../../src/infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../../../src/infra/crypto/node-uuid-gen.js';
@@ -106,6 +107,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
     new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen);
   const transactionRepository = new SqliteTransactionRepository(db);
   const snapshotService = new NodeSqliteSnapshotService(db);
+  const domainEventRecorder = new SqliteDomainEventRecorder(db);
 
   const sink = new PassThrough();
   sink.resume();
@@ -131,6 +133,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
       snapshotService,
       dbPath: state.dbPath!,
       configWriter: { appendAutoTagRules: async () => Result.ok() },
+      domainEventRecorder,
     },
   );
 

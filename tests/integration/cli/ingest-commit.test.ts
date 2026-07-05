@@ -22,6 +22,7 @@ import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../../src/cli/commands/ingest-command.js';
 import { runMigrations } from '../../../src/infra/db/migrator.js';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
+import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { SqliteHashRepository } from '../../../src/infra/db/repositories/sqlite-hash-repository.js';
 import { NodeSqliteSnapshotService } from '../../../src/infra/db/node-sqlite-snapshot-service.js';
 import { NodeCsvParser } from '../../../src/infra/csv/node-csv-parser.js';
@@ -36,6 +37,7 @@ import type { AppConfig } from '@core/config/app-config.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { BatchWriteOutcome } from '@core/ports/transaction-repository.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
+import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
 
 function makeNoOpConfigWriter(): ConfigWriter {
   return { appendAutoTagRules: async () => Result.ok() };
@@ -74,6 +76,7 @@ function makeRealDeps(
   csvPath: string,
   snapshotOverride?: SnapshotService,
   repoOverride?: { saveBatch: IngestCommandDeps['transactionRepository']['saveBatch'] },
+  recorderOverride?: DomainEventRecorder,
 ): { deps: IngestCommandDeps; stdout: Writable & { captured: string }; stderr: Writable & { captured: string }; exitCodes: number[] } {
   const stdout = makeCapture();
   const stderr = makeCapture();
@@ -85,6 +88,7 @@ function makeRealDeps(
   const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
   const mainAccount = { id: 'main-account', type: 'bank' as const, filenamePrefix: 'bpce-valid' };
   const snapshotService = snapshotOverride ?? new NodeSqliteSnapshotService(db);
+  const domainEventRecorder = recorderOverride ?? new SqliteDomainEventRecorder(db);
 
   const config: AppConfig = {
     dbPath,
@@ -116,6 +120,7 @@ function makeRealDeps(
     snapshotService,
     dbPath,
     configWriter: makeNoOpConfigWriter(),
+    domainEventRecorder,
   };
 
   return { deps, stdout, stderr, exitCodes };

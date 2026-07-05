@@ -7,6 +7,7 @@ import type { AccountConfig, AppConfig } from '@core/config/app-config.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
+import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pick-source-account.js';
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
@@ -40,6 +41,7 @@ export interface IngestCommandDeps {
   readonly snapshotService: SnapshotService;
   readonly dbPath: string;
   readonly configWriter: ConfigWriter;
+  readonly domainEventRecorder: DomainEventRecorder;
 }
 
 function writeln(stream: Writable, msg: string): void {
@@ -93,7 +95,7 @@ export async function runIngestCommand(
   opts: IngestCommandOptions,
   deps: IngestCommandDeps,
 ): Promise<void> {
-  const { config, idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath, configWriter } = deps;
+  const { config, idempotencyService, transactionBuilder, prompt, stdout, stderr, exitCode, transactionRepository, snapshotService, dbPath, configWriter, domainEventRecorder } = deps;
 
   const parsed = await loadAndParse(opts, deps);
   if (parsed === null) return;
@@ -161,14 +163,15 @@ export async function runIngestCommand(
     }
   }
 
-  await commitBatch(resolvedOutcomes, { transactionRepository, snapshotService, dbPath, stderr, exitCode });
+  await commitBatch(resolvedOutcomes, account.id, { transactionRepository, snapshotService, dbPath, stderr, exitCode, domainEventRecorder });
 }
 
 async function commitBatch(
   outcomes: readonly BuildOutcome[],
-  deps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'stderr' | 'exitCode'>,
+  sourceAccount: string,
+  deps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'stderr' | 'exitCode' | 'domainEventRecorder'>,
 ): Promise<void> {
-  const { transactionRepository, snapshotService, dbPath, stderr, exitCode } = deps;
+  const { transactionRepository, snapshotService, dbPath, stderr, exitCode, domainEventRecorder } = deps;
   const snapshotPath = dbPath + '.bak';
 
   const snapResult = await snapshotService.create(dbPath, snapshotPath);
@@ -187,6 +190,18 @@ async function commitBatch(
     writeln(stderr, `Snapshot retained at ${snapshotPath} for recovery.`);
     exitCode(4);
     return;
+  }
+
+  // Recorded only after saveBatch succeeds (B1 app-boundary wiring, story-4.1) — a
+  // failed record() does not roll back the already-committed batch; the rows are
+  // durable, so we warn rather than fail (mirrors the snapshot-removal pattern below).
+  const recordResult = domainEventRecorder.record({
+    type: 'TransactionIngested',
+    transactionIds: outcomes.map((o) => o.transaction.id),
+    sourceAccount,
+  });
+  if (recordResult.isFailure) {
+    writeln(stderr, `Warning: committed successfully but could not record the audit event: ${recordResult.error}`);
   }
 
   const removeResult = await snapshotService.remove(snapshotPath);

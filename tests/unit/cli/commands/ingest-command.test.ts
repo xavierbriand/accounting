@@ -11,6 +11,7 @@ import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import { Money } from '@core/shared/money.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
+import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
 
 // fails if: the summary table is not written to stdout,
 //           or the interactive loop is skipped for low-confidence items,
@@ -90,6 +91,10 @@ function makeNoOpConfigWriterStub(): ConfigWriter {
   };
 }
 
+function makeNoOpDomainEventRecorder(): DomainEventRecorder {
+  return { record: vi.fn().mockReturnValue(Result.ok()) };
+}
+
 // No-op InteractivePrompter stub that satisfies the updated interface.
 // Used in tests that don't exercise confirmRememberRule.
 const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
@@ -134,6 +139,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     const opts: IngestCommandOptions = {
@@ -184,6 +190,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -220,6 +227,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -256,6 +264,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -285,6 +294,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/orphan.csv', nonInteractive: false, json: false }, deps);
@@ -339,6 +349,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -401,6 +412,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
       ...overrides,
     };
 
@@ -567,6 +579,7 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
@@ -634,6 +647,7 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter,
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     return { deps, stdout, stderr, exitCodes, saveBatchMock };

@@ -8,6 +8,7 @@ import { IdempotencyService } from '../core/ingest/idempotency-service.js';
 import { TransactionBuilder } from '../core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../infra/db/repositories/sqlite-hash-repository.js';
 import { SqliteTransactionRepository } from '../infra/db/repositories/sqlite-transaction-repo.js';
+import { SqliteDomainEventRecorder } from '../infra/db/repositories/sqlite-domain-event-recorder.js';
 import { NodeSqliteSnapshotService } from '../infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../infra/crypto/node-uuid-gen.js';
@@ -146,6 +147,7 @@ program
       new TransactionBuilder(accounts, config.autoTagRules, nodeUuidGen);
     const transactionRepository = new SqliteTransactionRepository(db);
     const snapshotService = new NodeSqliteSnapshotService(db);
+    const domainEventRecorder = new SqliteDomainEventRecorder(db);
 
     await runIngestCommand(
       { file: options.file, nonInteractive: options.nonInteractive, json: options.json },
@@ -164,6 +166,7 @@ program
         snapshotService,
         dbPath: resolvedDb,
         configWriter,
+        domainEventRecorder,
       },
     );
   });

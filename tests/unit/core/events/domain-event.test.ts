@@ -21,8 +21,8 @@ const __dirname = path.dirname(__filename);
 
 const FORBIDDEN_IMPORT_PATTERNS = [
   /from ['"]better-sqlite3['"]/,
-  /from ['"]fs['"]/,
-  /from ['"]path['"]/,
+  /from ['"](?:node:)?fs['"]/,
+  /from ['"](?:node:)?path['"]/,
   /from ['"]commander['"]/,
   /require\(['"]better-sqlite3['"]\)/,
   /new Date\(/,

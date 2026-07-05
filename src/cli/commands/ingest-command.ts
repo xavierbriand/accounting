@@ -201,7 +201,10 @@ async function commitBatch(
     sourceAccount,
   });
   if (recordResult.isFailure) {
-    writeln(stderr, `Warning: committed successfully but could not record the audit event: ${recordResult.error}`);
+    // sanitizeSqlError: the recorder returns String(SqliteError) on failure, which can
+    // embed hex-like fingerprint tokens — redact before stderr, same as the saveBatch
+    // branch above (P2 review, security-checklist PII hygiene).
+    writeln(stderr, `Warning: committed successfully but could not record the audit event: ${sanitizeSqlError(recordResult.error)}`);
   }
 
   const removeResult = await snapshotService.remove(snapshotPath);

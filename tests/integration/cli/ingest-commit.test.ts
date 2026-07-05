@@ -154,6 +154,18 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     const nullHashCount = (db.prepare('SELECT COUNT(*) as n FROM transactions WHERE idempotency_hash IS NULL').get() as { n: number }).n;
     expect(nullHashCount).toBe(0);
 
+    // Real-infra audit trail: exactly one batch-level TransactionIngested event,
+    // recorded via the real SqliteDomainEventRecorder after the successful commit
+    // (story-4.1 B1 wiring — in-process real-infra layer between the spy-based unit
+    // test and the subprocess acceptance test).
+    const events = db.prepare('SELECT event_type, payload FROM domain_events ORDER BY seq').all() as { event_type: string; payload: string }[];
+    expect(events).toHaveLength(1);
+    expect(events[0].event_type).toBe('TransactionIngested');
+    const committedIds = (db.prepare('SELECT id FROM transactions ORDER BY id').all() as { id: string }[]).map((r) => r.id);
+    const eventPayload = JSON.parse(events[0].payload) as { transactionIds: string[]; sourceAccount: string };
+    expect([...eventPayload.transactionIds].sort()).toEqual(committedIds);
+    expect(eventPayload.sourceAccount).toBe('main-account');
+
     // Snapshot removed on success
     expect(fs.existsSync(snapshotPath)).toBe(false);
 

@@ -190,17 +190,17 @@ Scenario: Committing an ingest batch records a TransactionIngested event
   `--non-interactive` wording (adopted-finding #2 was a fixture problem; Phase 3 found the deeper
   path gap).
 
-```gherkin
-Scenario: A failed batch commit records no event
-  Given a fresh migrated database
-  And a statement whose commit will fail (simulated saveBatch failure)
-  When I run the ingest commit
-  Then no event is recorded in the audit trail
-```
+**In-process ordering guard (unit spec — not a quickpickle feature).** *No event is recorded on a
+failed batch commit:* given a failing `transactionRepository` stub (saveBatch → `Result.fail`) and
+a spy recorder, running `commitBatch` records **no** event (`recorder.record` never called).
+
 - **fails if:** `record(...)` is called before/independently of `saveBatch` success (guards the
   "only on success" ordering in `commitBatch`).
 - **classification:** **in-process** unit on `commitBatch` with a failing `transactionRepository`
-  stub + a spy recorder (no subprocess — a pure ordering assertion).
+  stub + a spy recorder (no subprocess — a pure ordering assertion). Lives as a unit test
+  (`ingest-command.test.ts` case (f)), **not** a `.feature` scenario — deliberately kept out of
+  Gherkin because a commit-failure is best simulated with an in-process stub, not driven through
+  the CLI.
 
 Store-level append-only + ordering are covered by an **integration** test on
 `SqliteDomainEventRecorder` (see Verification plan), not a Gherkin scenario (they assert on Infra
@@ -274,6 +274,22 @@ the actionable ones:
 | 9 | P3: migration SQL field-comment necessity | **ACKNOWLEDGE** | Phase-4 comment-necessity check (per engineering-standards § Style). Comments kept brief and label-style, mirroring 002/004. |
 
 No un-tagged findings; the one DEFER links [#180](https://github.com/xavierbriand/accounting/issues/180).
+
+### Phase 4 (code-reviewer + ddd-modeler Mode B) dispositions
+
+`ddd-modeler` Mode B: **0 hard violations** (Core purity, no-base-class, timestamp-boundary,
+PII-free payload, vocabulary all conformant). `code-reviewer`: 4 findings + 3 soft.
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| P4-1 | P2: `record()` failure error written to stderr without `sanitizeSqlError` (unlike sibling `saveBatch` branch) | **FIX-NOW** | [79615d4] wrapped in `sanitizeSqlError`. |
+| P4-2 | P1/R2: plan promised an in-process real-infra "record fires" assertion in `ingest-commit.test.ts`; not delivered (test (g) uses a spy; subprocess covers e2e) | **FIX-NOW** | [79615d4] added the real-infra `domain_events` assertion; slice-4 claim below corrected. |
+| P4-3 | P3 soft: `FORBIDDEN_IMPORT_PATTERNS` textual regex misses `node:fs`/`node:path` | **FIX-NOW** | [79615d4] regex now matches optional `node:` prefix. |
+| P4-4 | P3: migration-004/hash-repo test loosening (`toBe(4)`→`>=4`) bundled into slice-4 feature commit | **ACKNOWLEDGE** | Each edit narrow, commented, justified (migration-005 fallout); not worth a history rewrite. Retro Change: version-fallout tests should be their own `chore:` commit. |
+| P4-5 | P3 soft: `audit-trail.feature` embeds inline `#` `fails if` comments — house-style first | **ACKNOWLEDGE** | Valid Gherkin; retro Try: standardize `fails if` prose in step docstrings. |
+| P4-6 | P3 soft: recorder `catch` loses `Error`/stack via `String(err)` | **ACKNOWLEDGE** | Consistent with existing repos (house pattern). |
+| P4-7 | ddd-modeler: `TransactionIngested.transactionIds` vs modelled `TransactionCorrected.producedTransactionIds` (family naming) | **ACKNOWLEDGE** | Kept `transactionIds` — clearer for an event with no "target"; no consumer exists; `TransactionCorrected` not yet built. Ratify family convention at 4.2 with both events concrete. Retro Change. |
+| P4-8 | ddd-modeler: `sourceAccount` not in the 4.0 note's field list | **ACKNOWLEDGE** | Composed from established "account" vocabulary; account id, not a new domain noun; no glossary edit (R25 clean). |
 
 ## DoR checklist
 

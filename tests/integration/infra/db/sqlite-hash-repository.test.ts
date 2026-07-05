@@ -35,13 +35,15 @@ function seedHashes(db: Database.Database, hashes: string[]): void {
 }
 
 describe('migration 003 (idempotency_hash column) + migration 004 (NOT NULL)', () => {
-  it('adds the idempotency_hash column on a fresh DB (user_version 0→4 after all migrations)', () => {
+  it('adds the idempotency_hash column on a fresh DB (user_version >= 4 after all migrations)', () => {
     // fails if: migration 003 does not exist, or the migrator skips it
-    // Note: full migration run now goes to user_version 4 (migration 004 tightens NOT NULL)
+    // Note: full migration run now goes to user_version >= 4 (migration 004 tightens
+    // NOT NULL); asserting >= 4 rather than === 4 tolerates later migrations (e.g. 005
+    // domain_events, story-4.1) — this test targets 003/004's own behavior.
     const db = freshDb();
     runMigrations(db);
     const version = db.pragma('user_version', { simple: true }) as number;
-    expect(version).toBe(4);
+    expect(version).toBeGreaterThanOrEqual(4);
 
     // Column must exist and be NOT NULL (migration 004)
     const cols = db.pragma('table_info(transactions)') as { name: string; notnull: number }[];
@@ -51,14 +53,15 @@ describe('migration 003 (idempotency_hash column) + migration 004 (NOT NULL)', (
     db.close();
   });
 
-  it('re-running migrator is a no-op (user_version stays 4 after two runs)', () => {
+  it('re-running migrator is a no-op (user_version stable after two runs)', () => {
     // fails if: the migrator does not gate on user_version — SQLite would throw
     // "duplicate column name: idempotency_hash" if ALTER TABLE fired twice
     const db = freshDb();
-    runMigrations(db); // first run: 0→4
+    runMigrations(db); // first run: 0 -> latest
+    const versionAfterFirstRun = db.pragma('user_version', { simple: true });
     expect(() => runMigrations(db)).not.toThrow(); // second run: no-op
     const version = db.pragma('user_version', { simple: true }) as number;
-    expect(version).toBe(4);
+    expect(version).toBe(versionAfterFirstRun);
     db.close();
   });
 });

@@ -8,8 +8,8 @@ Authoritative source for "where we are." [CLAUDE.md § 1](../CLAUDE.md) points h
 - **Epic 2** — complete. Stories 2.1–2.5 (Ingest + Tagging + Commit) shipped.
 - **Epic 3** — **complete.** Stories 3.1 (Versioned Split Rules) + 3.2 (Buffer State Reader) + 3.3 (Recurring Cost Forecast) + 3.4 (Safe Monthly Transfer Calculator) + 3.5 (Status CLI Command) shipped.
 - **Refactor epic (Epic M-A)** — story-maint-01 through story-maint-16 shipped.
-- **Epic 4** (Trust, Transparency & Lifecycle — corrections, audit trail, dissolution) — **defined** (story-4.0, Phase-0 model note + glossary + slices 4.1–4.5). Implementation not started.
-- **Next:** **story-4.1** — `DomainEventRecorder` port + append-only event store + first event (`TransactionIngested`); ships the FR23 spine that unblocks the rest of Epic 4 and Epic-5 Story 5.4. **Epic 5** (Year-in-Review & Annual Planner) scaffolded — Stories 5.1 / 5.2a / 5.2b / 5.3 are read-only and unblocked, but Story 5.4 sequences after FR23 (Audit Trail) lands. See [epics.md](epics.md).
+- **Epic 4** (Trust, Transparency & Lifecycle — corrections, audit trail, dissolution) — **defined** (story-4.0) + **story-4.1 shipped**: the FR23 audit-trail spine — `DomainEventRecorder` port + append-only `domain_events` store + first event (`TransactionIngested`), recorded at the app boundary (B1) on ingest commit. Closes #155.
+- **Next:** **story-4.2** — Correction (reverse-and-correct): the `correct` command writes a reversal + a correcting entry (original never mutated) and emits `TransactionCorrected` via the 4.1 recorder. Depends on 4.1. **Epic 5** (Year-in-Review & Annual Planner) scaffolded — Stories 5.1 / 5.2a / 5.2b / 5.3 are read-only and unblocked, but Story 5.4 sequences after FR23 (Audit Trail) completes (needs 4.1 + the `ConfigChanged` event from 4.5). See [epics.md](epics.md).
 
 ### Non-product initiatives
 

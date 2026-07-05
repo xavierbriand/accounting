@@ -30,6 +30,7 @@ import { runIngestCommand } from '../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../src/cli/commands/ingest-command.js';
 import { runMigrations } from '../../src/infra/db/migrator.js';
 import { SqliteTransactionRepository } from '../../src/infra/db/repositories/sqlite-transaction-repo.js';
+import { SqliteDomainEventRecorder } from '../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { SqliteHashRepository } from '../../src/infra/db/repositories/sqlite-hash-repository.js';
 import { NodeSqliteSnapshotService } from '../../src/infra/db/node-sqlite-snapshot-service.js';
 import { NodeCsvParser } from '../../src/infra/csv/node-csv-parser.js';
@@ -133,6 +134,7 @@ describe('ingest-throughput (perf)', () => {
       const hashRepo = new SqliteHashRepository(db);
       const idempotencyService = new IdempotencyService(nodeHashFn, hashRepo);
       const snapshotService = new NodeSqliteSnapshotService(db);
+      const domainEventRecorder = new SqliteDomainEventRecorder(db);
 
       const config: AppConfig = {
         dbPath,
@@ -168,6 +170,7 @@ describe('ingest-throughput (perf)', () => {
         snapshotService,
         dbPath,
         configWriter: { appendAutoTagRules: async () => Result.ok() },
+        domainEventRecorder,
       };
 
       const start = performance.now();

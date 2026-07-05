@@ -59,14 +59,17 @@ afterEach(() => {
 });
 
 describe('migration 004 — idempotency_hash NOT NULL tightening', () => {
-  it('(a) user_version advances from 3 to 4 after running migrations', () => {
-    // fails if: migration 004 does not execute or PRAGMA user_version is not bumped
+  it('(a) user_version advances from 3 past 4 after running migrations', () => {
+    // fails if: migration 004 does not execute or PRAGMA user_version is not bumped.
+    // Asserts >= 4 (not === 4): runMigrations also applies any later migrations
+    // (e.g. 005 domain_events, story-4.1) present on disk — this test targets 004's
+    // own behavior, not the final schema version.
     const db = tracked(makeV3Db());
     expect(db.pragma('user_version', { simple: true })).toBe(3);
 
     runMigrations(db);
 
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true }) as number).toBeGreaterThanOrEqual(4);
   });
 
   it('(b) INSERT with idempotency_hash = NULL fails after migration', () => {
@@ -106,15 +109,15 @@ describe('migration 004 — idempotency_hash NOT NULL tightening', () => {
     expect(issues).toHaveLength(0);
   });
 
-  it('(e) running migrations a second time at v4 is a no-op (idempotent)', () => {
+  it('(e) running migrations a second time is a no-op (idempotent)', () => {
     // fails if: runner loses the version guard and re-runs the rebuild
     const db = tracked(makeV3Db());
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    const versionAfterFirstRun = db.pragma('user_version', { simple: true });
 
     // Second call must be a no-op
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true })).toBe(versionAfterFirstRun);
 
     // Schema is still valid
     expect(() => {

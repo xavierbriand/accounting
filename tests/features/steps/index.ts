@@ -6,3 +6,4 @@ import './recurring-forecast.steps.js';
 import './safe-transfer.steps.js';
 import './status.steps.js';
 import './categorize.steps.js';
+import './audit-trail.steps.js';

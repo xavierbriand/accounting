@@ -10,6 +10,7 @@ import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import { Money } from '@core/shared/money.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
+import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
@@ -75,6 +76,10 @@ function makeNoOpConfigWriterStub(): ConfigWriter {
   return { appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()) };
 }
 
+function makeNoOpDomainEventRecorder(): DomainEventRecorder {
+  return { record: vi.fn().mockReturnValue(Result.ok()) };
+}
+
 const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
 
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
@@ -110,6 +115,7 @@ describe('--non-interactive mode', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -140,6 +146,7 @@ describe('--non-interactive mode', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: false }, deps);
@@ -173,6 +180,7 @@ describe('--json mode', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -218,6 +226,7 @@ describe('--json mode', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
@@ -258,6 +267,7 @@ describe('--json mode', () => {
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
     await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: false }, deps);

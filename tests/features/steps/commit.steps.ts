@@ -9,6 +9,7 @@ import { IdempotencyService } from '../../../src/core/ingest/idempotency-service
 import { TransactionBuilder } from '../../../src/core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../../../src/infra/db/repositories/sqlite-hash-repository.js';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
+import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { NodeSqliteSnapshotService } from '../../../src/infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../../../src/infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../../../src/infra/crypto/node-uuid-gen.js';
@@ -61,6 +62,7 @@ async function runIngestInProcess(
   const realRepo = new SqliteTransactionRepository(db);
   const transactionRepository = saveBatchOverride ?? realRepo;
   const snapshotService = new NodeSqliteSnapshotService(db);
+  const domainEventRecorder = new SqliteDomainEventRecorder(db);
 
   const stdoutSink = new PassThrough();
   stdoutSink.resume();
@@ -93,6 +95,7 @@ async function runIngestInProcess(
       snapshotService,
       dbPath: state.dbPath!,
       configWriter: { appendAutoTagRules: async () => Result.ok() },
+      domainEventRecorder,
     },
   );
 

@@ -64,8 +64,8 @@
 
 ### Ledger — append-only
 
-- **Decision:** no `UPDATE`/`DELETE` on ledger tables. Corrections are recorded as reversal + new correction entries.
-- **Rationale:** immutability is a non-negotiable accounting invariant. The "Soft Edit" CLI command handles this transparently for the user.
+- **Decision:** no `UPDATE`/`DELETE` on ledger tables. Corrections are recorded as a reversal + a new correcting entry.
+- **Rationale:** immutability is a non-negotiable accounting invariant. The `correct` CLI command (a Correction) handles this transparently for the user.
 
 ### Data integrity — double-entry invariant
 
@@ -79,8 +79,8 @@
 
 ### Domain events — plain value objects via a port
 
-- **Decision:** domain events enter as a first-class tactical pattern with Epic 4. An event is a plain immutable value object in Core — no base class, no dispatcher framework, no event sourcing — recorded through a Core port (working name `DomainEventRecorder` in `src/core/ports/`); Infra persists events append-only. First implementation lands with the first Epic 4 story that needs it (FR23 audit trail; FR19/FR20 soft edits are event-shaped). No code before then.
-- **Rationale:** the append-only ledger is already event thinking — FR23's audit trail and soft-edit corrections are "things that happened," not state to mutate. Plain value objects through a port keep Core pure and avoid the event-sourcing machinery the validity-window decision deliberately rejected.
+- **Decision:** domain events enter as a first-class tactical pattern with Epic 4. An event is a plain immutable value object in Core — no base class, no dispatcher framework, no event sourcing — recorded through a Core port (working name `DomainEventRecorder` in `src/core/ports/`); Infra persists events append-only. First implementation lands with the first Epic 4 story that needs it (FR23 audit trail; FR14 corrections are event-shaped). No code before then.
+- **Rationale:** the append-only ledger is already event thinking — FR23's audit trail and FR14 corrections are "things that happened," not state to mutate. Plain value objects through a port keep Core pure and avoid the event-sourcing machinery the validity-window decision deliberately rejected.
 
 ## Project structure
 

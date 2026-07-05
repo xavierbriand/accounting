@@ -20,6 +20,8 @@ Modules inside the context (mapped from `src/core/` folders and [prd.md](../prd.
 | Configuration & Rules | `config/`, `categories/` | Validity window, partner, category |
 | Annual Planning *(Epic 5)* | — | Plan file, revision, challenger *(language TBD)* |
 
+**Domain events (Epic 4)** are a cross-cutting tactical pattern *within* Shared Finances, not a new module or context: corrections live in Ledger, but the `DomainEventRecorder` port (#155) and its append-only event store record happened-facts from any module (`TransactionIngested`, `TransactionCorrected`, `ConfigChanged`, `DissolutionPerformed`). No split-tripwire change — the events speak the same glossary as the rest of the context.
+
 ## The map
 
 ```mermaid

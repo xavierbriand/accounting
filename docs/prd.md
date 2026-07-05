@@ -47,7 +47,7 @@
     *   **Dynamic Equity Splits:** Support for time-series split rules (e.g., changing from 50/50 to 60/40 on a specific date).
 *   **Interface:** CLI / Text-Based Interface.
     *   **"Conversational CFO":** Generates human-readable explanations for transfer amounts.
-    *   **Commands:** `ingest`, `status`, `explain`, `settle`, `edit` (Soft Edit).
+    *   **Commands:** `ingest`, `status`, `explain`, `settle`, `correct` (Correction).
 
 ### Growth Features (Post-MVP)
 *   **Web Interface (PWA):** Visual dashboards for "Buffer Health" and "Equity Splits."
@@ -108,8 +108,8 @@
 ### Technical Constraints (The "Bank-Grade" Standard)
 *   **Append-Only Ledger:** The core ledger is **Immutable**.
     *   *Constraint:* Users cannot "Edit" a past transaction directly.
-    *   *Pattern:* To fix an error, the system must generate a "Reversal" transaction and a new "Correction" transaction (Double-Entry principles).
-    *   *UX:* The "Soft Edit" command in CLI handles this complexity automatically (User sees "Edit", System does "Reverse + Post").
+    *   *Pattern:* To fix an error, the system must generate a "Reversal" and a new "Correcting entry" (Double-Entry principles).
+    *   *UX:* The `correct` command in CLI handles this complexity automatically (User asks to correct, System does "Reverse + Post").
 *   **Integer Math (Dinero.js):** All monetary values are stored as Integers (Cents). Floating point arithmetic is strictly forbidden in the codebase.
 *   **Batch Ingestion — Two-Stage Policy:** A batch import runs in two stages.
     *   *Parse stage:* each input row is independently validated. Malformed rows (bad dates, non-numeric amounts, unknown format) are **skipped and reported individually** — they never crash the batch, and valid siblings proceed.
@@ -165,7 +165,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
     *   `accounting status`: Read-only view of buffers.
     *   `accounting settle`: Write-only generation of transfer amounts.
     *   `accounting config`: Manage rules/schema.
-    *   `accounting edit`: (Soft Edit) UX command that generates reversal + correction transactions.
+    *   `accounting correct`: (Correction) UX command that generates a reversal + a correcting entry.
 
 ### Output Formats
 *   **Dual Output:** Every command must support `--json`.
@@ -258,7 +258,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 ### Transaction Management (Ledger)
 
 - FR13: **System** can record all financial events in an **Append-Only Ledger** (SQLite), preventing direct modification of history.
-- FR14: **User** can "Edit" a past transaction via a **Soft Edit** command, which triggers a Reversal and a Correction entry.
+- FR14: **User** can **correct** a past transaction via the **Correction** command (`correct`), which triggers a Reversal and a Correcting entry.
 - FR15: **System** can enforce **Double-Entry Consistency**, ensuring every debit has a matching credit within the ledger.
 - FR16: **System** can store monetary values with their associated **Currency Code** (ISO 4217) to support future multi-currency features.
 - FR17: **System** can create a **Snapshot Backup** of the database before any write operation (ingest/settle).

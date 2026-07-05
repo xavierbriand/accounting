@@ -22,7 +22,7 @@ FR10: Epic 3 - Buffer Logic
 FR11: Epic 3 - Fixed Cost Prediction
 FR12: Epic 3 - Dynamic Splits
 FR13: Epic 1 - Append-Only Ledger (Schema) / Epic 2 - Recording
-FR14: Epic 4 - Soft Edit
+FR14: Epic 4 - Correction
 FR15: Epic 2 - Double-Entry Consistency
 FR16: Epic 1 - Multi-Currency Support
 FR17: Epic 2 - Snapshot Safety
@@ -55,7 +55,7 @@ FR27: Epic 5 - Config Diff & Apply
 **FRs covered:** FR8, FR10, FR11, FR12, FR18, FR22
 
 ### Epic 4: Trust, Transparency & Lifecycle
-**Goal:** Solidify trust with human-readable explanations ("Conversational CFO"), allow for error correction (Soft Edits), and provide data portability/lifecycle management.
+**Goal:** Solidify trust with human-readable explanations ("Conversational CFO"), allow for error correction (the `correct` command), and provide data portability/lifecycle management.
 **User Value:** "I understand *why* the numbers are what they are, I can fix my mistakes, and I own my data."
 **FRs covered:** FR14, FR19, FR20, FR21, FR23
 
@@ -303,10 +303,52 @@ So that I can run one command on Sunday morning and answer "what's the picture?"
 
 ## Epic 4: Trust, Transparency & Lifecycle
 
-**Goal:** Solidify trust with human-readable explanations ("Conversational CFO"), allow for error correction (Soft Edits), and provide data portability/lifecycle management.
+**Goal:** Solidify trust with human-readable explanations ("Conversational CFO"), allow for error correction (the `correct` command), and provide data portability/lifecycle management.
 **FRs covered:** FR14, FR19, FR20, FR21, FR23
 
-*Detailed stories to be defined during implementation.*
+Story shapes converge from the Epic-4 defining model note ([docs/domain/model-notes/story-4.0.md](domain/model-notes/story-4.0.md), issue #156): corrections use **reverse-and-correct** (a reversal + a correcting entry), and every meaningful action is recorded as a plain **domain event** via the `DomainEventRecorder` port (#155).
+
+**Sequencing:** 4.1 → (4.2 → 4.3) with 4.4 parallel → 4.5. Story 4.1 ships the FR23 spine (the recorder port + append-only event store) that every later event depends on. **Epic-5 Story 5.4 dependency:** its `--apply` emits an audit-trail entry, so it needs the port (4.1) *and* the `ConfigChanged` event (4.5) before it can ship.
+
+### Story 4.1: DomainEventRecorder Port & Append-Only Event Store
+
+As a **System**,
+I want a Core `DomainEventRecorder` port with an append-only Infra event store, wired first to the ingest path emitting a `TransactionIngested` event,
+So that every meaningful action from here on can be recorded as an immutable, ordered audit trail (FR23) — starting with the simplest existing action to prove the pattern.
+
+**Lane:** Full (touches `src/core/`). Model note derives from [story-4.0](domain/model-notes/story-4.0.md). Introduces the port (#155). Decides the recorder call-site (inside-service vs app-boundary — deferred from story-4.0). First because it unblocks every later event and Epic-5 Story 5.4.
+
+### Story 4.2: Correction (Reverse-and-Correct)
+
+As a **User**,
+I want to correct a past transaction — via the `correct` command — that writes a reversal and a correcting entry without erasing the original,
+So that I can fix mistakes (any field — amount, category/account, date, description) while the full history stays on the record.
+
+**Lane:** Full. Carries the story-4.0 fork decisions: reverse-and-correct; original date on both new rows; **required** free-text reason; all three rows visible by default; no actor recorded; corrections may themselves be corrected (unlimited `correctsId` chain). `CorrectionService` (domain service), `correctsId` + `kind` on `Transaction`, emits `TransactionCorrected` via the 4.1 recorder. Depends on 4.1. Split 4.2a/4.2b if > 3 scenarios.
+
+### Story 4.3: Conversational-CFO Explanations (FR19)
+
+As a **User**,
+I want a human-readable explanation of *why* a number changed (e.g. "Increased due to a corrected heating bill"),
+So that I trust the figures because I can always see the reasoning.
+
+**Lane:** Full if the explanation builder lives in Core; Reduced if pure presentation. Narrates from correction + event data. Depends on 4.2.
+
+### Story 4.4: Global JSON Output (FR20)
+
+As a **User**,
+I want every command to support `--json`,
+So that I can pipe results into external dashboards and scripts.
+
+**Lane:** Reduced (CLI/Infra, `No model impact`). **Audit current `--json` coverage first** — `status` (3.5) and other commands already expose it; this story fills the gaps and documents the global contract (`Money` via `Money.toString()`). Parallel-able with 4.2/4.3.
+
+### Story 4.5: Config-Change & Dissolution Events (FR21, FR23 completion)
+
+As a **User**,
+I want config changes and a graceful dissolution (export + secure wipe) recorded as domain events,
+So that the audit trail is complete and I can port or wind down my data as a deliberate, recorded act.
+
+**Lane:** Full for the events; dissolution export/wipe is Infra-heavy. Emits `ConfigChanged` and `DissolutionPerformed` via the 4.1 recorder; promotes the reserved **Dissolution** glossary term. Depends on 4.1; precedes Epic-5 Story 5.4 (which consumes `ConfigChanged`).
 
 ## Epic 5: Year-in-Review & Annual Planner
 

@@ -526,6 +526,48 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
     expect(snapshotService.remove).not.toHaveBeenCalled();
     expect(exitCodes).toContain(0);
   });
+
+  it('(f) saveBatch fails: domainEventRecorder.record is NEVER called (story-4.1 ordering guard)', async () => {
+    // fails if: record(...) is called before/independently of saveBatch success —
+    //   guards the "only on success" ordering in commitBatch (docs/plans/story-4.1.md
+    //   Gherkin scenario "A failed batch commit records no event").
+    const transactionRepository: Pick<TransactionRepository, 'saveBatch'> = {
+      saveBatch: vi.fn().mockReturnValue(Result.fail('SQLITE_CONSTRAINT: UNIQUE constraint failed: transactions.idempotency_hash')),
+    };
+    const domainEventRecorder: DomainEventRecorder = {
+      record: vi.fn().mockReturnValue(Result.ok()),
+    };
+
+    const { deps, exitCodes } = makeBaseInteractiveDeps({ transactionRepository, domainEventRecorder });
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(exitCodes).toContain(4);
+    expect(domainEventRecorder.record).not.toHaveBeenCalled();
+  });
+
+  it('(g) saveBatch succeeds: domainEventRecorder.record is called once with the committed ids + source account', async () => {
+    // fails if: record(...) is never called on a successful commit, called more than
+    //   once (should be one batch-level event), or built from the wrong ids/account.
+    const transactionRepository: Pick<TransactionRepository, 'saveBatch'> = {
+      saveBatch: vi.fn().mockReturnValue(Result.ok({ written: 3 })),
+    };
+    const domainEventRecorder: DomainEventRecorder = {
+      record: vi.fn().mockReturnValue(Result.ok()),
+    };
+
+    const { deps, exitCodes } = makeBaseInteractiveDeps({ transactionRepository, domainEventRecorder });
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(exitCodes).toContain(0);
+    expect(domainEventRecorder.record).toHaveBeenCalledOnce();
+    expect(domainEventRecorder.record).toHaveBeenCalledWith({
+      type: 'TransactionIngested',
+      transactionIds: ['tx-CARREFOUR', 'tx-EDF', 'tx-AMAZON'],
+      sourceAccount: 'main-X',
+    });
+  });
 });
 
 describe('runIngestCommand — new category propagates to subsequent prompts (Story A)', () => {

@@ -2,7 +2,7 @@
 
 Every term the system speaks, defined for both partners — not just the one who codes. Entry shape: **Everyday definition** (one plain sentence) → **Example** (concrete, with numbers) → **Technical notes** (type, location, pattern, invariants).
 
-User-authored; agents propose changes but never edit this file directly (see [README.md](README.md)). Terms marked *(forthcoming)* are reserved for Epic 4 and will be defined in its first modeling session.
+User-authored; agents propose changes but never edit this file directly (see [README.md](README.md)). Terms marked *(forthcoming)* are reserved for a later Epic-4 story and will be defined when it ships.
 
 Example names (Alex, Sam) are fixtures, never real people.
 
@@ -144,18 +144,44 @@ Example names (Alex, Sam) are fixtures, never real people.
 
 **Technical notes.** Atomic, fail-safe pre-commit backup via the `SnapshotService` port; the append-only spirit applied to files.
 
+## Correction
+
+**Everyday definition.** Fixing a past transaction by recording new balancing entries instead of erasing it — the original stays on the record, a reversal cancels it, and a correcting entry posts the truth alongside. Every correction says why it was made.
+
+**Example.** The €54.30 supermarket run on April 21st was really €45.30. A correction leaves the €54.30 line untouched, adds a *reversal* that cancels it, and writes a *correcting entry* of €45.30 — all three dated April 21st, with the reason "wrong amount on the receipt". All three stay visible; together they net to €45.30.
+
+**Technical notes.** **Reverse-and-correct** (accounting practice: a reversing entry backs the error out, a correcting entry posts the truth — FR14): `CorrectionService` (**domain service**) writes two new balanced transactions — a reversal and a correcting entry — via the append-only ledger; the original is never touched. The CLI verb is `correct` (FR14); "soft edit" is retired. `Transaction` carries `correctsId` + `kind` ([src/core/ledger/transaction.ts](../../src/core/ledger/transaction.ts)). Both new rows carry the original's `occurredAt` (receipt truth; no clock in Core). Any field may change (amount, account/category, date, description); a free-text reason is **required** (PII-adjacent — redacted in logs). A correcting entry may itself be corrected (unlimited `correctsId` chain). Emits a `TransactionCorrected` domain event. See [model-notes/story-4.0.md](model-notes/story-4.0.md).
+
+## Reversal
+
+**Everyday definition.** A mirror-image entry that cancels an earlier transaction without deleting it — the same amounts, with debits and credits swapped.
+
+**Example.** To correct the €54.30 groceries line, a reversal debits and credits the same accounts the opposite way, netting the original to zero.
+
+**Technical notes.** One of the two transactions a correction writes (`kind: 'reversal'`, `correctsId` set); balanced like any `Transaction`; carries the original's date. The accounting term is a *reversing entry*.
+
+## Correcting entry
+
+**Everyday definition.** The corrected version of a transaction, written fresh next to the reversal so both the mistake and the fix stay on the record.
+
+**Example.** After the reversal cancels the €54.30, the correcting entry records the true €45.30 — same date, corrected amount.
+
+**Technical notes.** The second transaction a correction writes (`kind: 'correcting'`, `correctsId` set); itself correctable via a later correction (chaining). Standard bookkeeping term for the re-posting that fixes a booked error.
+
+## Audit trail / domain event
+
+**Everyday definition.** An in-order record of every meaningful thing the system did — a statement imported, a transaction corrected, a rule changed, the data wound down — so we can always answer "why does it say that?"
+
+**Example.** Correcting the groceries amount records a "transaction corrected" event; next December's config apply records a "config changed" event. Read in order, they explain how today's numbers came to be.
+
+**Technical notes.** Plain immutable value objects in Core (`src/core/events/`), recorded through the `DomainEventRecorder` port ([architecture.md § Domain events](../architecture.md), #155); Infra persists them append-only. No base class, no dispatcher, no event sourcing. Names are past-tense (`TransactionCorrected`, `TransactionIngested`, `ConfigChanged`, `DissolutionPerformed`). The recording timestamp is a system event (UTC) stamped at the boundary; no actor is recorded (no auth system).
+
 ---
 
 ## Reserved for Epic 4
 
-## Soft edit *(forthcoming)*
+## Dissolution *(forthcoming)*
 
-**Everyday definition.** Fixing a mistake without erasing history — the correction is itself a recorded event.
+**Everyday definition.** Winding the household's data down — exporting it to portable formats and securely resetting the app — as a deliberate, recorded act.
 
-**Technical notes.** Reversal + new balancing entries per the append-only decision; vocabulary to be modeled in Epic 4's first Phase-0 session (FR19/FR20).
-
-## Audit trail / domain event *(forthcoming)*
-
-**Everyday definition.** The answer to "why does it say that?" — a trace of every meaningful thing the system did, in order.
-
-**Technical notes.** Domain events as plain value objects recorded via a Core port ([architecture.md § Domain events](../architecture.md)); to be modeled in Epic 4's first Phase-0 session (FR23, FR14).
+**Technical notes.** Graceful Dissolution (FR21); emits a `DissolutionPerformed` domain event. To be modeled in Epic 4's Story 4.5.

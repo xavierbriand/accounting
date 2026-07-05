@@ -26,7 +26,7 @@ The distinction from [engineering-standards.md](engineering-standards.md) and [s
 - **User journeys reachable.** Every journey documented in [product-brief.md](product-brief.md) must remain achievable through the CLI. A refactor that orphans a journey is a P2 blocker, not a deferred item.
 - **"Conversational CFO" truthfulness.** Human-readable explanations must match the mathematical result they reference. A sentence like "you'll be short €240 in March" must be backed by a deterministic calculation the user can reproduce.
 - **Audit trail.** Every user action that changes state leaves a traceable entry (ledger row, audit-log row, or both). "What changed and why" must be answerable from the local data alone.
-- **Soft edits, not hard edits.** Corrections are recorded as new balancing transactions (reversal + correction). The original is never mutated.
+- **Corrections, not hard edits.** A correction is recorded as new balancing transactions (a reversal + a correcting entry). The original is never mutated.
 
 ## Observability of failures
 

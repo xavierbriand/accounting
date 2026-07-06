@@ -322,4 +322,4 @@ adopted into the plan or acknowledged as already-resolved/soft).
 - [x] Phase 0 (Model): derives from [story-4.0 model note](../domain/model-notes/story-4.0.md) (R24); reversal-guard recorded as a proposed delta (user-approved 2026-07-06).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — Full lane: `plan-reviewer` + `sibling-overlap` in parallel): findings triaged above; no un-tagged items.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled: [PR #187](https://github.com/xavierbriand/accounting/pull/187).

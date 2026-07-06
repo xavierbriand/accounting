@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
-import { Transaction, EntryDraft } from '@core/ledger/transaction.js';
+import { Transaction, EntryDraft, TransactionKind } from '@core/ledger/transaction.js';
 import type { TransactionRepository, BatchWriteOutcome } from '@core/ports/transaction-repository.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 
@@ -9,6 +9,8 @@ interface TransactionRow {
   id: string;
   occurred_at: string;
   description: string;
+  kind: string;
+  corrects_id: string | null;
 }
 
 interface EntryRow {
@@ -20,19 +22,23 @@ interface EntryRow {
 
 export class SqliteTransactionRepository implements TransactionRepository {
   private readonly insertHeader: Database.Statement;
+  private readonly insertCorrectionHeader: Database.Statement;
   private readonly insertEntry: Database.Statement;
   private readonly selectHeader: Database.Statement;
   private readonly selectEntries: Database.Statement;
 
   constructor(private readonly db: Database.Database) {
     this.insertHeader = db.prepare(
-      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES (?, ?, ?, ?)',
+      'INSERT INTO transactions (id, occurred_at, description, idempotency_hash, kind, corrects_id) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    this.insertCorrectionHeader = db.prepare(
+      'INSERT INTO transactions (id, occurred_at, description, kind, corrects_id) VALUES (?, ?, ?, ?, ?)',
     );
     this.insertEntry = db.prepare(
       'INSERT INTO transaction_entries (transaction_id, account, side, amount_cents, currency) VALUES (?, ?, ?, ?, ?)',
     );
     this.selectHeader = db.prepare(
-      'SELECT id, occurred_at, description FROM transactions WHERE id = ?',
+      'SELECT id, occurred_at, description, kind, corrects_id FROM transactions WHERE id = ?',
     );
     this.selectEntries = db.prepare(
       'SELECT account, side, amount_cents, currency FROM transaction_entries WHERE transaction_id = ? ORDER BY id',
@@ -40,53 +46,70 @@ export class SqliteTransactionRepository implements TransactionRepository {
   }
 
   save(transaction: Transaction, idempotencyHash: string): Result<void> {
-    const write = this.db.transaction(() => {
-      this.insertHeader.run(transaction.id, transaction.occurredAt, transaction.description, idempotencyHash);
-      for (const entry of transaction.entries) {
-        this.insertEntry.run(
+    return this.runWrite(() => {
+      this.insertHeader.run(
+        transaction.id,
+        transaction.occurredAt,
+        transaction.description,
+        idempotencyHash,
+        transaction.kind,
+        transaction.correctsId ?? null,
+      );
+      this.insertEntries(transaction);
+    });
+  }
+
+  saveCorrection(reversal: Transaction, correcting: Transaction): Result<void> {
+    return this.runWrite(() => {
+      for (const transaction of [reversal, correcting]) {
+        this.insertCorrectionHeader.run(
           transaction.id,
-          entry.account,
-          entry.side,
-          entry.amount.amount,
-          entry.amount.currency,
+          transaction.occurredAt,
+          transaction.description,
+          transaction.kind,
+          transaction.correctsId ?? null,
         );
+        this.insertEntries(transaction);
       }
     });
-
-    try {
-      write();
-      return Result.ok();
-    } catch (err) {
-      return Result.fail(String(err));
-    }
   }
 
   saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome> {
-    const write = this.db.transaction(() => {
+    const result = this.runWrite(() => {
       for (const o of outcomes) {
         this.insertHeader.run(
           o.transaction.id,
           o.transaction.occurredAt,
           o.transaction.description,
           o.idempotencyHash,
+          o.transaction.kind,
+          o.transaction.correctsId ?? null,
         );
-        for (const entry of o.transaction.entries) {
-          this.insertEntry.run(
-            o.transaction.id,
-            entry.account,
-            entry.side,
-            entry.amount.amount,
-            entry.amount.currency,
-          );
-        }
+        this.insertEntries(o.transaction);
       }
     });
 
+    return result.isSuccess ? Result.ok({ written: outcomes.length }) : Result.fail(result.error);
+  }
+
+  private runWrite(fn: () => void): Result<void> {
     try {
-      write();
-      return Result.ok({ written: outcomes.length });
+      this.db.transaction(fn)();
+      return Result.ok();
     } catch (err) {
       return Result.fail(String(err));
+    }
+  }
+
+  private insertEntries(transaction: Transaction): void {
+    for (const entry of transaction.entries) {
+      this.insertEntry.run(
+        transaction.id,
+        entry.account,
+        entry.side,
+        entry.amount.amount,
+        entry.amount.currency,
+      );
     }
   }
 
@@ -115,6 +138,8 @@ export class SqliteTransactionRepository implements TransactionRepository {
       id: row.id,
       occurredAt: row.occurred_at,
       description: row.description,
+      kind: row.kind as TransactionKind,
+      correctsId: row.corrects_id ?? undefined,
       entries: entryDrafts,
     });
   }

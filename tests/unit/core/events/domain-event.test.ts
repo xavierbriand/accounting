@@ -4,15 +4,17 @@
  * Gherkin coverage: none directly — Core value-object shape + purity, exercised end-to-end
  *   by tests/features/audit-trail.feature (see docs/plans/story-4.1.md).
  *
- * fails if: TransactionIngested carries fields beyond type/transactionIds/sourceAccount
- *   (a clock or PII field would leak into Core), or src/core/events/ or the port import
- *   Node APIs / better-sqlite3 / a clock (Core purity — architecture.md § Domain events).
+ * fails if: TransactionIngested carries fields beyond type/transactionIds/sourceAccount, or
+ *   TransactionCorrected carries fields beyond type/targetTransactionId/producedTransactionIds/
+ *   changedFields/reason (a clock, an actor, or a PII field would leak into Core), or
+ *   src/core/events/ or the port import Node APIs / better-sqlite3 / a clock (Core purity —
+ *   architecture.md § Domain events).
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -56,6 +58,34 @@ describe('TransactionIngested — value object shape', () => {
     };
 
     expect(event.type).toBe('TransactionIngested');
+  });
+});
+
+describe('TransactionCorrected — value object shape', () => {
+  it('carries type, targetTransactionId, producedTransactionIds, changedFields, and reason', () => {
+    const event: TransactionCorrected = {
+      type: 'TransactionCorrected',
+      targetTransactionId: 'tx-original',
+      producedTransactionIds: ['tx-reversal', 'tx-correcting'],
+      changedFields: ['amount'],
+      reason: 'wrong amount entered',
+    };
+
+    expect(Object.keys(event).sort()).toEqual(
+      ['changedFields', 'producedTransactionIds', 'reason', 'targetTransactionId', 'type'].sort(),
+    );
+  });
+
+  it('is assignable to the DomainEvent union', () => {
+    const event: DomainEvent = {
+      type: 'TransactionCorrected',
+      targetTransactionId: 'tx-original',
+      producedTransactionIds: ['tx-reversal', 'tx-correcting'],
+      changedFields: ['description'],
+      reason: 'typo fix',
+    };
+
+    expect(event.type).toBe('TransactionCorrected');
   });
 });
 

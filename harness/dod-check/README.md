@@ -8,13 +8,16 @@ than only the cheap-to-fake commit-subject/TBD/envelope surface.
 Seven checks, one findings union:
 
 - **Commit subjects** — every commit subject in `origin/main...HEAD` must reference the current
-  story id (bracket `[story-<id>]`, bare `story-<id>`, or capitalized `Story <id>`); commit count is
+  story id (bracket `[story-<id>]`, bare `story-<id>`, or capitalized `Story <id>`); the slice count is
   checked against the R13/R14/R16 envelope declared in the story's plan (`docs/plans/story-<id>.md`
-  § Slice plan / Sizing heading). The count is **behaviour-slice commits only**
-  (`countChangeBodyCommits`): commits carrying the story id in their subject, excluding the
-  preparatory `chore(docs): ... plan + P1/P2/P3 review` commit and the `chore(retro): ...` commit —
-  both are bookkeeping, not TDD slices, and including them would inflate the count past the declared
-  envelope (e.g. a 10-slice story would read 11 or 12 and false-hard-fail once out of draft). Merge
+  § Slice plan / Sizing heading). The count is **behaviour slices** (`countSlices`, R28): commits
+  carrying the story id in their subject, excluding the preparatory `chore(docs): ... plan + P1/P2/P3
+  review` commit, the `chore(retro): ...` commit, **and each `test: … — failing` red-half** — the TDD
+  rhythm (§6.4) splits every behaviour into a `test: — failing` + `feat: — minimal green` pair, so
+  collapsing the red half yields one slice per behaviour (`refactor:` and R10 green-on-landing `test:`
+  commits stand as their own slices). Counting raw commits instead would double the figure and
+  false-hard-fail once out of draft. `countChangeBodyCommits` (the pre-R28 raw count) is retained for
+  R16 zero-behaviour stories, where the two agree (no failing/green pairs). Merge
   commits are excluded from the scan entirely (`git log --no-merges`): they never carry the story-id
   convention, and a GitHub `pull_request` build checks out a synthetic merge commit (`Merge <sha>
   into <base>`) that would otherwise be a false `missing-story-id`.

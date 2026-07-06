@@ -7,7 +7,7 @@ import {
   checkCommitSubjects,
   parseEnvelopeRule,
   checkCommitEnvelope,
-  countChangeBodyCommits,
+  countSlices,
   type CommitLogEntry,
   type MissingStoryIdFinding,
   type CommitEnvelopeFinding,
@@ -166,7 +166,7 @@ function runCommitSubjectCheck(repoRoot: string, degraded: string[]): DodFinding
 
   const planPath = findPlanFile(repoRoot, storyId);
   const envelope = planPath ? parseEnvelopeRule(fs.readFileSync(planPath, 'utf8')) : null;
-  const envelopeFinding = checkCommitEnvelope(countChangeBodyCommits(commits, storyId), envelope);
+  const envelopeFinding = checkCommitEnvelope(countSlices(commits, storyId), envelope);
   if (envelopeFinding) {
     findings.push(envelopeFinding);
   }
@@ -413,12 +413,12 @@ function draftSuffix(finding: DodFinding, isDraft: boolean): string {
 
 function formatCommitEnvelopeLine(f: CommitEnvelopeFinding, isDraft: boolean): string {
   if (f.rule === null) {
-    return `  commit-envelope: ${f.count} commits, envelope not declared in plan (advisory)`;
+    return `  commit-envelope: ${f.count} slices, envelope not declared in plan (advisory)`;
   }
   if (f.min !== null && f.count < f.min) {
-    return `  commit-envelope: ${f.count} commits, under the ${f.rule} (${f.min}–${f.max}) target (advisory)`;
+    return `  commit-envelope: ${f.count} slices, under the ${f.rule} (${f.min}–${f.max}) target (advisory)`;
   }
-  return `  commit-envelope: ${f.count} commits, over the ${f.rule} (${f.min}–${f.max}) envelope${draftSuffix(f, isDraft)}`;
+  return `  commit-envelope: ${f.count} slices, over the ${f.rule} (${f.min}–${f.max}) envelope${draftSuffix(f, isDraft)}`;
 }
 
 function formatCommitSubjectLines(findings: DodFinding[], isDraft: boolean): string[] {

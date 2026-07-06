@@ -15,11 +15,15 @@ export interface EntryDraft {
   amount: Money;
 }
 
+export type TransactionKind = 'original' | 'reversal' | 'correcting';
+
 export interface TransactionDraft {
   id: string;
   occurredAt: string;
   description: string;
   entries: EntryDraft[];
+  kind?: TransactionKind;
+  correctsId?: string;
 }
 
 export class Transaction {
@@ -28,6 +32,8 @@ export class Transaction {
     private readonly _occurredAt: string,
     private readonly _description: string,
     private readonly _entries: readonly Entry[],
+    private readonly _kind: TransactionKind,
+    private readonly _correctsId: string | undefined,
   ) {}
 
   get id(): string {
@@ -46,8 +52,16 @@ export class Transaction {
     return this._entries;
   }
 
+  get kind(): TransactionKind {
+    return this._kind;
+  }
+
+  get correctsId(): string | undefined {
+    return this._correctsId;
+  }
+
   static create(draft: TransactionDraft): Result<Transaction> {
-    const { id, occurredAt, description, entries } = draft;
+    const { id, occurredAt, description, entries, kind = 'original', correctsId } = draft;
 
     if (entries.length < 2) {
       return Result.fail('Invariant Violation: at least 2 entries are required');
@@ -86,6 +100,6 @@ export class Transaction {
       );
     }
 
-    return Result.ok(new Transaction(id, occurredAt, description, entries));
+    return Result.ok(new Transaction(id, occurredAt, description, entries, kind, correctsId));
   }
 }

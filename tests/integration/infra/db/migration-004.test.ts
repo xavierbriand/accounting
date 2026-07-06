@@ -73,7 +73,13 @@ describe('migration 004 — idempotency_hash NOT NULL tightening', () => {
   });
 
   it('(b) INSERT with idempotency_hash = NULL fails after migration', () => {
-    // fails if: NOT NULL constraint is not in place after the rebuild
+    // fails if: the NOT-NULL-for-'original'-rows invariant is not in place after the rebuild.
+    // Story-4.2a (migration 006) superseded the plain NOT NULL constraint asserted here with a
+    // kind-conditioned CHECK (original rows still require a hash; reversal/correcting rows
+    // require NULL) — the insert below defaults to kind='original', so it still throws, just
+    // via CHECK rather than NOT NULL. This test only targets migration 004's own behaviour
+    // (the column exists and rejects NULL for the default row shape); see migration-006.test.ts
+    // for the kind-conditioned CHECK itself.
     const db = tracked(makeV3Db());
     runMigrations(db);
 
@@ -81,7 +87,7 @@ describe('migration 004 — idempotency_hash NOT NULL tightening', () => {
       db.prepare(
         "INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('tx-null', '2026-01-01T00:00:00Z', 'test', NULL)",
       ).run();
-    }).toThrow(/NOT NULL constraint failed/);
+    }).toThrow(/constraint failed/);
   });
 
   it('(c) unique index is recreated as UNIQUE after rebuild', () => {
@@ -119,12 +125,13 @@ describe('migration 004 — idempotency_hash NOT NULL tightening', () => {
     runMigrations(db);
     expect(db.pragma('user_version', { simple: true })).toBe(versionAfterFirstRun);
 
-    // Schema is still valid
+    // Schema is still valid. See (b) above — story-4.2a's migration 006 relaxed this to a
+    // kind-conditioned CHECK, so the default (kind='original') NULL-hash insert still throws.
     expect(() => {
       db.prepare(
         "INSERT INTO transactions (id, occurred_at, description, idempotency_hash) VALUES ('tx-1', '2026-01-01T00:00:00Z', 'test', NULL)",
       ).run();
-    }).toThrow(/NOT NULL constraint failed/);
+    }).toThrow(/constraint failed/);
   });
 
   it('(f) rebuild preserves children under FK-off toggle — 1 tx + 2 entries survive', () => {

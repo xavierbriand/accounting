@@ -224,6 +224,15 @@ describe('CorrectionService.correct — input guards (scenarios 4, 5, 8)', () =>
     expect(result.isFailure).toBe(true);
     expect(result.error).toMatch(/split/i);
   });
+
+  it('a same-currency but otherwise invariant-violating amount correction (negative) surfaces Transaction.create\'s own failure', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { amount: makeEur(-100) }, ids, 'negative amount typo');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toMatch(/non-negative/);
+  });
 });
 
 describe('CorrectionService.correct — chaining (scenario 6)', () => {

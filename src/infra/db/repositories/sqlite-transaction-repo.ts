@@ -46,7 +46,7 @@ export class SqliteTransactionRepository implements TransactionRepository {
   }
 
   save(transaction: Transaction, idempotencyHash: string): Result<void> {
-    const write = this.db.transaction(() => {
+    return this.runWrite(() => {
       this.insertHeader.run(
         transaction.id,
         transaction.occurredAt,
@@ -57,17 +57,10 @@ export class SqliteTransactionRepository implements TransactionRepository {
       );
       this.insertEntries(transaction);
     });
-
-    try {
-      write();
-      return Result.ok();
-    } catch (err) {
-      return Result.fail(String(err));
-    }
   }
 
   saveCorrection(reversal: Transaction, correcting: Transaction): Result<void> {
-    const write = this.db.transaction(() => {
+    return this.runWrite(() => {
       for (const transaction of [reversal, correcting]) {
         this.insertCorrectionHeader.run(
           transaction.id,
@@ -79,9 +72,29 @@ export class SqliteTransactionRepository implements TransactionRepository {
         this.insertEntries(transaction);
       }
     });
+  }
 
+  saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome> {
+    const result = this.runWrite(() => {
+      for (const o of outcomes) {
+        this.insertHeader.run(
+          o.transaction.id,
+          o.transaction.occurredAt,
+          o.transaction.description,
+          o.idempotencyHash,
+          o.transaction.kind,
+          o.transaction.correctsId ?? null,
+        );
+        this.insertEntries(o.transaction);
+      }
+    });
+
+    return result.isSuccess ? Result.ok({ written: outcomes.length }) : Result.fail(result.error);
+  }
+
+  private runWrite(fn: () => void): Result<void> {
     try {
-      write();
+      this.db.transaction(fn)();
       return Result.ok();
     } catch (err) {
       return Result.fail(String(err));
@@ -97,29 +110,6 @@ export class SqliteTransactionRepository implements TransactionRepository {
         entry.amount.amount,
         entry.amount.currency,
       );
-    }
-  }
-
-  saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome> {
-    const write = this.db.transaction(() => {
-      for (const o of outcomes) {
-        this.insertHeader.run(
-          o.transaction.id,
-          o.transaction.occurredAt,
-          o.transaction.description,
-          o.idempotencyHash,
-          o.transaction.kind,
-          o.transaction.correctsId ?? null,
-        );
-        this.insertEntries(o.transaction);
-      }
-    });
-
-    try {
-      write();
-      return Result.ok({ written: outcomes.length });
-    } catch (err) {
-      return Result.fail(String(err));
     }
   }
 

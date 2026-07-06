@@ -9,6 +9,7 @@ import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { Transaction } from '@core/ledger/transaction.js';
 import { Money } from '@core/shared/money.js';
+import { CorrectionService } from '@core/ledger/correction-service.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
 
 function makeEur(cents: number): Money {
@@ -59,6 +60,8 @@ describe('SqliteTransactionRepository', () => {
     expect(found!.entries[0].side).toBe('debit');
     expect(found!.entries[0].amount.amount).toBe(2000);
     expect(found!.entries[0].amount.currency).toBe('EUR');
+    expect(found!.kind).toBe('original');
+    expect(found!.correctsId).toBeUndefined();
   });
 
   it('findById returns Result.ok(null) for unknown id', () => {
@@ -388,6 +391,127 @@ describe('SqliteTransactionRepository', () => {
         ),
         { numRuns: 500 },
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // saveCorrection tests (Story 4.2a — scenario 7)
+  // ---------------------------------------------------------------------------
+
+  describe('saveCorrection — Story 4.2a (scenario 7)', () => {
+    function persistOriginal(id: string): Transaction {
+      const tx = makeBalancedTx(id);
+      expect(repo.save(tx, `hash-${id}`).isSuccess).toBe(true);
+      return tx;
+    }
+
+    it('(a) atomically persists both rows with kind/corrects_id; findById reconstructs both', () => {
+      const original = persistOriginal('tx-corr-original');
+      const outcome = CorrectionService.correct(
+        original,
+        { amount: makeEur(2500) },
+        { reversalId: 'tx-corr-reversal', correctingId: 'tx-corr-correcting' },
+        'undercharged',
+      ).value;
+
+      const result = repo.saveCorrection(outcome.reversal, outcome.correcting);
+      expect(result.isSuccess).toBe(true);
+
+      const foundReversal = repo.findById('tx-corr-reversal').value;
+      expect(foundReversal).not.toBeNull();
+      expect(foundReversal!.kind).toBe('reversal');
+      expect(foundReversal!.correctsId).toBe('tx-corr-original');
+      expect(foundReversal!.entries).toHaveLength(2);
+
+      const foundCorrecting = repo.findById('tx-corr-correcting').value;
+      expect(foundCorrecting).not.toBeNull();
+      expect(foundCorrecting!.kind).toBe('correcting');
+      expect(foundCorrecting!.correctsId).toBe('tx-corr-original');
+      expect(foundCorrecting!.entries[0].amount.amount).toBe(2500);
+    });
+
+    it('(b) saveCorrection never writes an idempotency_hash row (correction rows are hash-free)', () => {
+      const original = persistOriginal('tx-corr-nohash-original');
+      const outcome = CorrectionService.correct(
+        original,
+        { description: 'renamed' },
+        { reversalId: 'tx-corr-nohash-reversal', correctingId: 'tx-corr-nohash-correcting' },
+        'typo',
+      ).value;
+
+      expect(repo.saveCorrection(outcome.reversal, outcome.correcting).isSuccess).toBe(true);
+
+      const rows = db
+        .prepare('SELECT id, idempotency_hash FROM transactions WHERE id IN (?, ?)')
+        .all('tx-corr-nohash-reversal', 'tx-corr-nohash-correcting') as Array<{ id: string; idempotency_hash: string | null }>;
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.idempotency_hash).toBeNull();
+      }
+    });
+
+    it('(c) a dangling corrects_id (FK violation) rolls back the whole pair — neither row persists', () => {
+      const original = persistOriginal('tx-corr-fk-original');
+      const outcome = CorrectionService.correct(
+        original,
+        { description: 'renamed' },
+        { reversalId: 'tx-corr-fk-reversal', correctingId: 'tx-corr-fk-correcting' },
+        'typo',
+      ).value;
+
+      // Force a dangling FK by deleting the original's row is not possible (append-only, no DELETE
+      // exposed) — instead, simulate the failure mode directly against the DB the same way the
+      // atomic-save tests above do: pre-insert a header row with the reversal's id to force a
+      // PK collision on the second write.
+      db.prepare(
+        "INSERT INTO transactions (id, occurred_at, description, idempotency_hash, kind) VALUES ('tx-corr-fk-correcting', '2026-01-01T00:00:00Z', 'pre', 'pre-hash', 'correcting')",
+      ).run();
+
+      const result = repo.saveCorrection(outcome.reversal, outcome.correcting);
+      expect(result.isFailure).toBe(true);
+
+      const reversalRow = db.prepare('SELECT id FROM transactions WHERE id = ?').get('tx-corr-fk-reversal');
+      expect(reversalRow).toBeUndefined();
+
+      const entryCount = (
+        db
+          .prepare('SELECT COUNT(*) as n FROM transaction_entries WHERE transaction_id IN (?, ?)')
+          .get('tx-corr-fk-reversal', 'tx-corr-fk-correcting') as { n: number }
+      ).n;
+      expect(entryCount).toBe(0);
+    });
+
+    it('(d) a truly dangling corrects_id (pointing at a non-existent transaction) is rejected by the FK and rolls back', () => {
+      const orphanReversal = Transaction.create({
+        id: 'tx-orphan-reversal',
+        occurredAt: '2026-04-21T14:30:00+02:00',
+        description: 'orphan reversal',
+        kind: 'reversal',
+        correctsId: 'does-not-exist',
+        entries: [
+          { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(2000) },
+          { account: 'Expense:Transport', side: 'credit', amount: makeEur(2000) },
+        ],
+      }).value;
+      const orphanCorrecting = Transaction.create({
+        id: 'tx-orphan-correcting',
+        occurredAt: '2026-04-21T14:30:00+02:00',
+        description: 'orphan correcting',
+        kind: 'correcting',
+        correctsId: 'does-not-exist',
+        entries: [
+          { account: 'Expense:Transport', side: 'debit', amount: makeEur(2000) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
+        ],
+      }).value;
+
+      const result = repo.saveCorrection(orphanReversal, orphanCorrecting);
+      expect(result.isFailure).toBe(true);
+
+      const rows = db
+        .prepare('SELECT id FROM transactions WHERE id IN (?, ?)')
+        .all('tx-orphan-reversal', 'tx-orphan-correcting');
+      expect(rows).toHaveLength(0);
     });
   });
 });

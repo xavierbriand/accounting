@@ -9,5 +9,6 @@ export interface BatchWriteOutcome {
 export interface TransactionRepository {
   save(transaction: Transaction, idempotencyHash: string): Result<void>;
   saveBatch(outcomes: readonly BuildOutcome[]): Result<BatchWriteOutcome>;
+  saveCorrection(reversal: Transaction, correcting: Transaction): Result<void>;
   findById(id: string): Result<Transaction | null>;
 }

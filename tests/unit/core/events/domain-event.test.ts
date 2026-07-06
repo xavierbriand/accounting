@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -56,6 +56,34 @@ describe('TransactionIngested — value object shape', () => {
     };
 
     expect(event.type).toBe('TransactionIngested');
+  });
+});
+
+describe('TransactionCorrected — value object shape', () => {
+  it('carries type, targetTransactionId, producedTransactionIds, changedFields, and reason', () => {
+    const event: TransactionCorrected = {
+      type: 'TransactionCorrected',
+      targetTransactionId: 'tx-original',
+      producedTransactionIds: ['tx-reversal', 'tx-correcting'],
+      changedFields: ['amount'],
+      reason: 'wrong amount entered',
+    };
+
+    expect(Object.keys(event).sort()).toEqual(
+      ['changedFields', 'producedTransactionIds', 'reason', 'targetTransactionId', 'type'].sort(),
+    );
+  });
+
+  it('is assignable to the DomainEvent union', () => {
+    const event: DomainEvent = {
+      type: 'TransactionCorrected',
+      targetTransactionId: 'tx-original',
+      producedTransactionIds: ['tx-reversal', 'tx-correcting'],
+      changedFields: ['description'],
+      reason: 'typo fix',
+    };
+
+    expect(event.type).toBe('TransactionCorrected');
   });
 });
 

@@ -84,6 +84,13 @@ export class CorrectionService {
       );
     }
 
+    const originalCurrency = original.entries[0]?.amount.currency;
+    if (changes.amount && originalCurrency && changes.amount.currency !== originalCurrency) {
+      return Result.fail(
+        `CorrectionService: currency mismatch — original is ${originalCurrency}, correction is ${changes.amount.currency}`,
+      );
+    }
+
     const built = Result.all([
       buildReversal(original, ids.reversalId),
       buildCorrecting(original, changes, ids.correctingId),

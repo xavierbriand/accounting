@@ -76,9 +76,11 @@ docblock (now names `TransactionCorrected`'s shape guard). **Deferred → issue:
 vs absent field in `CorrectionChanges` (truthy-check; unreachable until 4.2b's CLI) → #185.
 **Acknowledged:** scenario-7's "dangling FK *or* mid-write" maps to two tests (correct);
 `fc.pre` nit rejected — `return false` should fail loudly if a valid correction errors, not
-skip; `saveBatch` `Result.map` opportunity (next touch); raw commit count (→ Change/Action);
-`reason` 4th param (plan-derived). **Reconcile (user-owned, proposed):** glossary "Correction"
-+ 4.0-note Invariant 6/"Correction date" date-rule wording.
+skip; `saveBatch` `Result.map` opportunity (next touch); `reason` 4th param (plan-derived).
+**Reconciled (user-approved 2026-07-06, this PR):** glossary "Correction" + 4.0-note
+Invariant 6/"Correction date" date-rule wording updated to match the shipped behaviour.
+**Rule minted (user-approved, this PR):** **R28** — the commit envelope counts *slices* not
+raw commits; dod-check's `countSlices` collapses each `test: — failing`/`feat:` pair.
 
 ## Action items
 
@@ -87,11 +89,12 @@ skip; `saveBatch` `Result.map` opportunity (next touch); raw commit count (→ C
 | Split-correction (>2-entry) capability | #183 | Open |
 | Empty-string vs absent field in `CorrectionChanges` (pick up at 4.2b) | #185 | Open |
 | Atomic audit-event recording (`UnitOfWork`) — B1 gap for ingest + correction | #180 | Open (deferred from 4.2a; not a correction-slice concern) |
-| Reconcile date-rule wording in glossary + 4.0 note | this PR (proposed, user sign-off) | Pending |
-| Clarify R13 to count slices (test+feat = one slice), target 6–10 slices | CLAUDE.md §8 (user-gated) | Proposed |
+| Reconcile date-rule wording in glossary + 4.0 note | this PR (user-approved 2026-07-06) | Done |
+| Clarify envelope to count slices (test+feat = one slice) | **R28** (CLAUDE.md §8) + dod-check `countSlices` | Done (this PR) |
 | Event-family field naming — ratify `producedTransactionIds` (role-precise) vs ingest's `transactionIds` | Resolved here | `TransactionCorrected` shipped `producedTransactionIds` per 4.0 note; ingest's `transactionIds` left as-is (role-precise convention, no retro-rename) |
 | `correct` CLI (explicit flags), boundary event-recording (B1), Conversational-CFO wording | story-4.2b | Next |
 
-No rule minted in-PR — 4.2a consumed existing rules (R24 derive-from-4.0, R25 glossary
-currency, R13 slicing, R6/R7 test honesty). The R13-clarification and the two repeated Changes
-(version-fallout commit, in-PR note reconciliation) are proposed for the user to formalize.
+**R28 minted** this PR (envelope counts slices — see §8), refining R13/R14 the way R16 refined
+R15. Otherwise 4.2a consumed existing rules (R24 derive-from-4.0, R25 glossary currency, R6/R7
+test honesty). The two repeated Changes (version-fallout commit home, signed-note reconciliation
+as a standing retro step) remain Try candidates for a future rule if they recur again.

@@ -6,6 +6,7 @@ import {
   parseEnvelopeRule,
   checkCommitEnvelope,
   countChangeBodyCommits,
+  countSlices,
   type CommitLogEntry,
 } from '../lib/commit-subject.js';
 import { isAlwaysAdvisory } from '../dod-check.js';
@@ -256,5 +257,45 @@ describe('countChangeBodyCommits', () => {
       { sha: 'r1', subject: 'chore(retro): story-h6 retrospective + status fragment [story-h6]' },
     ];
     expect(countChangeBodyCommits(commits, 'h6')).toBe(4);
+  });
+});
+
+describe('countSlices (R28)', () => {
+  // fails if: a `test: — failing` red-half is counted as its own slice — R28 collapses
+  // each failing/green pair into one slice so the TDD rhythm doesn't double the envelope.
+  it('collapses each test-failing + feat-green pair into one slice', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'a1', subject: 'test(ledger): kind + correctsId — failing [story-4.2a]' },
+      { sha: 'a2', subject: 'feat(ledger): kind + correctsId — minimal green [story-4.2a]' },
+      { sha: 'a3', subject: 'test(ledger): CorrectionService — input guards — failing [story-4.2a]' },
+      { sha: 'a4', subject: 'feat(ledger): CorrectionService — input guards — minimal green [story-4.2a]' },
+    ];
+    expect(countChangeBodyCommits(commits, '4.2a')).toBe(4);
+    expect(countSlices(commits, '4.2a')).toBe(2);
+  });
+
+  // fails if: a refactor or an R10 green-on-landing test commit is dropped — both are
+  // legitimate standalone slices, not red-halves of a pair.
+  it('counts refactor and green-on-landing test commits as their own slices', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'a1', subject: 'test(ledger): amount correction — failing [story-4.2a]' },
+      { sha: 'a2', subject: 'feat(ledger): amount correction — minimal green [story-4.2a]' },
+      { sha: 'a3', subject: 'test(ledger): core invariants as properties — green on landing [story-4.2a]' },
+      { sha: 'a4', subject: 'refactor(ledger): dedupe transaction boilerplate [story-4.2a]' },
+    ];
+    expect(countSlices(commits, '4.2a')).toBe(3);
+  });
+
+  // fails if: countSlices diverges from countChangeBodyCommits for a zero-behaviour (R16)
+  // story — such a story has no failing/green pairs, so the R16 4-commit target must hold.
+  it('equals countChangeBodyCommits when there are no failing/green pairs (R16 unaffected)', () => {
+    const commits: CommitLogEntry[] = [
+      { sha: 'p0', subject: 'chore(docs): story-x plan + P1/P2/P3 review [story-x]' },
+      { sha: 'a1', subject: 'chore(docs): refresh process doc [story-x]' },
+      { sha: 'a2', subject: 'refactor(workflow): empty slice — TDD rhythm note [story-x]' },
+      { sha: 'r1', subject: 'chore(retro): story-x retrospective [story-x]' },
+    ];
+    expect(countSlices(commits, 'x')).toBe(countChangeBodyCommits(commits, 'x'));
+    expect(countSlices(commits, 'x')).toBe(2);
   });
 });

@@ -32,6 +32,8 @@ Tactical roles:
 
 **Correction date.** Reversal + correcting entry both carry the **original** transaction's `occurredAt`. This preserves receipt truth, keeps a past period's settlement math stable, and needs **no clock in Core** — the service stays pure and deterministic.
 
+> *Clarification (story-4.2a, user-approved 2026-07-06).* This holds for every corrected field **except the date itself**: when `date` is the corrected field, the **correcting entry takes the new date** while the **reversal still carries the original date** (so the original nets out in its own period, and no clock is introduced). Invariant 6 reads accordingly.
+
 **Event-timestamp boundary note.** The correction *ledger rows* carry the original date (no Core clock). The audit *event's* recording timestamp — "when this correction was performed" — is a system event (UTC) stamped at the boundary where `record()` is called (Infra clock), not inside `CorrectionService`. This resolves the apparent date tension while keeping Core clock-free. The recorder call-site (inside-service vs app-boundary — B2/B1) is **decided at story-4.1 Phase 1**; likely hybrid: record inside the service for ledger-mutating events (atomic with the rows), at the app boundary for app-level facts (config change, dissolution).
 
 ## Invariants
@@ -43,7 +45,7 @@ Each becomes a property or unit test in story-4.2 (correction):
 3. Correcting-entry currency == original currency; a cross-currency correction is `Result.fail`, never a warning.
 4. `correctsId` on the reversal and the correcting entry resolves to an existing transaction.
 5. The three-row group's net ledger effect equals a single transaction with the corrected values (observational equality — "as if edited"; property test).
-6. Reversal and correcting entry carry the original's `occurredAt` (date-preservation).
+6. Reversal and correcting entry carry the original's `occurredAt` (date-preservation) — **except** the correcting entry carries the **new** date when `date` is the corrected field (story-4.2a clarification, see *Correction date* above; the reversal always keeps the original date).
 7. Every correction carries a non-empty `reason`.
 8. A correcting entry may itself be the target of a later correction; the `correctsId` chain resolves to the current value (chaining, unlimited).
 

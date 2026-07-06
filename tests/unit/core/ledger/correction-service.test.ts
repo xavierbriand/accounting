@@ -165,3 +165,62 @@ describe('CorrectionService.correct — field-change semantics (scenario 2, 3)',
     expect(result.value.correcting.occurredAt).toBe(original.occurredAt);
   });
 });
+
+describe('CorrectionService.correct — input guards (scenarios 4, 5, 8)', () => {
+  it('empty reason is rejected (scenario 4) and the message never echoes the (empty) reason text', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { description: 'x' }, ids, '');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.toLowerCase()).toContain('reason');
+  });
+
+  it('whitespace-only reason is rejected (scenario 4)', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { description: 'x' }, ids, '   ');
+
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('a reason with PII-adjacent text never appears verbatim in a failing result message (reason redaction)', () => {
+    const original = makeOriginal();
+    const secretReason = 'IBAN FR7612345987650123456789014 refund';
+
+    // Force a failure via cross-currency, carrying the secret reason, to prove it's never echoed.
+    const usd = Money.fromCents(2500, 'USD').value;
+    const result = CorrectionService.correct(original, { amount: usd }, ids, secretReason);
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error).not.toContain(secretReason);
+  });
+
+  it('cross-currency correction is rejected citing currency mismatch (scenario 5)', () => {
+    const original = makeOriginal();
+    const usd = Money.fromCents(2500, 'USD').value;
+
+    const result = CorrectionService.correct(original, { amount: usd }, ids, 'wrong currency entered');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.toLowerCase()).toContain('currency');
+  });
+
+  it('correcting a >2-entry (split) original is rejected, citing split-correction is unsupported (scenario 8)', () => {
+    const split = Transaction.create({
+      id: 'tx-split',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Split purchase',
+      entries: [
+        { account: 'Expense:Food', side: 'debit', amount: makeEur(1000) },
+        { account: 'Expense:Household', side: 'debit', amount: makeEur(1000) },
+        { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
+      ],
+    }).value;
+
+    const result = CorrectionService.correct(split, { description: 'x' }, ids, 'try to correct a split');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toMatch(/split/i);
+  });
+});

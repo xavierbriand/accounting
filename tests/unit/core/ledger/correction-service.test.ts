@@ -224,3 +224,22 @@ describe('CorrectionService.correct — input guards (scenarios 4, 5, 8)', () =>
     expect(result.error).toMatch(/split/i);
   });
 });
+
+describe('CorrectionService.correct — chaining (scenario 6)', () => {
+  it('correcting a prior correcting entry carries correctsId = that correcting entry\'s id', () => {
+    const original = makeOriginal();
+    const first = CorrectionService.correct(original, { amount: makeEur(2500) }, ids, 'first correction').value;
+
+    const secondIds = { reversalId: 'tx-reversal-2', correctingId: 'tx-correcting-2' };
+    const second = CorrectionService.correct(
+      first.correcting,
+      { description: 'second pass' },
+      secondIds,
+      'second correction',
+    );
+
+    expect(second.isSuccess).toBe(true);
+    expect(second.value.reversal.correctsId).toBe(first.correcting.id);
+    expect(second.value.correcting.correctsId).toBe(first.correcting.id);
+  });
+});

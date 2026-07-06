@@ -29,12 +29,12 @@ afterEach(() => {
 });
 
 describe('migration 005 — domain_events append-only table', () => {
-  it('(a) user_version advances to 5 and the domain_events table exists with expected columns', () => {
+  it('(a) user_version advances to at least 5 and the domain_events table exists with expected columns', () => {
     // fails if: migration 005 does not execute or PRAGMA user_version is not bumped
     const db = makeFreshDb();
     runMigrations(db);
 
-    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    expect(db.pragma('user_version', { simple: true }) as number).toBeGreaterThanOrEqual(5);
 
     const columns = db.prepare("PRAGMA table_info(domain_events)").all() as Array<{
       name: string;
@@ -50,15 +50,15 @@ describe('migration 005 — domain_events append-only table', () => {
     expect(byName.get('payload')?.notnull).toBe(1);
   });
 
-  it('(b) running migrations a second time at v5 is a no-op (idempotent)', () => {
+  it('(b) running migrations a second time is a no-op (idempotent)', () => {
     // fails if: the migrator re-runs migration 005 on a second call (e.g. AUTOINCREMENT
     //   collision, or a duplicate CREATE TABLE throwing "table already exists")
     const db = makeFreshDb();
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    const version = db.pragma('user_version', { simple: true }) as number;
 
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    expect(db.pragma('user_version', { simple: true })).toBe(version);
 
     const count = (db.prepare('SELECT COUNT(*) as n FROM domain_events').get() as { n: number }).n;
     expect(count).toBe(0);

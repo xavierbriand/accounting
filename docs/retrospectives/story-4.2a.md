@@ -39,8 +39,11 @@ promoted in 4.0).
   behaviour slices × a `test:`+`feat:` pair, + 2 refactors + coverage commits) — roughly double
   the literal figure, exactly as story-4.1 did (~19). The TDD rhythm (§6.4) *mandates* the
   failing/green split, so counting raw commits against "6–10" will always over-shoot. Two
-  stories now confirm the drift. **Recommend clarifying R13 to count *slices* (a test+feat pair
-  = one slice), targeting 6–10 slices** — see Action items (rule change is user-gated).
+  stories now confirm the drift. Clarified via **R28** (envelope counts slices) — but 4.2a's
+  own honest slice count is **14, still over 10**: the mid-story `idempotency_hash` conflict, a
+  branch-coverage top-up, and three refactor commits pushed it past a domain-dense story's
+  envelope. Accepted and cleared via **squash-on-merge** (user decision 2026-07-06) — `main`
+  gets one commit, and R28's honest count stands as the metric for future stories.
 - **The date-correction clarification diverged from a *signed* invariant and needs the note
   reconciled in-PR.** The 4.0 note's Invariant 6 + "Correction date" say *both* new rows carry
   the original `occurredAt`; the shipped behaviour (user-approved 2026-07-06) moves the

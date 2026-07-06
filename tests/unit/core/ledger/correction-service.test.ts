@@ -10,7 +10,8 @@
  *   misshapes the TransactionCorrected event.
  */
 import { describe, it, expect } from 'vitest';
-import { Transaction } from '@core/ledger/transaction.js';
+import fc from 'fast-check';
+import { Transaction, type Entry } from '@core/ledger/transaction.js';
 import { Money } from '@core/shared/money.js';
 import { CorrectionService } from '@core/ledger/correction-service.js';
 
@@ -241,5 +242,96 @@ describe('CorrectionService.correct — chaining (scenario 6)', () => {
     expect(second.isSuccess).toBe(true);
     expect(second.value.reversal.correctsId).toBe(first.correcting.id);
     expect(second.value.correcting.correctsId).toBe(first.correcting.id);
+  });
+});
+
+describe('CorrectionService.correct — core invariants as properties (Story 4.0 model note inv 1, 5)', () => {
+  function netByAccount(entries: readonly Entry[]): Map<string, number> {
+    const net = new Map<string, number>();
+    for (const entry of entries) {
+      const sign = entry.side === 'debit' ? 1 : -1;
+      net.set(entry.account, (net.get(entry.account) ?? 0) + sign * entry.amount.amount);
+    }
+    return net;
+  }
+
+  it('invariant 1: reversal + original net to zero on every account, for any balanced two-entry original and any amount correction', () => {
+    fc.assert(
+      fc.property(
+        fc.nat({ max: 1_000_000 }),
+        fc.nat({ max: 1_000_000 }),
+        (originalCents, correctedCents) => {
+          const original = Transaction.create({
+            id: 'prop-original',
+            occurredAt: '2026-04-21T14:30:00+02:00',
+            description: 'property original',
+            entries: [
+              { account: 'Expense:Transport', side: 'debit', amount: makeEur(originalCents) },
+              { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(originalCents) },
+            ],
+          }).value;
+
+          const result = CorrectionService.correct(
+            original,
+            { amount: makeEur(correctedCents) },
+            ids,
+            'property: amount correction',
+          );
+          if (result.isFailure) return false;
+
+          const { reversal } = result.value;
+          const net = netByAccount([...original.entries, ...reversal.entries]);
+          return [...net.values()].every((n) => n === 0);
+        },
+      ),
+    );
+  });
+
+  it('invariant 5: the three-row group (original + reversal + correcting) nets, per account, to exactly what a single corrected transaction would show', () => {
+    fc.assert(
+      fc.property(
+        fc.nat({ max: 1_000_000 }),
+        fc.nat({ max: 1_000_000 }),
+        (originalCents, correctedCents) => {
+          const original = Transaction.create({
+            id: 'prop-original-2',
+            occurredAt: '2026-04-21T14:30:00+02:00',
+            description: 'property original',
+            entries: [
+              { account: 'Expense:Transport', side: 'debit', amount: makeEur(originalCents) },
+              { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(originalCents) },
+            ],
+          }).value;
+
+          const result = CorrectionService.correct(
+            original,
+            { amount: makeEur(correctedCents) },
+            ids,
+            'property: observational equality',
+          );
+          if (result.isFailure) return false;
+
+          const { reversal, correcting } = result.value;
+          const threeRowNet = netByAccount([...original.entries, ...reversal.entries, ...correcting.entries]);
+
+          const singleCorrected = Transaction.create({
+            id: 'prop-single-corrected',
+            occurredAt: original.occurredAt,
+            description: original.description,
+            entries: [
+              { account: 'Expense:Transport', side: 'debit', amount: makeEur(correctedCents) },
+              { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(correctedCents) },
+            ],
+          }).value;
+          const singleNet = netByAccount(singleCorrected.entries);
+
+          if (threeRowNet.size !== singleNet.size) return false;
+          for (const [account, net] of singleNet) {
+            if (threeRowNet.get(account) !== net) return false;
+          }
+          return true;
+        },
+      ),
+    );
   });
 });

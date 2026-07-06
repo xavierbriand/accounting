@@ -398,6 +398,12 @@ describe('SqliteTransactionRepository', () => {
   // saveCorrection tests (Story 4.2a — scenario 7)
   // ---------------------------------------------------------------------------
 
+  // fails if: SqliteTransactionRepository.saveCorrection is non-atomic (a reversal persists
+  //   without its correcting entry, or vice-versa, on a mid-write failure — see the single
+  //   db.transaction wrapper in runWrite), does not write kind/corrects_id so findById can't
+  //   reconstruct them, writes a non-NULL idempotency_hash on a correction row (violating
+  //   migration 006's kind-conditioned CHECK / the ingest-ACL firewall), or fails to roll
+  //   back both rows on a PK collision or dangling-corrects_id FK violation.
   describe('saveCorrection — Story 4.2a (scenario 7)', () => {
     function persistOriginal(id: string): Transaction {
       const tx = makeBalancedTx(id);

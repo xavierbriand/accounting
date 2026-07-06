@@ -4,9 +4,11 @@
  * Gherkin coverage: none directly — Core value-object shape + purity, exercised end-to-end
  *   by tests/features/audit-trail.feature (see docs/plans/story-4.1.md).
  *
- * fails if: TransactionIngested carries fields beyond type/transactionIds/sourceAccount
- *   (a clock or PII field would leak into Core), or src/core/events/ or the port import
- *   Node APIs / better-sqlite3 / a clock (Core purity — architecture.md § Domain events).
+ * fails if: TransactionIngested carries fields beyond type/transactionIds/sourceAccount, or
+ *   TransactionCorrected carries fields beyond type/targetTransactionId/producedTransactionIds/
+ *   changedFields/reason (a clock, an actor, or a PII field would leak into Core), or
+ *   src/core/events/ or the port import Node APIs / better-sqlite3 / a clock (Core purity —
+ *   architecture.md § Domain events).
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';

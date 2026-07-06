@@ -141,4 +141,75 @@ describe('Transaction.create', () => {
       );
     });
   });
+
+  describe('kind + correctsId (Story 4.2a)', () => {
+    it('defaults kind to "original" and correctsId to undefined when omitted', () => {
+      const result = Transaction.create({
+        id: 'tx-kind-default',
+        occurredAt: '2026-04-21T14:00:00+02:00',
+        description: 'test',
+        entries: [
+          { account: 'Expense:Transport', side: 'debit', amount: makeEur(100) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(100) },
+        ],
+      });
+
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.kind).toBe('original');
+      expect(result.value.correctsId).toBeUndefined();
+    });
+
+    it('accepts an explicit kind + correctsId (reversal)', () => {
+      const result = Transaction.create({
+        id: 'tx-reversal',
+        occurredAt: '2026-04-21T14:00:00+02:00',
+        description: 'reversal of tx-original',
+        kind: 'reversal',
+        correctsId: 'tx-original',
+        entries: [
+          { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(100) },
+          { account: 'Expense:Transport', side: 'credit', amount: makeEur(100) },
+        ],
+      });
+
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.kind).toBe('reversal');
+      expect(result.value.correctsId).toBe('tx-original');
+    });
+
+    it('accepts an explicit kind + correctsId (correcting)', () => {
+      const result = Transaction.create({
+        id: 'tx-correcting',
+        occurredAt: '2026-04-21T14:00:00+02:00',
+        description: 'corrected transport',
+        kind: 'correcting',
+        correctsId: 'tx-original',
+        entries: [
+          { account: 'Expense:Transport', side: 'debit', amount: makeEur(150) },
+          { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(150) },
+        ],
+      });
+
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.kind).toBe('correcting');
+      expect(result.value.correctsId).toBe('tx-original');
+    });
+
+    it('existing invariants (balance, entry count) still apply when kind is set', () => {
+      const result = Transaction.create({
+        id: 'tx-unbalanced-reversal',
+        occurredAt: '2026-04-21T14:00:00+02:00',
+        description: 'bad reversal',
+        kind: 'reversal',
+        correctsId: 'tx-original',
+        entries: [
+          { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(100) },
+          { account: 'Expense:Transport', side: 'credit', amount: makeEur(99) },
+        ],
+      });
+
+      expect(result.isFailure).toBe(true);
+      expect(result.error).toMatch(/^Invariant Violation: debits/);
+    });
+  });
 });

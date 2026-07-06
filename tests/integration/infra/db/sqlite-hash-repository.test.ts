@@ -45,11 +45,17 @@ describe('migration 003 (idempotency_hash column) + migration 004 (NOT NULL)', (
     const version = db.pragma('user_version', { simple: true }) as number;
     expect(version).toBeGreaterThanOrEqual(4);
 
-    // Column must exist and be NOT NULL (migration 004)
+    // Column must exist. Migration 004 made it NOT NULL at the column level; migration 006
+    // (story-4.2a) relaxed the column to nullable and replaced the column-level constraint with
+    // a table-level, kind-conditioned CHECK (original rows still require a hash; reversal/
+    // correcting rows require NULL — see migration-006.test.ts for the CHECK itself). The
+    // column-level notnull flag is therefore 0 post-006; the invariant this test originally
+    // guarded (a plain/'original' insert with a NULL hash is rejected) is asserted below via the
+    // CHECK-driven throw, not the notnull flag.
     const cols = db.pragma('table_info(transactions)') as { name: string; notnull: number }[];
     const hashCol = cols.find((c) => c.name === 'idempotency_hash');
     expect(hashCol).toBeDefined();
-    expect(hashCol!.notnull).toBe(1);
+    expect(hashCol!.notnull).toBe(0);
     db.close();
   });
 
@@ -171,14 +177,19 @@ describe('SqliteHashRepository.listKnownHashes', () => {
     }).toThrow(/UNIQUE constraint failed/);
   });
 
-  it('rejects NULL idempotency_hash (NOT NULL enforced after migration 004)', () => {
+  it('rejects NULL idempotency_hash for a default (kind=original) row (migration 004, refined by 006)', () => {
     // fails if: migration 004 did not tighten the column to NOT NULL
-    // (prior to 004, NULLs were allowed; this replaces the old "allows multiple NULLs" test)
+    // (prior to 004, NULLs were allowed; this replaces the old "allows multiple NULLs" test).
+    // Story-4.2a's migration 006 relaxed the column-level NOT NULL to a table-level,
+    // kind-conditioned CHECK (see sqlite-hash-repository.test.ts's other test above + the
+    // dedicated migration-006.test.ts). The insert below omits `kind`, so it defaults to
+    // 'original', which still requires a non-NULL hash — the invariant this test guards is
+    // unchanged, only the constraint mechanism (and thus the thrown error string) changed.
     const insert = db.prepare(
       "INSERT INTO transactions (id, occurred_at, description) VALUES (?, ?, ?)",
     );
     expect(() => {
       insert.run('tx-null-1', '2026-04-20T00:00:00+00:00', 'test null 1');
-    }).toThrow(/NOT NULL constraint failed/);
+    }).toThrow(/constraint failed/);
   });
 });

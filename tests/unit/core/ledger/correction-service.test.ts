@@ -99,3 +99,69 @@ describe('CorrectionService.correct — amount correction (scenario 1)', () => {
     }
   });
 });
+
+describe('CorrectionService.correct — field-change semantics (scenario 2, 3)', () => {
+  it('correcting only the description leaves entries unchanged and names "description" in changedFields', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(
+      original,
+      { description: 'Transport (corrected)' },
+      ids,
+      'typo in description',
+    );
+
+    expect(result.isSuccess).toBe(true);
+    const { correcting, event } = result.value;
+
+    expect(correcting.description).toBe('Transport (corrected)');
+    expect(correcting.entries[0]).toMatchObject({ account: 'Expense:Transport', side: 'debit' });
+    expect(correcting.entries[0].amount.amount).toBe(2000);
+    expect(correcting.entries[1]).toMatchObject({ account: 'Liabilities:CreditCard', side: 'credit' });
+    expect(correcting.entries[1].amount.amount).toBe(2000);
+    expect(correcting.occurredAt).toBe(original.occurredAt);
+    expect(event.changedFields).toEqual(['description']);
+  });
+
+  it('correcting the debit-side account retargets only the debit entry, credit side untouched', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(
+      original,
+      { account: 'Expense:Groceries' },
+      ids,
+      'miscategorized',
+    );
+
+    expect(result.isSuccess).toBe(true);
+    const { correcting, event } = result.value;
+
+    expect(correcting.entries[0]).toMatchObject({ account: 'Expense:Groceries', side: 'debit' });
+    expect(correcting.entries[0].amount.amount).toBe(2000);
+    expect(correcting.entries[1]).toMatchObject({ account: 'Liabilities:CreditCard', side: 'credit' });
+    expect(event.changedFields).toEqual(['account']);
+  });
+
+  it('correcting the date: correcting entry carries the new date, reversal keeps the original date (scenario 3)', () => {
+    const original = makeOriginal();
+    const newDate = '2026-04-25T09:00:00+02:00';
+
+    const result = CorrectionService.correct(original, { date: newDate }, ids, 'wrong date recorded');
+
+    expect(result.isSuccess).toBe(true);
+    const { reversal, correcting, event } = result.value;
+
+    expect(correcting.occurredAt).toBe(newDate);
+    expect(reversal.occurredAt).toBe(original.occurredAt);
+    expect(event.changedFields).toEqual(['date']);
+  });
+
+  it('correcting entry keeps the original date when date is not among the changes', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { description: 'renamed' }, ids, 'renamed only');
+
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.correcting.occurredAt).toBe(original.occurredAt);
+  });
+});

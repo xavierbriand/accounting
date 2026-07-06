@@ -462,9 +462,11 @@ describe('SqliteTransactionRepository', () => {
       // Force a dangling FK by deleting the original's row is not possible (append-only, no DELETE
       // exposed) — instead, simulate the failure mode directly against the DB the same way the
       // atomic-save tests above do: pre-insert a header row with the reversal's id to force a
-      // PK collision on the second write.
+      // PK collision on the second write. hash is NULL (not a placeholder string) to stay
+      // kind-consistent with migration 006's kind-conditioned idempotency_hash CHECK — a
+      // 'correcting' row must carry a NULL hash.
       db.prepare(
-        "INSERT INTO transactions (id, occurred_at, description, idempotency_hash, kind) VALUES ('tx-corr-fk-correcting', '2026-01-01T00:00:00Z', 'pre', 'pre-hash', 'correcting')",
+        "INSERT INTO transactions (id, occurred_at, description, idempotency_hash, kind) VALUES ('tx-corr-fk-correcting', '2026-01-01T00:00:00Z', 'pre', NULL, 'correcting')",
       ).run();
 
       const result = repo.saveCorrection(outcome.reversal, outcome.correcting);

@@ -142,6 +142,9 @@ describe('runCorrectCommand — happy path, human output (scenario 1)', () => {
   });
 });
 
+// fails if: the JSON payload is missing a field, only reports one of two
+// simultaneously-changed fields (R8 mock-diversity), or human-readable prose
+// leaks into stdout alongside the JSON document.
 describe('runCorrectCommand — --json output, multiple changed fields (scenario 2)', () => {
   it('emits a single JSON document naming both changed fields, no human prose mixed in', async () => {
     const { deps, stdout, exitCodes } = makeDeps();
@@ -185,6 +188,10 @@ function makeReversal(): Transaction {
   }).value;
 }
 
+// fails if: any error path writes rows or records an event despite failing
+// (not-found, reversal-guard, no-fields-guard, write-failure), an exit code
+// doesn't match the plan's table (2 validation, 1 unexpected read error, 4
+// write failure), or a write-failure message leaks an unredacted DB error.
 describe('runCorrectCommand — error paths → exit codes (scenarios 4, 5, 6, 6b)', () => {
   it('(scenario 4) transaction not found: exits 2, stderr names the id, no write/record', async () => {
     const { deps, stderr, exitCodes, saveCorrectionMock, recordMock } = makeDeps({
@@ -264,6 +271,9 @@ describe('runCorrectCommand — error paths → exit codes (scenarios 4, 5, 6, 6
   });
 });
 
+// fails if: a record()-failure warning string echoes the literal reason text
+// (reason is PII-adjacent per the glossary; only the audit-trail payload
+// itself, never a CLI stderr message, should carry it verbatim).
 describe('runCorrectCommand — reason-leakage guard (Risks & deferred items)', () => {
   it('a record()-failure warning never echoes the literal reason text', async () => {
     const secretReason = 'IBAN FR7612345987650123456789014 refund correction';
@@ -279,6 +289,10 @@ describe('runCorrectCommand — reason-leakage guard (Risks & deferred items)', 
   });
 });
 
+// fails if: the correcting entry's date doesn't take the new date, the
+// reversal's date moves off the original, or a Date-object round-trip
+// silently shifts an offset across a DST transition instead of the raw
+// ISO string components being spliced.
 describe('runCorrectCommand — --date splicing (Risks: DST-safety, string manipulation only)', () => {
   it('splices the new date onto the original\'s time-of-day + UTC offset', async () => {
     const { deps, saveCorrectionMock } = makeDeps();

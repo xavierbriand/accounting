@@ -10,7 +10,6 @@ import { runMigrations } from '../../../src/infra/db/migrator.js';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { runCorrectCommand } from '../../../src/cli/commands/correct-command.js';
-import { CorrectionService } from '../../../src/core/ledger/correction-service.js';
 import { Transaction } from '../../../src/core/ledger/transaction.js';
 import { Money } from '../../../src/core/shared/money.js';
 import { Result } from '../../../src/core/shared/result.js';
@@ -170,11 +169,32 @@ Given('a persisted reversal-kind transaction', function (state: CorrectWorld) {
   state.transactionRepository = repo;
   state.domainEventRecorder = new SqliteDomainEventRecorder(db);
 
+  // Built directly via Transaction.create, not a CorrectionService.correct round-trip
+  // (Phase-2 P1 finding — adopted, docs/plans/story-4.2b.md suggestion-log #8): faster,
+  // and the round-trip path is already covered by 4.2a's own tests.
   const original = insertOriginal(db);
-  const ids = { reversalId: 'tx-reversal-fixture', correctingId: 'tx-correcting-fixture' };
-  const correctionResult = CorrectionService.correct(original, { description: 'seed correction' }, ids, 'seed reason');
-  if (correctionResult.isFailure) throw new Error(`fixture correction failed: ${correctionResult.error}`);
-  const { reversal, correcting } = correctionResult.value;
+  const reversal = Transaction.create({
+    id: 'tx-reversal-fixture',
+    occurredAt: original.occurredAt,
+    description: `Reversal of ${original.id}`,
+    kind: 'reversal',
+    correctsId: original.id,
+    entries: [
+      { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(2000) },
+      { account: 'Expense:Transport', side: 'credit', amount: makeEur(2000) },
+    ],
+  }).value;
+  const correcting = Transaction.create({
+    id: 'tx-correcting-fixture',
+    occurredAt: original.occurredAt,
+    description: original.description,
+    kind: 'correcting',
+    correctsId: original.id,
+    entries: [
+      { account: 'Expense:Transport', side: 'debit', amount: makeEur(2000) },
+      { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
+    ],
+  }).value;
   const writeResult = repo.saveCorrection(reversal, correcting);
   if (writeResult.isFailure) throw new Error(`fixture saveCorrection failed: ${writeResult.error}`);
   state.originalId = reversal.id;

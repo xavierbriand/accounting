@@ -25,9 +25,14 @@ Feature: Correct a past transaction via the correct CLI command
     And no transaction rows are written beyond the original
     And no TransactionCorrected event is recorded
     # fails if: the command proceeds without a reason. Tested against the zod
-    # boundary (parseCorrectOptions) in-process, per R7 — commander's own
-    # requiredOption('--reason', ...) enforcement is exercised transitively by
-    # scenario 8's real subprocess run (see docs/plans/story-4.2b.md Deviations).
+    # boundary (parseCorrectOptions) in-process, per R7 — this exercises an
+    # explicitly-blank --reason ("" present but empty), not a fully-omitted
+    # flag. Commander's own requiredOption('--reason', ...) enforcement (which
+    # a genuinely-omitted --reason hits first, before parseCorrectOptions ever
+    # runs) is not exercised by any test in this suite — scenario 8's subprocess
+    # run always supplies --reason. This mirrors the repo's existing precedent:
+    # ingest/categorize's requiredOption('-f, --file', ...) is likewise untested
+    # via subprocess omission.
 
   Scenario: Transaction not found
     Given a fresh migrated correct DB

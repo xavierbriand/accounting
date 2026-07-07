@@ -31,15 +31,21 @@ conformance violations**. No new glossary vocabulary.
 
 ## Change
 
-- **Sonnet's own "Deviations from plan" self-report missed a divergence from an *adopted*
-  Phase-2 suggestion-log item.** The plan's suggestion log (item 8, ADOPTED) specified building
-  scenario 5's `kind: 'reversal'` fixture directly via `Transaction.create`, not a
-  `CorrectionService.correct` round-trip. The two unit-test fixtures followed it correctly; the
-  acceptance-step fixture (`correct.steps.ts`) didn't — and Sonnet's return report didn't flag
-  it. `code-reviewer` caught it at Phase 4 instead, one round-trip later than necessary. The
-  agent spec's § 4a "Deviation case law" lists four specific triggers (shim-for-tests,
-  architectural-violation, safeguard-removal, commit-bundle) but has no explicit "diff every
-  ADOPTED suggestion-log row against what actually shipped" step.
+- **Sonnet's own "Deviations from plan" self-report missed a divergence from a suggestion-log
+  item that carried a concrete implementation instruction.** The plan's suggestion log item 8
+  (tagged **ACKNOWLEDGE**, not ADOPT — corrected here after a Phase-4 accuracy check on this
+  retro itself caught the mislabel) specified building scenario 5's `kind: 'reversal'` fixture
+  directly via `Transaction.create`, not a `CorrectionService.correct` round-trip. The two
+  unit-test fixtures followed it correctly; the acceptance-step fixture (`correct.steps.ts`)
+  didn't — and Sonnet's return report didn't flag it. `code-reviewer` caught it at Phase 4
+  instead, one round-trip later than necessary. The agent spec's § 4a "Deviation case law" lists
+  four specific triggers (shim-for-tests, architectural-violation, safeguard-removal,
+  commit-bundle) but has no explicit "diff every suggestion-log row that carries a concrete
+  implementation instruction — ADOPT or ACKNOWLEDGE-with-a-directive alike — against what
+  actually shipped" step. The ADOPT/ACKNOWLEDGE tag alone doesn't predict which rows matter
+  here: several ACKNOWLEDGE rows in this same plan are genuinely no-action notes (e.g. "no
+  blocking overlap"), while row 8 was an ACKNOWLEDGE that still told the implementer exactly
+  what to build.
 - **A `fails if` comment made an inaccurate claim about what another scenario covers.** Scenario
   3's comment asserted commander's `requiredOption('--reason', ...)` rejection was "exercised
   transitively by scenario 8's real subprocess run" — untrue; scenario 8 always supplies
@@ -56,10 +62,11 @@ conformance violations**. No new glossary vocabulary.
 ## Try
 
 - **Add a suggestion-log cross-check to the Phase-3 return-report checklist.** Before returning,
-  Sonnet should walk every `ADOPTED` row in the plan's suggestion log and confirm the shipped
-  diff actually reflects it (not just "tests pass") — would have caught the reversal-fixture
-  divergence without a Phase-4 round-trip. Candidate addition to `.claude/agents/sonnet-implementer.md`
-  § 4 (Return format) or § 4a.
+  Sonnet should walk every suggestion-log row that carries a concrete implementation
+  instruction — not just rows tagged ADOPT — and confirm the shipped diff actually reflects it
+  (not just "tests pass"). Scoping the check to the ADOPT tag alone would have missed this
+  story's own divergence, since the row in question was tagged ACKNOWLEDGE. Candidate addition
+  to `.claude/agents/sonnet-implementer.md` § 4 (Return format) or § 4a.
 - **Teach Check B to recognize `*(new)*`/`*(planned)*`-marked plan-table paths and suppress the
   `missing-path` finding for those specific entries**, mirroring the `*(pending)*`/`*(hole)*`
   suppression markers Check A/Check D already support. Two confirmed data points (4.2a, 4.2b)
@@ -68,20 +75,26 @@ conformance violations**. No new glossary vocabulary.
 ## Phase-4 disposition record
 
 `code-reviewer` (4 P1, 2 P3 hard + 3 soft) + `ddd-modeler` Mode B (0 conformance violations, 2
-observations) in parallel. **Fixed now** (`531ab4a`): scenario 5's reversal-kind fixture
-rebuilt via direct `Transaction.create` (closes the adopted-suggestion-log-#8 divergence);
-scenario 3's `fails if` comment corrected (no more over-claim about scenario 8's coverage, no
-more citation to a nonexistent plan "Deviations" section); `fails if` comments added to the four
-`correct-command.test.ts` describe blocks that lacked one. **User decision** (`89dceb7`):
-relabel `changedFields`'s `"account"` entry to `"category"` in CLI-facing output only (`--json`
-and human text) — the recorded `TransactionCorrected` event keeps Core's `"account"` vocabulary
-untouched. **Acknowledged, no code change:** `findById` read-failure → exit 1 (consistent with
+observations — **(1)** the `changedFields` account/category display-label question, **(2)** the
+model note's `correct()` signature line lagging the `reason` 4th param shipped at 4.2a) in
+parallel. **Fixed now** (`531ab4a`): scenario 5's reversal-kind fixture rebuilt via direct
+`Transaction.create` (closes the suggestion-log-#8 divergence — see Change above for the
+ADOPT/ACKNOWLEDGE correction); scenario 3's `fails if` comment corrected (no more over-claim
+about scenario 8's coverage, no more citation to a nonexistent plan "Deviations" section);
+`fails if` comments added to the four `correct-command.test.ts` describe blocks that lacked
+one. **User decision** (`89dceb7`, resolves observation (1)): relabel `changedFields`'s
+`"account"` entry to `"category"` in CLI-facing output only (`--json` and human text) — the
+recorded `TransactionCorrected` event keeps Core's `"account"` vocabulary untouched.
+**Acknowledged, no code change:** `findById` read-failure → exit 1 (consistent with
 `status-command`/`ingest-command` precedent, already tested); 8 landed slices vs. the plan's
 9-item enumeration (two closely-related pairs bundled, still within R13's range); negative-amount
 CLI-boundary test gap (already correctly rejected downstream by `Transaction.create`'s
 invariant, just untested at that specific layer — soft, not pursued). **Reconciled** (this PR,
-user-approved 2026-07-07): [story-4.0 model note](../domain/model-notes/story-4.0.md) — new
-invariant 9 (a correction may not target a `reversal`-kind transaction) added; `CorrectionService.correct`'s
+user-approved 2026-07-07, resolves observation (2)): [story-4.0 model note](../domain/model-notes/story-4.0.md)
+— new invariant 9 (a correction may not target a `reversal`-kind transaction) added, **and only
+that guard** — the sibling "require ≥1 changed field" guard is a CLI-usability check, not a
+domain invariant (no `Transaction`/`CorrectionChanges` shape it protects beyond "don't no-op"),
+so it has no model-note counterpart by design, not by omission; `CorrectionService.correct`'s
 tactical signature line updated to show the `reason` 4th parameter (pre-existing drift from
 4.2a, not introduced here). No new CLAUDE.md rule minted — all findings were execution-level.
 

@@ -158,9 +158,9 @@ Phase 2 review for this story is **Reduced lane** (infra-only dep bump, no Core/
 
 ## Merge checklist
 
-- [ ] `lint` / `build` / `test` green on CI
+- [x] `lint` / `build` / `test` green on CI
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-21.md`
-- [ ] All suggestion-log items resolved (no blank `Resolution` cells)
-- [ ] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
+- [x] Retrospective file committed at `docs/retrospectives/story-maint-21.md`
+- [x] All suggestion-log items resolved (no blank `Resolution` cells)
+- [x] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
 - [ ] User approval

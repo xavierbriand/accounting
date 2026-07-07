@@ -17,6 +17,8 @@ export default tseslint.config(
     rules: {
       "local/no-ignored-test": "error",
       "local/no-redundant-assertion": "error",
+      "local/assertion-roulette": "warn",
+      "local/no-sleepy-test": "warn",
     },
   },
   {

@@ -19,6 +19,7 @@ import { ScriptedPrompter, scriptHasForceMtimeRace, type Script } from './utils/
 import { runIngestCommand } from './commands/ingest-command.js';
 import { runCategorizeCommand } from './commands/categorize-command.js';
 import { runStatusCommand } from './commands/status-command.js';
+import { runCorrectCommand } from './commands/correct-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
@@ -167,6 +168,58 @@ program
         dbPath: resolvedDb,
         configWriter,
         domainEventRecorder,
+      },
+    );
+  });
+
+program
+  .command('correct <transactionId>')
+  .description('Correct a past transaction (writes a reversal + a correcting entry; the original is never mutated)')
+  .option('--amount <decimal>', 'New amount, e.g. 45.30')
+  .option('--category <name>', 'New expense category')
+  .option('--date <YYYY-MM-DD>', 'New date (bare date; time-of-day and UTC offset are kept from the original)')
+  .option('--description <text>', 'New description (pass "" to explicitly clear it)')
+  .requiredOption('--reason <text>', 'Why this correction is being made (required, recorded in the audit trail)')
+  .option('--json', 'Output JSON instead of human-readable text', false)
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (
+    transactionId: string,
+    options: { amount?: string; category?: string; date?: string; description?: string; reason: string; json: boolean; dbPathOverride?: string },
+  ) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { resolvedDbPath } = result.value;
+    const db = getDb(resolvedDbPath);
+
+    const migrationCheck = assertMigrated(db, resolvedDbPath);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+
+    const transactionRepository = new SqliteTransactionRepository(db);
+    const domainEventRecorder = new SqliteDomainEventRecorder(db);
+
+    await runCorrectCommand(
+      {
+        transactionId,
+        amount: options.amount,
+        category: options.category,
+        date: options.date,
+        description: options.description,
+        reason: options.reason,
+        json: options.json,
+      },
+      {
+        transactionRepository,
+        domainEventRecorder,
+        uuidGen: nodeUuidGen,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        exitCode: (code) => process.exit(code),
       },
     );
   });

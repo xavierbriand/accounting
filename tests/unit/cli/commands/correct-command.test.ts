@@ -170,3 +170,111 @@ describe('runCorrectCommand — --json output, multiple changed fields (scenario
     expect(stdout.captured).not.toContain('Reversal:');
   });
 });
+
+function makeReversal(): Transaction {
+  return Transaction.create({
+    id: 'tx-reversal-target',
+    occurredAt: '2026-04-21T14:30:00+02:00',
+    description: 'Reversal of tx-original',
+    kind: 'reversal',
+    correctsId: 'tx-original',
+    entries: [
+      { account: 'Expense:Transport', side: 'credit', amount: makeEur(2000) },
+      { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(2000) },
+    ],
+  }).value;
+}
+
+describe('runCorrectCommand — error paths → exit codes (scenarios 4, 5, 6, 6b)', () => {
+  it('(scenario 4) transaction not found: exits 2, stderr names the id, no write/record', async () => {
+    const { deps, stderr, exitCodes, saveCorrectionMock, recordMock } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(null)),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ transactionId: 'tx-bogus', amount: '10.00' }), deps);
+
+    expect(exitCodes).toEqual([2]);
+    expect(stderr.captured).toContain('tx-bogus');
+    expect(saveCorrectionMock).not.toHaveBeenCalled();
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it('(unexpected findById read failure) exits 1, stderr redacted, no write/record', async () => {
+    const { deps, stderr, exitCodes, saveCorrectionMock, recordMock } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.fail('SqliteError: database disk image is malformed')),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ amount: '10.00' }), deps);
+
+    expect(exitCodes).toEqual([1]);
+    expect(stderr.captured).toContain('tx-original');
+    expect(saveCorrectionMock).not.toHaveBeenCalled();
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it('(scenario 5) rejects correcting a reversal: exits 2, stderr cites "reversal", no write/record', async () => {
+    const { deps, stderr, exitCodes, saveCorrectionMock, recordMock } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(makeReversal())),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ transactionId: 'tx-reversal-target', amount: '10.00' }), deps);
+
+    expect(exitCodes).toEqual([2]);
+    expect(stderr.captured.toLowerCase()).toContain('reversal');
+    expect(saveCorrectionMock).not.toHaveBeenCalled();
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it('(scenario 6) no fields to correct: exits 2, stderr cites "at least one field", no write', async () => {
+    const { deps, stderr, exitCodes, saveCorrectionMock } = makeDeps();
+
+    await runCorrectCommand(baseOptions(), deps);
+
+    expect(exitCodes).toEqual([2]);
+    expect(stderr.captured.toLowerCase()).toContain('at least one field');
+    expect(saveCorrectionMock).not.toHaveBeenCalled();
+  });
+
+  it('(scenario 6b) saveCorrection write failure: exits 4, sanitizeSqlError-redacted stderr, no record', async () => {
+    const collidingHash = 'a'.repeat(64);
+    const { deps, stderr, exitCodes, recordMock } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(makeOriginal())),
+        saveCorrection: vi.fn().mockReturnValue(
+          Result.fail(`SqliteError: UNIQUE constraint failed: transactions.idempotency_hash = ${collidingHash}`),
+        ),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ amount: '45.30' }), deps);
+
+    expect(exitCodes).toEqual([4]);
+    expect(stderr.captured).not.toContain(collidingHash);
+    expect(stderr.captured).toContain('<redacted>');
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('runCorrectCommand — reason-leakage guard (Risks & deferred items)', () => {
+  it('a record()-failure warning never echoes the literal reason text', async () => {
+    const secretReason = 'IBAN FR7612345987650123456789014 refund correction';
+    const { deps, stderr, exitCodes } = makeDeps({
+      domainEventRecorder: { record: vi.fn().mockReturnValue(Result.fail('SqliteError: disk I/O error')) },
+    });
+
+    await runCorrectCommand(baseOptions({ amount: '45.30', reason: secretReason }), deps);
+
+    expect(exitCodes).toEqual([0]);
+    expect(stderr.captured).not.toContain(secretReason);
+    expect(stderr.captured).toContain('Warning');
+  });
+});

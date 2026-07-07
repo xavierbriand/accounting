@@ -10,6 +10,7 @@
 - **Sibling work:** `gh pr list --state open --draft --base main` returns empty (story-maint-21/#197 merged; #194 merged earlier). No overlap.
 - **Open issues touching this surface:** [#196](https://github.com/xavierbriand/accounting/issues/196) (this story's own tracking issue) and [#57](https://github.com/xavierbriand/accounting/issues/57) ("Track quickpickle's undeclared pixelmatch dependency upstream" — stays open, see § "Selected solution"). Nothing else stale.
 - **Open Dependabot PRs:** only #188, handled by this story.
+- **Story-id uniqueness (R23):** `docs/plans/`, `docs/retrospectives/`, `docs/status.d/` on `origin/main`, and open PR branch names all clean for `story-maint-22` — no collision.
 - **`npm audit --audit-level=high`:** 0 findings, pre- and post-bump (checked in § "Pre-planning probe findings" below, including on the downgraded `pixelmatch@6.0.0`).
 - **Proceed-to-planning.**
 
@@ -53,7 +54,8 @@ Called at [gherkin-map.ts:37-40](harness/dod-check/lib/gherkin-map.ts) (`new Ast
 | `@cucumber/gherkin` 33→40 — "BREAKING CHANGE: Switch to ESM" | This repo is already `"type": "module"`; `gherkin-map.ts` already uses ESM `import` syntax | None |
 | `@cucumber/gherkin` 41 — "Remove namespace imports from messages" | A fix, not a break; verified `Parser`/`AstBuilder`/`GherkinClassicTokenMatcher` are still named exports at the same subpath in `41.0.0`'s `dist/index.js` | None |
 | `@cucumber/cucumber-expressions` 20.0.0 — "BREAKING CHANGE: Switch to ESM" | Same as above — repo already ESM; `20.0.0`'s `package.json` drops the CJS `exports` map, which only removes `require()` support we never used | None |
-| All other `@cucumber/*` changelog entries in the 18→20 / 32→41 ranges | Checked — scoped to PHP/.NET/C++/Java, not the JS/TS package we consume | N/A |
+| `@cucumber/gherkin` 37.0.0 — "BREAKING CHANGE: Require messages v31 or greater" (**unscoped** — applies to all language ports, not PHP/.NET-only; found in Phase 4 review, see § "Suggestion log") | `@cucumber/gherkin`'s own `@cucumber/messages` dependency range moved `>=19.1.4 <28` → `>=31.0.0 <34`. Since it's a regular (non-peer) dep, npm nests a separate copy at `node_modules/@cucumber/gherkin/node_modules/@cucumber/messages@33.0.4`, distinct from the top-level `@cucumber/messages@27.2.0` that `gherkin-map.ts:2` imports `IdGenerator` from directly. Compared both copies' `IdGenerator.d.ts`: byte-identical (`export type NewId = () => string; export declare function uuid(): NewId; export declare function incrementing(): NewId;`) | None — the two `@cucumber/messages` copies never need to interoperate structurally beyond this identical type shape; `AstBuilder`'s constructor accepts whichever `IdGenerator.uuid()` value our top-level import produces regardless of which copy `@cucumber/gherkin` itself resolves internally. Confirmed empirically: `npm run test:harness` 252/252 green (Phase 1 probe and independently re-run in Phase 4 review). |
+| All other `@cucumber/*` changelog entries in the 18→20 / 32→41 ranges (re-verified in Phase 4 against the full upstream `CHANGELOG.md`, not just the Dependabot PR body excerpt) | Scoped to PHP/.NET/C++/Java, or a non-breaking "update dependency messages to vNN" bump | N/A |
 | `quickpickle`'s own internal `@cucumber/*` deps | `quickpickle@1.11.2`'s `package.json` `dependencies` still pin `@cucumber/cucumber-expressions ^18.0.1` / `@cucumber/gherkin ^32.1.0` (regular deps, not peers — unchanged from `1.11.1`) | Our top-level bump doesn't move quickpickle's own runtime; npm nests a separate satisfying copy under `node_modules/quickpickle/node_modules/`. `harness/dod-check/lib/gherkin-map.ts` is the *only* in-repo code whose runtime is actually affected by the top-level bump — audited above. |
 
 **pixelmatch peer-range fix — separate from the Dependabot diff:**
@@ -76,6 +78,7 @@ Ran `npm install --save-dev @cucumber/cucumber-expressions@20.0.0 @cucumber/gher
 | `npm audit --audit-level=high` | 0 findings | 0 findings (confirmed clean on `pixelmatch@6.0.0` too) | 0 |
 | `git diff --stat -- src/ tests/ harness/` | — | empty | 0 LOC changed |
 | `package.json` diff | — | 10 line-pairs (9 group bumps + `pixelmatch` downgrade) | as planned |
+| `package-lock.json` diff | — | 459 changed lines: the 10 top-level pins plus ordinary transitive re-resolution riding along (`@typescript-eslint/*` × 9 sub-packages, `@vitest/*` × 7 sub-packages, `vite`'s bundled rolldown/oxc toolchain — `@oxc-project/types`, `rolldown`, 14 `@rolldown/binding-*` platform packages, `picomatch`) plus the nested `@cucumber/gherkin/node_modules/@cucumber/messages@33.0.4` copy (see § "Breaking-change audit" table) | benign; not itself a signal of risk beyond what the audit table above already covers |
 
 The probe confirms the § "Gherkin / AC scenarios" scenarios pass verbatim, including the harness-specific one the research audit flagged as the real risk (`gherkin-map.ts`'s direct usage of both majors).
 
@@ -154,13 +157,21 @@ Phase 2 review for this story is **Reduced lane** (devDependency-only bump, no C
 | P2 (sibling-overlap) | Issues #57 and #198 are correctly referenced (not duplicated) — #57 stays open (real upstream fix still pending), #198 is unrelated harness tooling already anticipated by this plan's `text`-fenced pseudo-Gherkin block. | adopted | No plan change needed — confirms § "Selected solution" and § "Gherkin / AC scenarios" framing already had this right. |
 | P2 (sibling-overlap) | No other open PR (28 checked) or issue (44 checked) touches `harness/dod-check/lib/gherkin-map.ts`, `package.json`/`package-lock.json`, any of the 9 bumped packages, or `pixelmatch`; none of the last 10 merged PRs touched this same surface. | adopted | Confirms no coordination risk beyond the two items above. |
 
-Phase 4 (code-reviewer + sibling-overlap, Reduced lane) findings will extend this table once the commits land.
+**Phase 4 (code-reviewer + sibling-overlap, Reduced lane) — run 2026-07-08 against PR #199.**
+
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 (code-reviewer) | Audit table's "All other `@cucumber/*` changelog entries... scoped to PHP/.NET/C++/Java" claim was factually wrong for one entry: `@cucumber/gherkin` 37.0.0 has an **unscoped** breaking change ("Require messages v31 or greater") that moves `@cucumber/gherkin`'s own internal `@cucumber/messages` range, nesting a separate `@cucumber/messages@33.0.4` copy distinct from our top-level `27.2.0`. Empirically harmless (both copies' `IdGenerator.d.ts` are byte-identical; `test:harness` 252/252 green) but the audit's completeness claim was inaccurate. | fix-now | Added the missed entry to § "Breaking-change audit" with the full mechanism and empirical confirmation; corrected the "scoped to non-JS" framing on the remaining catch-all row. Second consecutive R15 story to hit this exact gap category (story-maint-21 retro item C) — see retro § Change. |
+| P3 (code-reviewer, soft) | Plan's "Maintenance sub-loop" section didn't explicitly narrate the R23 story-id-uniqueness check, unlike its explicit R19 sibling-PR/issue walk. Second consecutive occurrence of this exact gap (story-maint-21 plan had the same soft finding). | fix-now | Added an explicit R23 narration line to § "Maintenance sub-loop" (no actual collision existed either time, but the check should be visibly walked, not just implicitly true). |
+| P3 (code-reviewer, soft) | R15's commit envelope and the § 6 lane-selection table (R13/R14/R16) still aren't formally reconciled — identical finding to story-maint-21's Phase 4 review, now a second data point. | fix-now (process, not plan text) | Filed [issue #200](https://github.com/xavierbriand/accounting/issues/200) — two consecutive identical findings crosses this repo's own retro-codification threshold (maint-05→maint-06 precedent: "codify once it reproduces"). |
+| P3 (code-reviewer, soft) | `package-lock.json` diff (459 lines) is much larger than the 10 top-level `package.json` pins, from ordinary transitive re-resolution (typescript-eslint/vitest/rolldown sub-packages) plus the nested `@cucumber/messages` copy above — the probe table didn't call this out the way it did for `package.json`. | fix-now | Added an explicit `package-lock.json` diff row to § "Pre-planning probe findings" explaining the benign churn. |
+| P4 (sibling-overlap) | Re-check for new overlap since Phase 2: none found. #188/#196 reconfirmed as the correct predecessors (still open, unchanged, no new commits on #188). | acknowledge | No action — confirms Phase 2's findings still hold. |
 
 ## Merge checklist
 
-- [ ] `lint` / `build` / `test` / `test:harness` green on CI
+- [x] `lint` / `build` / `test` / `test:harness` green on CI
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-22.md`
-- [ ] All suggestion-log items resolved (no blank `Resolution` cells)
-- [ ] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
+- [x] Retrospective file committed at `docs/retrospectives/story-maint-22.md`
+- [x] All suggestion-log items resolved (no blank `Resolution` cells)
+- [x] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
 - [ ] User approval

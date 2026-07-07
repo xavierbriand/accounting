@@ -76,9 +76,9 @@ The probe confirms the § 5 scenarios pass verbatim. No manual smoke-test AC app
 
 ## Gherkin / AC scenarios
 
-No `.feature` files — dep bumps have no CLI surface change. Scenarios map 1:1 to post-bump verification, per the story-maint-05 Gherkin-to-test-mapping precedent.
+No `.feature` files — dep bumps have no CLI surface change. Scenarios map 1:1 to post-bump verification, per the story-maint-05 Gherkin-to-test-mapping precedent. **Pseudo-Gherkin, not automatable:** fenced as ` ```text ` rather than ` ```gherkin ` deliberately — these narrate verification invariants for a human reader, not scenarios meant to gain `.feature`/step-definition coverage (`harness/dod-check`'s Gherkin↔step hard gate treats any ` ```gherkin ` fenced block in a story's plan as scenarios that must resolve against real feature files; see retro § Change for the process-gap note).
 
-```gherkin
+```text
 Feature: csv-parse 6.2.1 → 7.0.1 migration
 
   Scenario: dependency pin shifts to v7

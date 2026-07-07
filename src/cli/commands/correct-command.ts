@@ -11,8 +11,6 @@ import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { parseCorrectOptions, type CorrectCommandOptions, type ParsedCorrectOptions } from './correct-command-options.js';
 import { formatCorrectJson } from './correct-formatter-json.js';
 
-export type { CorrectCommandOptions } from './correct-command-options.js';
-
 export interface CorrectCommandDeps {
   readonly transactionRepository: Pick<TransactionRepository, 'findById' | 'saveCorrection'>;
   readonly domainEventRecorder: DomainEventRecorder;

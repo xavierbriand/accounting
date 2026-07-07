@@ -73,7 +73,7 @@ None. Test-only change:
 
 No new scenario — this is a zero-behaviour-change mechanical extraction (R6/R7 honesty: the guard is the existing suite, not a new test).
 
-`fails if`: the relocated `makeCapturingStream` diverges from the original 7 declarations (wrong `Object.defineProperty` getter, wrong chunk-join order, wrong `Buffer`/`string` handling) — any of the 7 consuming suites' assertions on stdout/stderr/`captured` content fail immediately, across unit, integration, perf, and BDD-step tiers (in-process for unit/BDD-step, subprocess-adjacent for perf/integration per their existing mechanism — unchanged by this story).
+`fails if`: the relocated `makeCapturingStream` diverges from the original 7 declarations (wrong `Object.defineProperty` getter, wrong chunk-join order, wrong `Buffer`/`string` handling) — any of the 7 consuming suites' assertions on stdout/stderr/`captured` content fail immediately, across unit, integration, perf, and BDD-step tiers. **Correction (Phase 4 finding, fix-now):** integration (`ingest-commit.test.ts`) and perf (`ingest-throughput.test.ts`) run `runIngestCommand` in-process against a real temp-file SQLite DB — real-infra "integration" tier per `docs/engineering-standards.md`'s testing-tiers table, not subprocess execution; only one step in `correct.steps.ts` uses `spawnCli` (subprocess). All mechanisms are unchanged by this extraction either way.
 
 ## Slice plan
 
@@ -110,9 +110,20 @@ No deferred follow-ups — this story fully closes issue #43.
 | 2 | Issue #117 (story-maint-17 Phase-4 deferred) touches a sibling `tests/features/steps/ingest.steps.ts` (YAML fixture injection), not this story's `correct.steps.ts` (stream-capture dedup). | ACKNOWLEDGE | No action — different file, different concern, no open PR. |
 | 3 | No other open issue references the 7 touched files or the `makeCapture`/`makeStdout`/`PassThrough`/`.captured` pattern. | ACKNOWLEDGE | No action — confirms proceed-to-implementation. |
 
+**Phase 4 (`code-reviewer` + `sibling-overlap`, Reduced lane) — run 2026-07-08 against PR #201, commit `4c7da51`.** `sibling-overlap` re-check: still exactly one open PR (#201 itself), no new issue overlaps since Phase 2 — nothing new. `code-reviewer`: 1 P1 finding, 0 P2, 5 P3 findings (2 soft); no code defect found (extraction verified byte-identical to all 7 originals; import paths, unused-import cleanup, and out-of-scope-file untouched-ness all verified independently).
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 4 | [R5] The plan's "no new Gherkin scenario" declaration doesn't literally match any documented carve-out wording — R5's audit assumes either new scenarios exist to map, or a docs/process story with zero test files; this story is a third shape (test-code-only mechanical extraction, existing suite as guard) the rule text doesn't explicitly enumerate. | ACKNOWLEDGE | No action on the story — the chosen approach (rely on the 7 consuming suites) is sound and explicitly reasoned. Rule-coverage gap, not an execution defect; see also findings 5–6 below (same theme). First occurrence of this specific shape — watch for reproduction before codifying (repo's own "codify on reproduction" convention, precedent: [story-maint-05](../retrospectives/story-maint-05.md)→[story-maint-06](../retrospectives/story-maint-06.md), [issue #200](https://github.com/xavierbriand/accounting/issues/200)). |
+| 5 | [R26] CLAUDE.md § 6's lane table doesn't literally enumerate "tests/-only change" under any of the three trigger definitions; this plan's Reduced-lane choice is by analogy to `story-maint-21`/`22` (which were dependency-bump stories, not test-code stories). | ACKNOWLEDGE | No action — same rule-coverage-gap theme as finding 4 and [issue #200](https://github.com/xavierbriand/accounting/issues/200) (which covers the R15/dependency-bump angle specifically). This is a distinct angle (test-infra-only stories); first occurrence, not yet at the two-data-point codify threshold. |
+| 6 | [R16] The 3-commit slice-envelope collapse borrows R16's shape by analogy; R16's own trigger list (§ 8 row) names "process refresh, agent spec, doc refresh, parallel-safety," not test-code refactors. | ACKNOWLEDGE | No action — same theme as findings 4–5; first occurrence for this angle. |
+| 7 | PR #201 §7/§8 read stale ("pending") despite Phase 3 (commit `4c7da51`) and this Phase 4 review already landing. | FIX-NOW | PR body updated in the same pass as this commit: §7 appended with this Phase 4 table, §8 filled with Sonnet's verbatim implementation report. |
+| 8 | (soft) `fails if` wording mischaracterized integration/perf tests as "subprocess-adjacent" when both actually run in-process against real SQLite/FS. | FIX-NOW | Corrected above in this document's Gherkin acceptance scenarios section. |
+| 9 | (soft) The extracted helper is imported under 3 different local names (`makeCapturingStream` canonical, `as makeCapture` ×5, `as makeStdout` ×1) — a discoverability tradeoff for a reader grepping the canonical name. | ACKNOWLEDGE | No action — explicitly reasoned and accepted in this plan's Selected solution / Alternative-considered section; diff-churn-minimization was the deliberate goal. |
+
 ## DoR checklist
 
-- [ ] Phase 0 (Model): `No model impact — test-infra maintenance` (R24).
+- [x] Phase 0 (Model): `No model impact — test-infra maintenance` (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — `sibling-overlap` only, Reduced lane): findings triaged above — no overlap detected.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled.

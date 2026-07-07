@@ -4,6 +4,8 @@
 
 `csv-parse` is a runtime dep pinned at `^6.1.0` ([package.json:41](package.json)) — the BPCE bank-statement CSV parser used by ingest. [Dependabot PR #192](https://github.com/xavierbriand/accounting/pull/192) proposed `6.2.1 → 7.0.1`, a semver-major jump. Per [CLAUDE.md § 6.7](CLAUDE.md) maintenance sub-loop policy, major bumps of runtime deps route to a full story rather than a routine merge — filed as [#195](https://github.com/xavierbriand/accounting/issues/195) during the 2026-07-07 dependabot maintenance sub-loop run.
 
+**No model impact** — pure dependency-version bump, no Core domain concept touched (R24 default for maint/process stories). `csv-parse` is consumed entirely inside `src/infra/csv/node-csv-parser.ts`, behind the `CsvParser` port; `src/core/` never references it.
+
 **Maintenance sub-loop (CLAUDE.md § 6.7) — this run, folded into the same sub-loop that filed #195/#196.**
 - **Sibling work:** only open non-dependabot PR is #194 (user's own draft retro for story-4.2b) — no overlap.
 - **Open issues:** reviewed; #195 (this story) and #196 (dev-dependencies group CI failure, out of scope here) are the only dependency-tracker items; nothing else stale.
@@ -48,8 +50,12 @@ All callers of `NodeCsvParser` (`src/cli/program.ts`, `categorize-command.ts`, `
 | `7.0.0` — "dont modify prototype in sync" internal fix | Implementation detail of the sync parser; no option/return-shape change | None |
 | `7.0.0` — "align trim with ECMAScript whitespace" | We pass `trim: true`; BPCE export is plain ASCII/Latin-1 French banking text, no exotic Unicode whitespace | None expected; covered by existing fixture-driven integration tests regardless |
 | `7.0.0` — export `CsvError` and `normalize_options` | Net-new exports; we don't import them | None |
+| `7.0.0` — "desactivate delimiter splitting when empty array" | We pass a plain string (`';'`), never an empty array | None |
+| `7.0.0` — "remove comment about sync parse old usage" | Doc-comment-only change inside the library's own source | None |
 | `7.0.0` maintainer disclaimer — "no breaking changes... published by mistake" | — | Upstream's own assessment; corroborates the above line-by-line audit |
 | `7.0.1` — "ship stream cjs export" bug fix | We only use the `csv-parse/sync` subpath, not the stream API | None |
+
+Cross-checked against the full upstream `7.0.0` CHANGELOG.md entry (6 Features + 1 Bug Fix) — every bullet is accounted for above, either individually or as a group (the two rows added in Phase-4 review close out the two bullets the first pass had left implicit).
 
 **Conclusion:** zero code change in `node-csv-parser.ts` expected. The migration is `package.json` + `package-lock.json` only.
 
@@ -138,7 +144,17 @@ Phase 2 review for this story is **Reduced lane** (infra-only dep bump, no Core/
 | P2 (sibling-overlap) | PRs #189/#190 (`@inquirer/core`, `yaml`) both touch `package.json`/`package-lock.json` — mechanical rebase risk if merge order interleaves with this story's `chore(deps)` commit. | adopted | Resolved procedurally: #190 and #191 merged to `main` before this story's dep-bump commit; #189 merging in parallel. This branch rebases onto `main` immediately before the `chore(deps)` commit so `package-lock.json` reflects all four bumps cleanly — no manual conflict resolution needed. |
 | P2 (sibling-overlap) | Plan's maintenance-sub-loop note claimed #189/#190 were already merged when they were still `OPEN`. | adopted | Corrected in the "Maintenance sub-loop" bullet above. |
 
-Phase 4 (code-reviewer + sibling-overlap, Reduced lane) findings will extend this table once the commits land.
+**Phase 4 (code-reviewer + sibling-overlap, Reduced lane) — run 2026-07-07 against PR #197.**
+
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 (code-reviewer) | Plan had no Phase-0 `No model impact` declaration (R24 exit criterion — maint/process stories qualify by default but must say so), unlike sibling maint plans (e.g. story-maint-19). | fix-now | Added to § Context: "No model impact — pure dependency-version bump, no Core domain concept touched (R24 default for maint/process stories)." First R15-pattern story reviewed against R24, which postdates story-maint-05/06. |
+| P1 (code-reviewer) | Breaking-change audit table named 4 of the upstream `7.0.0` changelog's 6 Feature bullets individually; 2 (`desactivate delimiter splitting when empty array`, `remove comment about sync parse old usage`) were implicitly-but-not-explicitly covered. | fix-now | Added both as explicit rows to § "Breaking-change audit against v7 changelog"; both confirmed N/A (plain-string delimiter, doc-comment-only library change). |
+| P1 (code-reviewer) | At review time, PR #197's `build` CI check was still `IN_PROGRESS`, so Gherkin scenario 3 / DoD item 1 weren't yet independently CI-confirmed. | acknowledge | Moot — CI has since gone green (see § Retrospective: this review ran concurrently with the Gherkin-fence hard-gate discovery/fix; `gh pr checks 197` now shows `build pass`). |
+| P2 (code-reviewer) | `npm audit` isn't run in CI (`.github/workflows/ci.yml` has no audit step), so Gherkin scenario 4 / the security checklist's "npm audit clean" item are only evidenced by this story's local probe, not a repeatable CI gate. | acknowledge | Pre-existing gap, not introduced by this story; out of scope here. Worth a future harness story if it recurs as a review finding. |
+| P3 (code-reviewer, soft) | R15's commit envelope and the § 6 lane-selection table (R13/R14/R16) aren't formally reconciled — this plan invokes "Reduced lane" for review-agent selection while using the R15 4-commit envelope, and the § 6 table doesn't list R15 as a selectable Envelope value. | acknowledge | Folded into retro § Change as a process-gap observation; not a defect in this story's execution. |
+| P3 (code-reviewer, soft) | Plan's "Maintenance sub-loop" section doesn't explicitly narrate the R23 story-id-uniqueness check, unlike its explicit R19 sibling-PR/issue walk. | acknowledge | No actual collision existed; folded into retro § Change as a narration-completeness observation. |
+| P4 (sibling-overlap) | Re-check for new overlap since Phase 2: none found. #192/#195 reconfirmed as the correct predecessors (still open, not touched by anyone else). | acknowledge | No action — confirms Phase 2's findings still hold. |
 
 ## Merge checklist
 

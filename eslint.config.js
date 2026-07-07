@@ -15,13 +15,27 @@ export default tseslint.config(
     files: ["tests/**/*.ts"],
     plugins: { local: { rules: testSmellRules.rules } },
     rules: {
+      // error from day one — confirmed-zero baseline via direct repo-wide check.
       "local/no-ignored-test": "error",
       "local/no-redundant-assertion": "error",
+      // promoted after the Slice 8 baseline audit — see docs/plans/story-maint-23.md
+      // § "Baseline audit results" — both were warn-only during development,
+      // each surfaced and fixed real false positives, and both now sweep the
+      // full suite at 0 hits.
+      "local/duplicate-assert": "error",
+      "local/no-unasserted-test": "error",
+      // stays warn indefinitely per the rollout plan — the paper's own
+      // low-yield caveat for this style of test code; never promote.
       "local/assertion-roulette": "warn",
+      // stays warn — 1 confirmed real hit needing a human disposition, not
+      // an automatic fix (see audit results).
       "local/no-sleepy-test": "warn",
-      "local/duplicate-assert": "warn",
+      // stays warn — 193 real hits, includes 2 known-legitimate categories
+      // not yet excluded (finally-cleanup guards, fc.property preconditions);
+      // needs a human triage pass before any promotion (see audit results).
       "local/conditional-test-logic": "warn",
-      "local/no-unasserted-test": "warn",
+      // stays warn indefinitely per the rollout plan — deliberately
+      // conservative heuristic, low recall by design; never promote.
       "local/no-swallowed-exception": "warn",
     },
   },

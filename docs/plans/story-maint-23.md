@@ -100,6 +100,31 @@ Both cite existing anchors (R6/R7 test-mechanism-honesty family, the "mock all P
 3. Everything else starts at `warn`: `conditional-test-logic`, `duplicate-assert`, `no-unasserted-test` (unmeasured baseline — need the sweep), `no-swallowed-exception` (deliberately conservative heuristic, stays `warn` indefinitely), `assertion-roulette` (paper's own low-yield caveat), `no-sleepy-test` (one confirmed real hit needing human disposition).
 4. `npm run lint` must be 0 errors before merge — any `error`-severity rule with unexpected hits gets fixed in-PR (if trivial) or dialed back to `warn` with a deferred issue. Never merge lint-red.
 
+### Baseline audit results (Slice 8)
+
+Each rule was implemented `warn`-only and swept against the real suite as it landed (not batched to the end) — every real hit was inspected as it appeared, which surfaced 4 genuine false positives (all fixed in-PR, see the corresponding `feat(lint):` commit bodies for each):
+
+- `no-redundant-assertion` — `expect(hash(x)).toBe(hash(x))` determinism checks (`tests/unit/infra/crypto/node-hash-fn.test.ts:29`) are not tautologies; narrowed to exclude self-comparisons where either side contains a `CallExpression`/`NewExpression`/`AwaitExpression`.
+- `duplicate-assert` — idempotency/lifecycle re-checks with a state-changing statement between two identical assertions (`tests/integration/infra/db/migration-006.test.ts:59-66`, `tests/integration/cli/ingest-commit.test.ts:170,274`) are not copy-paste duplicates; narrowed from "anywhere in the same test" to "directly adjacent statements only."
+- `no-unasserted-test` — fast-check's own `fc.assert(fc.property(..., predicate))` idiom (predicate's boolean return value **is** the check, no inner `expect()` needed) was invisible to a bare-identifier `expect`/`assert` check, producing 49 false positives (`tests/unit/core/ingest/account-names.test.ts:27-33` and 11 other files); extended assertion recognition to `<ns>.assert(...)` member-call shapes.
+
+Final severities (promoted after each rule's real-suite sweep hit 0, same bar as the originally-`error` rules):
+
+| Rule | Final severity | Real-suite hits at final severity |
+| --- | --- | --- |
+| `no-ignored-test` | `error` | 0 (confirmed-zero baseline, unchanged) |
+| `no-redundant-print` | `error` | 0 (confirmed-zero baseline within scope; 1 hit exists in `tests/perf/**`, out of scope by design) |
+| `no-redundant-assertion` | `error` | 0 (after the determinism-check fix) |
+| `no-mystery-guest-db` | `error` | 0 (confirmed-zero baseline, unchanged) |
+| `duplicate-assert` | `error` (promoted from `warn`) | 0 (after the adjacency-narrowing fix) |
+| `no-unasserted-test` | `error` (promoted from `warn`) | 0 (after the `fc.assert` fix) |
+| `assertion-roulette` | `warn` (stays, per plan) | 41 — paper's own low-yield caveat for `expect()`-style code; never promote |
+| `no-sleepy-test` | `warn` (stays) | 1 — `tests/integration/infra/db/node-sqlite-snapshot-service.test.ts:203` (real-timer 10ms sleep to force an mtime delta). Needs a human disposition (accept-with-comment, or refactor to `fs.utimesSync` for a deterministic delta) — not fixed in this story; flagged as a retro follow-up. |
+| `conditional-test-logic` | `warn` (stays) | 151 — the paper's flagship highest-correlation smell, genuinely high-volume in this codebase. Includes 2 known-legitimate-but-unexcluded categories observed during Slice 5 (`finally`-block cleanup guards, e.g. `tests/unit/infra/fs/read-bpce-csv.test.ts:23`; `fast-check` property-precondition early returns, e.g. `tests/unit/infra/crypto/node-hash-fn.test.ts:59`) mixed in with what are likely genuine smells. Deliberately **not** narrowed further in this story (unlike the 3 confirmed bugs above) — narrowing exception categories for an advisory-only rule without a human triage pass of the other ~140 hits risks hiding real smells under a self-authored exemption. Flagged as a retro follow-up: triage the 151 hits, decide which categories warrant a rule exception vs. an actual fix, then reconsider promotion. |
+| `no-swallowed-exception` | `warn` (stays, per plan) | 0 — deliberately conservative heuristic (whole-test-body zero-assertion gate), never promote |
+
+`npm run lint`: **0 errors, 193 warnings**, full real suite (847 passing tests, 2 pre-existing unrelated failures in `tests/integration/cli/symlink-dbpath-refuse.test.ts` — confirmed via `git stash` to predate this story, unaffected by any change here).
+
 ## Gherkin / AC scenarios
 
 No `.feature` files — this is dev-tooling with no CLI/product surface change. **Pseudo-Gherkin, not automatable:** fenced as ` ```text ` rather than ` ```gherkin ` deliberately, following the `story-maint-21` precedent — `harness/dod-check`'s Gherkin↔step hard gate treats any ` ```gherkin ` fenced block as scenarios requiring `.feature`/step-definition coverage (see open issue #198); these narrate verification invariants for a human/CI reader instead.

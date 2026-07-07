@@ -365,7 +365,7 @@ Then('the subprocess JSON output matches the correct command\'s documented shape
   };
   expect(parsed.targetTransactionId).toBe(state.originalId);
   expect(parsed.producedTransactionIds).toHaveLength(2);
-  expect(parsed.changedFields).toEqual(['account']);
+  expect(parsed.changedFields).toEqual(['category']);
   expect(parsed.reason).toBe('miscategorized');
 });
 

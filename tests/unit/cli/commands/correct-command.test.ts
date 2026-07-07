@@ -165,7 +165,7 @@ describe('runCorrectCommand — --json output, multiple changed fields (scenario
     };
     expect(parsed.targetTransactionId).toBe('tx-original');
     expect(parsed.producedTransactionIds).toHaveLength(2);
-    expect(parsed.changedFields).toEqual(['amount', 'account']);
+    expect(parsed.changedFields).toEqual(['amount', 'category']);
     expect(parsed.reason).toBe('wrong amount on receipt');
 
     // No human-readable prose leaks into stdout under --json.

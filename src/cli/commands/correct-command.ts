@@ -9,7 +9,7 @@ import { CorrectionService, type CorrectionIds, type CorrectionOutcome } from '@
 import { expenseAccount } from '@core/ingest/account-names.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { parseCorrectOptions, type CorrectCommandOptions, type ParsedCorrectOptions } from './correct-command-options.js';
-import { formatCorrectJson } from './correct-formatter-json.js';
+import { formatCorrectJson, toDisplayFieldName } from './correct-formatter-json.js';
 
 export interface CorrectCommandDeps {
   readonly transactionRepository: Pick<TransactionRepository, 'findById' | 'saveCorrection'>;
@@ -104,7 +104,7 @@ function renderOutcome(
   writeln(stdout, `Correction recorded for ${event.targetTransactionId}.`);
   writeln(stdout, `  Reversal:        ${event.producedTransactionIds[0]}`);
   writeln(stdout, `  Correcting:      ${event.producedTransactionIds[1]}`);
-  writeln(stdout, `  Changed fields:  ${event.changedFields.join(', ')}`);
+  writeln(stdout, `  Changed fields:  ${event.changedFields.map(toDisplayFieldName).join(', ')}`);
 }
 
 export async function runCorrectCommand(

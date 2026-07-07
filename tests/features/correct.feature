@@ -14,7 +14,7 @@ Feature: Correct a past transaction via the correct CLI command
     Given a persisted two-entry original transaction
     When I run correct with amount "45.30", category "Insurance", reason "wrong amount and category", and json output
     Then the correct command exits with code 0
-    And correct stdout is a single JSON document with changedFields "amount,account"
+    And correct stdout is a single JSON document with changedFields "amount,category"
     # fails if: the JSON is missing a field, only reports one of the two changed fields,
     # or human prose leaks into stdout under --json.
 

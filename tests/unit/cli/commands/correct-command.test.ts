@@ -141,3 +141,32 @@ describe('runCorrectCommand — happy path, human output (scenario 1)', () => {
     expect(callOrder).toEqual(['saveCorrection', 'record']);
   });
 });
+
+describe('runCorrectCommand — --json output, multiple changed fields (scenario 2)', () => {
+  it('emits a single JSON document naming both changed fields, no human prose mixed in', async () => {
+    const { deps, stdout, exitCodes } = makeDeps();
+
+    await runCorrectCommand(
+      baseOptions({ amount: '45.30', category: 'Insurance', json: true }),
+      deps,
+    );
+
+    expect(exitCodes).toEqual([0]);
+    const lines = stdout.captured.trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]) as {
+      targetTransactionId: string;
+      producedTransactionIds: string[];
+      changedFields: string[];
+      reason: string;
+    };
+    expect(parsed.targetTransactionId).toBe('tx-original');
+    expect(parsed.producedTransactionIds).toHaveLength(2);
+    expect(parsed.changedFields).toEqual(['amount', 'account']);
+    expect(parsed.reason).toBe('wrong amount on receipt');
+
+    // No human-readable prose leaks into stdout under --json.
+    expect(stdout.captured).not.toContain('Correction recorded');
+    expect(stdout.captured).not.toContain('Reversal:');
+  });
+});

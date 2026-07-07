@@ -31,5 +31,12 @@ export default tseslint.config(
     rules: {
       "local/no-redundant-print": "error",
     },
+  },
+  {
+    // Subset of tests/**/*.ts — see the plugin-registration note above.
+    files: ["tests/unit/core/**/*.ts"],
+    rules: {
+      "local/no-mystery-guest-db": "error",
+    },
   }
 );

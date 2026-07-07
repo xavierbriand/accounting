@@ -3,6 +3,7 @@ import noRedundantPrint from './no-redundant-print.js';
 import noRedundantAssertion from './no-redundant-assertion.js';
 import assertionRoulette from './assertion-roulette.js';
 import noSleepyTest from './no-sleepy-test.js';
+import noMysteryGuestDb from './no-mystery-guest-db.js';
 
 export default {
   rules: {
@@ -11,5 +12,6 @@ export default {
     'no-redundant-assertion': noRedundantAssertion,
     'assertion-roulette': assertionRoulette,
     'no-sleepy-test': noSleepyTest,
+    'no-mystery-guest-db': noMysteryGuestDb,
   },
 };

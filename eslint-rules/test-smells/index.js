@@ -6,6 +6,7 @@ import noSleepyTest from './no-sleepy-test.js';
 import noMysteryGuestDb from './no-mystery-guest-db.js';
 import duplicateAssert from './duplicate-assert.js';
 import conditionalTestLogic from './conditional-test-logic.js';
+import noUnassertedTest from './no-unasserted-test.js';
 
 export default {
   rules: {
@@ -17,5 +18,6 @@ export default {
     'no-mystery-guest-db': noMysteryGuestDb,
     'duplicate-assert': duplicateAssert,
     'conditional-test-logic': conditionalTestLogic,
+    'no-unasserted-test': noUnassertedTest,
   },
 };

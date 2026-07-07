@@ -7,6 +7,7 @@ import noMysteryGuestDb from './no-mystery-guest-db.js';
 import duplicateAssert from './duplicate-assert.js';
 import conditionalTestLogic from './conditional-test-logic.js';
 import noUnassertedTest from './no-unasserted-test.js';
+import noSwallowedException from './no-swallowed-exception.js';
 
 export default {
   rules: {
@@ -19,5 +20,6 @@ export default {
     'duplicate-assert': duplicateAssert,
     'conditional-test-logic': conditionalTestLogic,
     'no-unasserted-test': noUnassertedTest,
+    'no-swallowed-exception': noSwallowedException,
   },
 };

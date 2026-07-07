@@ -254,6 +254,110 @@ describe('CorrectionService.correct — chaining (scenario 6)', () => {
   });
 });
 
+describe('CorrectionService.correct — reject correcting a reversal (story-4.2b, new invariant 9)', () => {
+  it('rejects when original.kind is "reversal", citing that a reversal cannot be corrected', () => {
+    const reversal = Transaction.create({
+      id: 'tx-reversal-target',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Reversal of tx-original',
+      kind: 'reversal',
+      correctsId: 'tx-original',
+      entries: [
+        { account: 'Expense:Transport', side: 'credit', amount: makeEur(2000) },
+        { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(2000) },
+      ],
+    }).value;
+
+    const result = CorrectionService.correct(reversal, { description: 'x' }, ids, 'trying to correct a reversal');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.toLowerCase()).toContain('reversal');
+  });
+
+  it('does not reject a "correcting"-kind original (only "reversal" is barred)', () => {
+    const correcting = Transaction.create({
+      id: 'tx-correcting-target',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Correcting entry',
+      kind: 'correcting',
+      correctsId: 'tx-original',
+      entries: [
+        { account: 'Expense:Transport', side: 'debit', amount: makeEur(2000) },
+        { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
+      ],
+    }).value;
+
+    const result = CorrectionService.correct(correcting, { description: 'y' }, ids, 'correcting a correcting entry');
+
+    expect(result.isSuccess).toBe(true);
+  });
+});
+
+describe('CorrectionService.correct — require at least one changed field (story-4.2b, CLI-usability guard)', () => {
+  it('rejects an empty CorrectionChanges, citing at least one field must change', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, {}, ids, 'nothing to change');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.toLowerCase()).toContain('at least one field');
+  });
+});
+
+describe('CorrectionService.correct — guard order (Phase-2 P1 finding — deterministic ordering)', () => {
+  it('reports the reversal-kind guard before the entry-count guard on a compound-invalid input', () => {
+    const invalidReversal = Transaction.create({
+      id: 'tx-bad-reversal',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Split reversal (contrived fixture for guard-order testing)',
+      kind: 'reversal',
+      correctsId: 'tx-original',
+      entries: [
+        { account: 'Expense:Food', side: 'credit', amount: makeEur(1000) },
+        { account: 'Expense:Household', side: 'credit', amount: makeEur(1000) },
+        { account: 'Liabilities:CreditCard', side: 'debit', amount: makeEur(2000) },
+      ],
+    }).value;
+
+    const result = CorrectionService.correct(invalidReversal, {}, ids, 'compound-invalid input');
+
+    expect(result.isFailure).toBe(true);
+    expect(result.error.toLowerCase()).toContain('reversal');
+    expect(result.error.toLowerCase()).not.toContain('split');
+  });
+});
+
+describe('CorrectionService.correct — #185 fix: absent-vs-empty-string field detection', () => {
+  it('an explicit empty-string description is treated as a change, not "no change" (closes #185)', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { description: '' }, ids, 'clearing description');
+
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.correcting.description).toBe('');
+    expect(result.value.event.changedFields).toEqual(['description']);
+  });
+
+  it('an absent description (undefined) is NOT treated as a change', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { amount: makeEur(2500) }, ids, 'only amount changed');
+
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.event.changedFields).toEqual(['amount']);
+  });
+
+  it('an explicit empty-string account is treated as a change (Core-level fix; CLI zod bars this before it reaches Core)', () => {
+    const original = makeOriginal();
+
+    const result = CorrectionService.correct(original, { account: '' }, ids, 'clearing account at Core level');
+
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.correcting.entries[0]).toMatchObject({ account: '', side: 'debit' });
+    expect(result.value.event.changedFields).toEqual(['account']);
+  });
+});
+
 describe('CorrectionService.correct — core invariants as properties (Story 4.0 model note inv 1, 5)', () => {
   function netByAccount(entries: readonly Entry[]): Map<string, number> {
     const net = new Map<string, number>();

@@ -44,7 +44,7 @@ function buildCorrecting(
   const correctedEntries = original.entries.map((entry) => {
     const amount = changes.amount ?? entry.amount;
     const isDebitSide = entry.side === 'debit';
-    const account = changes.account && isDebitSide ? changes.account : entry.account;
+    const account = changes.account !== undefined && isDebitSide ? changes.account : entry.account;
     return { account, side: entry.side, amount };
   });
 
@@ -61,9 +61,9 @@ function buildCorrecting(
 function changedFieldsOf(changes: CorrectionChanges): string[] {
   const fields: string[] = [];
   if (changes.amount) fields.push('amount');
-  if (changes.account) fields.push('account');
-  if (changes.date) fields.push('date');
-  if (changes.description) fields.push('description');
+  if (changes.account !== undefined) fields.push('account');
+  if (changes.date !== undefined) fields.push('date');
+  if (changes.description !== undefined) fields.push('description');
   return fields;
 }
 
@@ -78,10 +78,20 @@ export class CorrectionService {
       return Result.fail('CorrectionService: a non-empty reason is required');
     }
 
+    if (original.kind === 'reversal') {
+      return Result.fail(
+        'CorrectionService: cannot correct a reversal — reversals are system-generated bookkeeping entries, not user-authored transactions',
+      );
+    }
+
     if (original.entries.length > 2) {
       return Result.fail(
         'CorrectionService: correcting a transaction with more than 2 entries is not supported (split-correction deferred, see #183)',
       );
+    }
+
+    if (changedFieldsOf(changes).length === 0) {
+      return Result.fail('CorrectionService: at least one field must be changed to correct a transaction');
     }
 
     const originalCurrency = original.entries[0].amount.currency;

@@ -163,7 +163,7 @@ Feature: Test-smell detection tooling
 | 3 — whole-suite lint clean | `npm run lint` full-suite run recorded in Slice 8's commit body and this plan's Suggestion log |
 | 4 — code-reviewer.md updated | `git diff` on `.claude/agents/code-reviewer.md` (Slice 9) |
 
-## Commit sequence — R13 envelope (target 6–10 slices)
+## Slice plan — R13 envelope (target 6–10 slices)
 
 1. `test(lint): local ESLint plugin scaffold + no-ignored-test/no-redundant-print/no-redundant-assertion — failing` / `feat(lint): wire local plugin into eslint.config.js, 3 zero-baseline rules at error — minimal green`
 2. `test(lint): assertion-roulette + no-sleepy-test — failing` / `feat(lint): assertion-roulette + no-sleepy-test, warn-only — minimal green`

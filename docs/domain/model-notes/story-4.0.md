@@ -27,7 +27,7 @@ Tactical roles:
 
 - `Transaction` (**aggregate root**, [src/core/ledger/transaction.ts](../../../src/core/ledger/transaction.ts)) gains `correctsId?: string` and `kind: 'original' | 'reversal' | 'correcting'`. Existing invariants (≥ 2 entries, non-negative amounts, single currency, debits == credits) unchanged; `kind` defaults to `'original'`.
 - `CorrectionChanges` (**value object**) — the requested field deltas (any of amount, account/category, date, description).
-- `CorrectionService` (**domain service**) — pure: `correct(original, changes, ids): Result<{ reversal: Transaction; correcting: Transaction; event: TransactionCorrected }>`. Takes the original, the changes, and injected ids (reversal + correcting entry); returns two aggregates + the event. **No `idempotencyHash` parameter** — the correction path never speaks ingest-ACL vocabulary (boundary flag from #155 respected). `correctsId`/`kind` are general ledger-correction vocabulary, not ingest vocabulary, so growing `Transaction` with them keeps the firewall intact.
+- `CorrectionService` (**domain service**) — pure: `correct(original, changes, ids, reason): Result<{ reversal: Transaction; correcting: Transaction; event: TransactionCorrected }>`. Takes the original, the changes, injected ids (reversal + correcting entry), and the required free-text reason (*signature updated story-4.2b, reconciling drift — `reason` shipped as a 4th param at story-4.2a; the note's tactical signature line had lagged*); returns two aggregates + the event. **No `idempotencyHash` parameter** — the correction path never speaks ingest-ACL vocabulary (boundary flag from #155 respected). `correctsId`/`kind` are general ledger-correction vocabulary, not ingest vocabulary, so growing `Transaction` with them keeps the firewall intact.
 - Domain events — plain immutable value objects in a new `src/core/events/`, recorded via the `DomainEventRecorder` port (#155, [architecture.md § Domain events](../../architecture.md)); Infra persists append-only. No base class, no dispatcher, no event sourcing.
 
 **Correction date.** Reversal + correcting entry both carry the **original** transaction's `occurredAt`. This preserves receipt truth, keeps a past period's settlement math stable, and needs **no clock in Core** — the service stays pure and deterministic.
@@ -48,6 +48,7 @@ Each becomes a property or unit test in story-4.2 (correction):
 6. Reversal and correcting entry carry the original's `occurredAt` (date-preservation) — **except** the correcting entry carries the **new** date when `date` is the corrected field (story-4.2a clarification, see *Correction date* above; the reversal always keeps the original date).
 7. Every correction carries a non-empty `reason`.
 8. A correcting entry may itself be the target of a later correction; the `correctsId` chain resolves to the current value (chaining, unlimited).
+9. *(Added story-4.2b, user-approved 2026-07-07.)* A correction may not target a transaction whose `kind` is `reversal` — a reversal is a system-generated bookkeeping artifact (produced only by a prior correction), never a user-authored row, so it is not a meaningful correction target. `original` and `correcting` transactions remain correctable (chaining, invariant 8, is unaffected — the guard checks only `kind === 'reversal'`).
 
 ## Events
 

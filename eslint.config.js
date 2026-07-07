@@ -19,6 +19,7 @@ export default tseslint.config(
       "local/no-redundant-assertion": "error",
       "local/assertion-roulette": "warn",
       "local/no-sleepy-test": "warn",
+      "local/duplicate-assert": "warn",
     },
   },
   {

@@ -4,6 +4,7 @@ import noRedundantAssertion from './no-redundant-assertion.js';
 import assertionRoulette from './assertion-roulette.js';
 import noSleepyTest from './no-sleepy-test.js';
 import noMysteryGuestDb from './no-mystery-guest-db.js';
+import duplicateAssert from './duplicate-assert.js';
 
 export default {
   rules: {
@@ -13,5 +14,6 @@ export default {
     'assertion-roulette': assertionRoulette,
     'no-sleepy-test': noSleepyTest,
     'no-mystery-guest-db': noMysteryGuestDb,
+    'duplicate-assert': duplicateAssert,
   },
 };

@@ -278,3 +278,52 @@ describe('runCorrectCommand — reason-leakage guard (Risks & deferred items)', 
     expect(stderr.captured).toContain('Warning');
   });
 });
+
+describe('runCorrectCommand — --date splicing (Risks: DST-safety, string manipulation only)', () => {
+  it('splices the new date onto the original\'s time-of-day + UTC offset', async () => {
+    const { deps, saveCorrectionMock } = makeDeps();
+
+    await runCorrectCommand(baseOptions({ date: '2026-04-25' }), deps);
+
+    const [, correctingArg] = saveCorrectionMock.mock.calls[0] as [Transaction, Transaction];
+    expect(correctingArg.occurredAt).toBe('2026-04-25T14:30:00+02:00');
+  });
+
+  it('does not touch the reversal\'s date (reversal keeps the original date)', async () => {
+    const { deps, saveCorrectionMock } = makeDeps();
+
+    await runCorrectCommand(baseOptions({ date: '2026-04-25' }), deps);
+
+    const [reversalArg] = saveCorrectionMock.mock.calls[0] as [Transaction, Transaction];
+    expect(reversalArg.occurredAt).toBe('2026-04-21T14:30:00+02:00');
+  });
+
+  it('preserves a non-UTC offset verbatim across a DST-transition boundary (no Date round-trip)', async () => {
+    // The original sits just before a fictional US-style DST transition (2026-03-08).
+    // A pure Date-object round-trip would risk silently shifting the offset when the
+    // new date crosses the transition; string-splicing keeps -05:00 verbatim, proving
+    // no Date object is ever constructed from the offset-bearing timestamp.
+    const dstOriginal = Transaction.create({
+      id: 'tx-dst-original',
+      occurredAt: '2026-03-07T23:30:00-05:00',
+      description: 'Late-night purchase',
+      entries: [
+        { account: 'Expense:Transport', side: 'debit', amount: makeEur(1000) },
+        { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(1000) },
+      ],
+    }).value;
+
+    const saveCorrectionMock = vi.fn().mockReturnValue(Result.ok());
+    const { deps } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(dstOriginal)),
+        saveCorrection: saveCorrectionMock,
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ transactionId: 'tx-dst-original', date: '2026-03-09' }), deps);
+
+    const [, correctingArg] = saveCorrectionMock.mock.calls[0] as [Transaction, Transaction];
+    expect(correctingArg.occurredAt).toBe('2026-03-09T23:30:00-05:00');
+  });
+});

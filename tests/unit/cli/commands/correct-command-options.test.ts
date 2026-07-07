@@ -121,4 +121,9 @@ describe('parseCorrectOptions — pass-through fields', () => {
     expect(result.value.transactionId).toBe('tx-abc');
     expect(result.value.json).toBe(true);
   });
+
+  it('rejects an empty transactionId', () => {
+    const result = parseCorrectOptions(baseOptions({ transactionId: '' }));
+    expect(result.isFailure).toBe(true);
+  });
 });

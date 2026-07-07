@@ -20,6 +20,7 @@ export default tseslint.config(
       "local/assertion-roulette": "warn",
       "local/no-sleepy-test": "warn",
       "local/duplicate-assert": "warn",
+      "local/conditional-test-logic": "warn",
     },
   },
   {

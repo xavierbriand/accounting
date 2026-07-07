@@ -5,6 +5,7 @@ import assertionRoulette from './assertion-roulette.js';
 import noSleepyTest from './no-sleepy-test.js';
 import noMysteryGuestDb from './no-mystery-guest-db.js';
 import duplicateAssert from './duplicate-assert.js';
+import conditionalTestLogic from './conditional-test-logic.js';
 
 export default {
   rules: {
@@ -15,5 +16,6 @@ export default {
     'no-sleepy-test': noSleepyTest,
     'no-mystery-guest-db': noMysteryGuestDb,
     'duplicate-assert': duplicateAssert,
+    'conditional-test-logic': conditionalTestLogic,
   },
 };

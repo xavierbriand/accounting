@@ -60,7 +60,7 @@ Feature: Correct a past transaction via the correct CLI command
     And saveCorrection is rigged to fail for this run
     When I run correct with amount "45.30" and reason "test"
     Then the correct command exits with code 4
-    And correct stderr contains no raw SQLite error text
+    And correct stderr contains no raw idempotency-hash value
     And no TransactionCorrected event is recorded
     # fails if: the command records an event despite the write failing, or leaks
     # an unredacted DB error to stderr.

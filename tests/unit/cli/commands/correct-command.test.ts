@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
-import { PassThrough } from 'stream';
+import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
 import { runCorrectCommand } from '../../../../src/cli/commands/correct-command.js';
 import type { CorrectCommandDeps } from '../../../../src/cli/commands/correct-command.js';
 import type { CorrectCommandOptions } from '../../../../src/cli/commands/correct-command-options.js';
@@ -32,14 +32,6 @@ function makeOriginal(): Transaction {
       { account: 'Liabilities:CreditCard', side: 'credit', amount: makeEur(2000) },
     ],
   }).value;
-}
-
-function makeCapture(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
 }
 
 function baseOptions(overrides: Partial<CorrectCommandOptions> = {}): CorrectCommandOptions {

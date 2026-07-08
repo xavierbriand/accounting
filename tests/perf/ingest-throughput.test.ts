@@ -25,7 +25,7 @@ import os from 'os';
 import path from 'path';
 import fc from 'fast-check';
 import type { Writable } from 'stream';
-import { PassThrough } from 'stream';
+import { makeCapturingStream as makeCapture } from '../_helpers/streams.js';
 import { runIngestCommand } from '../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../src/cli/commands/ingest-command.js';
 import { runMigrations } from '../../src/infra/db/migrator.js';
@@ -99,14 +99,6 @@ function generateBpceCsv(n: number): string {
   }
 
   return rows.join('\n') + '\n';
-}
-
-function makeCapture(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
 }
 
 describe('ingest-throughput (perf)', () => {

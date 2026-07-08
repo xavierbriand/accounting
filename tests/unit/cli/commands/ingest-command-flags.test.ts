@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
-import { PassThrough } from 'stream';
+import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../../../src/cli/commands/ingest-command.js';
 import { Result } from '@core/shared/result.js';
@@ -83,13 +83,6 @@ function makeNoOpDomainEventRecorder(): DomainEventRecorder {
 const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
 
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
-  function makeCapture(): Writable & { captured: string } {
-    const buf: string[] = [];
-    const stream = new PassThrough() as unknown as Writable & { captured: string };
-    stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-    Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-    return stream;
-  }
   return { stdout: makeCapture(), stderr: makeCapture() };
 }
 

@@ -3,7 +3,6 @@ import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { PassThrough } from 'stream';
 import type { Writable } from 'stream';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../../src/infra/db/migrator.js';
@@ -16,6 +15,7 @@ import { Result } from '../../../src/core/shared/result.js';
 import type { TransactionRepository } from '../../../src/core/ports/transaction-repository.js';
 import type { DomainEventRecorder } from '../../../src/core/ports/domain-event-recorder.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
 
 interface CorrectWorld {
   tmpDir?: string;
@@ -47,14 +47,6 @@ afterEach(() => {
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;
-}
-
-function makeCapture(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
 }
 
 function makeTmpDb(): { tmpDir: string; dbPath: string; db: Database.Database } {

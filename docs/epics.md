@@ -308,7 +308,7 @@ So that I can run one command on Sunday morning and answer "what's the picture?"
 
 Story shapes converge from the Epic-4 defining model note ([docs/domain/model-notes/story-4.0.md](domain/model-notes/story-4.0.md), issue #156): corrections use **reverse-and-correct** (a reversal + a correcting entry), and every meaningful action is recorded as a plain **domain event** via the `DomainEventRecorder` port (#155).
 
-**Sequencing:** 4.1 → (4.2 → 4.3) with 4.4 parallel → 4.5. Story 4.1 ships the FR23 spine (the recorder port + append-only event store) that every later event depends on. **Epic-5 Story 5.4 dependency:** its `--apply` emits an audit-trail entry, so it needs the port (4.1) *and* the `ConfigChanged` event (4.5) before it can ship.
+**Sequencing:** 4.1 → 4.2, then 4.3 (independent of 4.2 since its 2026-07 reframe — see Story 4.3) with 4.4 parallel → 4.5. Story 4.1 ships the FR23 spine (the recorder port + append-only event store) that every later event depends on. **Epic-5 Story 5.4 dependency:** its `--apply` emits an audit-trail entry, so it needs the port (4.1) *and* the `ConfigChanged` event (4.5) before it can ship.
 
 ### Story 4.1: DomainEventRecorder Port & Append-Only Event Store
 
@@ -326,13 +326,13 @@ So that I can fix mistakes (any field — amount, category/account, date, descri
 
 **Lane:** Full. Carries the story-4.0 fork decisions: reverse-and-correct; original date on both new rows; **required** free-text reason; all three rows visible by default; no actor recorded; corrections may themselves be corrected (unlimited `correctsId` chain). `CorrectionService` (domain service), `correctsId` + `kind` on `Transaction`, emits `TransactionCorrected` via the 4.1 recorder. Depends on 4.1. Split 4.2a/4.2b if > 3 scenarios.
 
-### Story 4.3: Conversational-CFO Explanations (FR19)
+### Story 4.3: Settlement Variance Explanation (FR19)
 
-As a **User**,
-I want a human-readable explanation of *why* a number changed (e.g. "Increased due to a corrected heating bill"),
-So that I trust the figures because I can always see the reasoning.
+As a **couple at the monthly settle ritual**,
+we want an itemized, penny-perfect breakdown of how this month's suggested transfer differs from last month's — per cause and per partner — plus how last month's actual transfers compared to the suggestion,
+So that both of us understand and trust the number without reconstructing it from memory.
 
-**Lane:** Full if the explanation builder lives in Core; Reduced if pure presentation. Narrates from correction + event data. Depends on 4.2.
+**Lane:** Full (new Core module `src/core/settlement/` + `ContributionQuery` port + config extension). *Reframed by user interview 2026-07-07/08* (model note: [docs/domain/model-notes/story-4.3.md](domain/model-notes/story-4.3.md)): the original correction-narration reading ("increased due to a corrected heating bill") did not match the need — corrections fold into balances silently; a per-transaction correction-story view is deferred to its own issue. Movement diffs two `SafeTransferCalculation` windows; follow-through compares the ledger's actual settlement credits (Contributions) to the suggestion. No longer depends on 4.2. **Split: 4.3a (Core + Infra) / 4.3b (CLI `explain` command), 4.2 precedent.**
 
 ### Story 4.4: Global JSON Output (FR20)
 

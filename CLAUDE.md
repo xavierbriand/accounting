@@ -110,6 +110,7 @@ Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-im
 
 - `test(<scope>): <scenario> — failing` · `feat(<scope>): <scenario> — minimal green` · `refactor(<scope>): <what>`
 - Story id in every subject. See § 8: **R10** green-on-landing · **R11** empty refactor · **R12** summary verb · **R13** 6–10 commits/story. Squash on merge optional.
+- Docs commits: only the canonical prep subject and `chore(retro)…` are envelope-exempt (**R30**) — anything else carrying the story id counts as a slice.
 
 ### 6.4.1 Push protocol (parallel-safe)
 
@@ -196,3 +197,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R27 | Dev harness is a second bounded context: user-owned ubiquitous language in docs/harness/glossary.md + control inventory; agent specs declare role: doer\|judge\|advisor; only doers carry file-mutation tools — enforced by drift-scan Check F | [story-ddd-2](docs/retrospectives/story-ddd-2.md) |
 | R28 | The commit envelope (R13/R14) counts **slices**, not raw commits: a `test: — failing` + `feat: — minimal green` pair is one slice; `refactor:` and R10 green-on-landing `test:` commits count as their own slices. Targets unchanged (R13 6–10, R14 5–7); dod-check counts via `countSlices` (excludes `— failing` red-halves). R16's 4-change-body-commit target is unaffected (zero-behaviour stories have no failing/green pairs) | [story-4.2a](docs/retrospectives/story-4.2a.md) |
 | R29 | Test-smell lint rules (`eslint-rules/test-smells/`, wired via `eslint.config.js`) mechanically enforce the empirically-common, high-confidence smells from Jorge et al. (SAST'21); `code-reviewer` P1/P3 checklist bullets cover the residual smells needing cross-file/semantic judgment (Mystery Guest/Resource Optimism, Eager/Lazy Test) that lint can't reliably automate | [story-maint-24](docs/retrospectives/story-maint-24.md) |
+| R30 | Story-id docs commits use the countSlices-**exempt** canonical subjects — prep `chore(docs): story-<id> plan + P1/P2/P3 review` and `chore(retro)…` — any other story-id-bearing commit counts toward the envelope; DoR/PR-link edits fold into the prep commit, Phase-4/5 doc updates into the retro commit | [story-4.3a](docs/retrospectives/story-4.3a.md) |

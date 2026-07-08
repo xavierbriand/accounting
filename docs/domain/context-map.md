@@ -16,7 +16,7 @@ Modules inside the context (mapped from `src/core/` folders and [prd.md](../prd.
 | --- | --- | --- |
 | Ledger | `ledger/`, `shared/` | Transaction, Entry, Money, double-entry invariant |
 | Ingestion | `ingest/` | Canonicalization, idempotency hash, auto-tagging |
-| Liquidity & Settlement | `buffers/`, `recurring/`, `splits/`, `transfer/` | Buffer, forecast occurrence, split rule, safe transfer |
+| Liquidity & Settlement | `buffers/`, `recurring/`, `splits/`, `transfer/`, `settlement/` | Buffer, forecast occurrence, split rule, safe transfer, settlement variance, contribution |
 | Configuration & Rules | `config/`, `categories/` | Validity window, partner, category |
 | Annual Planning *(Epic 5)* | — | Plan file, revision, challenger *(language TBD)* |
 

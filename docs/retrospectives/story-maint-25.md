@@ -1,0 +1,48 @@
+# Story maint-25 retrospective
+
+**PR:** [#212](https://github.com/xavierbriand/accounting/pull/212)  **Closed:** pending merge  **Closes issue:** [#206](https://github.com/xavierbriand/accounting/issues/206)
+
+Follow-up from [story-maint-24](story-maint-24.md): triages all 155 `local/conditional-test-logic` hits then-current on `main` via a 26-agent workflow, then acts on the findings — 3 new rule-exclusion patterns (155 → 105 hits) and 55 mechanical genuine-smell fixes across 18 files (105 → 96 hits), plus a bonus bug fix found along the way. 15 structural refactors deferred to [issue #211](https://github.com/xavierbriand/accounting/issues/211); 13 hits acknowledged as unavoidable.
+
+## Keep
+
+- **A multi-stage agent workflow (26 per-file triage agents → 1 synthesis agent that cross-checked every proposed rule exclusion against the whole dataset) caught something a per-file view structurally couldn't.** Several per-file agents independently recommended excluding "loop over a fast-check-generated array with a nested per-element guard" as a fourth safe rule pattern. The synthesis agent, working across all 155 hits at once, found a confirmed genuine smell of the *identical* AST shape (`date-arithmetic.test.ts:104-105`) with a sibling `.every()`-based property test two tests down proving the loop was avoidable — proof the pattern isn't safe to blanket-exclude. No single per-file agent could have seen that; only a pass with the full dataset in view could. Worth repeating this two-stage shape (independent per-item classification, then a cross-checking synthesis) for any future "should we build a blanket rule from N examples" question.
+- **Delegating the 55 fixes to one Workflow agent per file, each independently verifying its own file green before/after, caught real problems before they reached review** — most notably `correction-service.test.ts`'s `netByAccount` helper turning out to be `describe`-block-scoped rather than file-scoped as the fix instructions assumed. The agent disclosed the deviation (relocated the helper to module scope, deleted the duplicate) rather than silently working around it or guessing. Same value as story-maint-24's "sweep the real corpus, don't just read the plan" lesson, applied to code fixes rather than lint-rule design.
+- **Explicitly telling agents "if a test-count change happens, verify and disclose it, don't just report success" avoided a false regression signal.** Five of the it.each conversions (recurring-forecast-service, status-command, domain-event, yaml-config-writer, config-schema-recurring) intentionally raise the pass count (splitting one loop-based test into N per-case tests) — every agent correctly flagged this as expected in its `concernsOrDeviations` field rather than silently changing the number, which made the full-suite verification pass trustworthy on the first read rather than needing a manual per-file audit.
+
+## Change
+
+- **The rule-refinement patterns' own blind spot bit almost immediately, not hypothetically.** `status-formatter-json.test.ts`'s two dead regex-match guards are structurally *identical* to the newly-added fc-property-precondition-skip exclusion (bare `if (!x) return;`, no else) — the same commit that added ~41 legitimate exclusions also silently suppressed 2 hits the synthesis had explicitly flagged as real smells needing a fix. Caught only because I happened to diff the post-refinement hit list against the pre-refinement one and noticed a file disappear entirely, not because anything failed. **Lesson: after any exclusion-pattern rule change, diff the full before/after hit list file-by-file, not just the total count** — a total-count-only check (155→105, "roughly matches the ~53 predicted") would have silently hidden this.
+- **Bundled the rule refinement's test spec and implementation into one commit instead of the strict test-failing/feat-green pair this repo's TDD rhythm otherwise uses.** Justified pragmatically (this is a refinement of an already-tested rule, not new-from-scratch functionality, and I ran the new RuleTester cases and watched them pass before committing — the verification happened, just not staged across two separate commits), but it's a real, disclosed deviation from the established rhythm, not an oversight to gloss over.
+- **The plan's own "Production-code surface" section tripped `drift-scan` Check B on a wording technicality** — a backtick-quoted glob (`` `tests/**/*.test.ts` ``) matched the same path-existence regex meant for literal file paths, since the pattern just checks "backtick-wrapped, starts with tests/src/harness, ends in .ts/.sql" with no glob-awareness. Caught by running `npm run test:harness` locally before pushing (the drift-scan integration tests exercise the live repo state), not by CI. **Third story in a row** (after story-maint-21's Gherkin-fence gap and story-maint-24's two mid-story-transient gaps) where a harness check's literal-text-matching approach collided with prose that was accurate in spirit but not in the checker's specific expected shape.
+
+## Try
+
+- **After any test-smell-lint rule-exclusion change, diff the full per-hit list (file:line), not just the aggregate count, before considering the change complete.** Would have caught the `status-formatter-json.test.ts` blind spot immediately instead of via incidental file-list scanning.
+- **Watch whether a fourth harness-check literal-text-matching gap appears** (beyond the Gherkin-fence gap and this story's Check-B glob-vs-path gap) before deciding whether these checkers need a structural fix (e.g. glob-awareness in Check B's path regex) versus continuing to word around each one as it's found.
+
+## Action items
+
+| Item | Where it lands | Status |
+| --- | --- | --- |
+| A. Fix 15 deferred structural refactors (bigger fc.property splits, dynamic-discovery-vs-it.each tension). | [Issue #211](https://github.com/xavierbriand/accounting/issues/211). | open |
+| B. After any exclusion-pattern rule change, diff the full per-hit list before considering it complete, not just the aggregate count. | Next story that adds/changes a test-smell lint rule exclusion. | open, passive |
+| C. Watch for a fourth harness-check literal-text-matching gap (Gherkin-fence, § 8 mid-story transients, this story's Check-B glob-vs-path) before considering a structural fix to the checkers. | Retro of the next story that hits one. | open, passive |
+
+## Loop metrics (this run)
+
+- **Plan phase:** a 26-agent triage workflow (one per file, classifying every flagged line into category + recommendation) followed by a 1-agent synthesis cross-checking every proposed exclusion against the full 155-hit dataset — ~48 minutes wall-clock, ~1.56M subagent tokens. Phase 2 `sibling-overlap`: 1 finding (PR #210/story-4.3b's own *future* planned edit to `settlement-variance-service.test.ts`, different region — acknowledged, kept this story's fix to that file narrowly scoped to minimize rebase friction).
+- **Implementation:** rule refinement done directly (1 commit, test+impl bundled — see Change); the 55-fix batch fanned out via an 18-agent Workflow (one per file, each independently verifying its own tests green before/after) — ~8 minutes wall-clock, ~885K subagent tokens.
+- **Issues opened:** 1 — [#211](https://github.com/xavierbriand/accounting/issues/211) (15 deferred structural refactors).
+- **Issues closed by this story:** [#206](https://github.com/xavierbriand/accounting/issues/206) (via merge — the original triage-and-decide tracking issue).
+- **Total commits on branch:** 7 pre-retro (plan+P2 / rule-refinement / 4 refactor-group commits / 1 drift-scan-wording fix) + this retro = 8, comfortably within R13's 6–10 slice target.
+- **Test count:** 928 passing + 1 skipped (root-only test, correctly gated) — up from 847 before this branch, +81 net: the it.each conversions across 5 files intentionally split loop-based tests into per-case tests (a real, disclosed, per-file-verified increase, not padding), plus the pre-existing `symlink-dbpath-refuse.test.ts` failures from story-maint-24's retro (2 tests) now pass cleanly — an environment change unrelated to this story's work, not something this story fixed.
+- **Diff stats:** `eslint-rules/test-smells/conditional-test-logic.js` (+118 LOC, 3 new exclusion patterns + helpers), its `RuleTester` spec (+43 LOC, 7 new cases), 18 test files (+188/-195 LOC net -7, restructuring not adding). 0 `src/` LOC.
+- **Bugs squashed:** 1 (the `canonicalize.test.ts` `direction`/`description` copy-paste bug, found incidentally while implementing an unrelated mechanical refactor). **Lint hits resolved:** 59 of 155 (50 rule-excluded + ~9 net from the fix batch's assertion-collapsing, some fixes closing 2+ flagged lines at once).
+- **`npm run lint`:** 155 → 96 warnings, 0 errors throughout.
+- **New runtime deps:** 0. **New dev deps:** 0.
+- **Pre-existing environment quirk resolved (not by this story):** the `symlink-dbpath-refuse.test.ts` failures noted as pre-existing/unrelated in story-maint-24's retro now pass cleanly in this session's environment — confirmed via a direct re-run, not investigated further (out of scope).
+
+## Carryovers resolved
+
+- **[#206](https://github.com/xavierbriand/accounting/issues/206) (conditional-test-logic triage)** → **CLOSED by this story** (via merge). Filed at story-maint-24, resolved same-session by its own follow-up story.

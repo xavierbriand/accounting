@@ -110,6 +110,26 @@ Phase-2 review 2026-07-08: `sibling-overlap` only (Reduced lane — plan-reviewe
 |---|---------|-----|------------|
 | SO-1 | No sibling overlap: zero open PRs; 42 open issues cross-checked against the file surface — #208 intake coverage confirmed (items 1/2/4 sliced, item 3 honestly deferred); #206/#207 hit-files disjoint; #186 is a future e2e tier blocked on #181, not this story's R4 test; #202/#203 are by-design future `explain` siblings; no claim on the verb or the settle-window helper | ACKNOWLEDGE | Proceed; no plan changes |
 
+Phase-4 rows: see § Phase-4 review & dispositions below (11 consolidated rows, 5 FIX-NOW applied on-branch, 0 deferred needing new issues).
+
+## Phase-4 review & dispositions (2026-07-08)
+
+`code-reviewer` (15 findings) + `sibling-overlap` (1 coordinate item) in parallel — Reduced lane, no Mode-B leg (no model note; 4.3a's governs). Dispositions (Opus-owned):
+
+| # | Finding | Disposition |
+|---|---|---|
+| CR-P1-1..5 (R6) | ~16 missing `// fails if` clauses across 5 unit-test files (feature file itself clean) | FIX-NOW — `2d7524f` adds every clause, naming the guarded production path |
+| CR-P1-6 (R4) | Read-only assertion was a `.bak`-absence proxy; plan promised "DB untouched" | FIX-NOW — `2d7524f` adds before/after row-count equality on `transactions` + `transaction_entries`; step renamed "creates no snapshot and writes no rows" |
+| CR-P2-1 | Raw `.amount` sign-reads in `signedDeltaPhrase` bypass Money for presentation | ACKNOWLEDGE — established idiom (`transaction.ts:71`, csv parser); 4.3a model note ruled sign-helpers implementation detail |
+| CR-P3-1/2/3 | Verbatim duplication: `monthLabel` (~9 LOC), `buildSuggestedAction` (~8 LOC), `ISO_DATE` — each across 2 files | FIX-NOW — `071cf27` extracts `src/cli/utils/report-format.ts` + `report-command.ts`; both commands/formatters consume shared versions |
+| CR-P3-4 | `explainSettlementVariance` invoked twice per happy-path run; synthetic empty-last-month fired always (implementer's "only when last-month fails" framing was narrower than the code) | FIX-NOW — `071cf27`: single domain call feeds both sections; synthetic fallback only when the real computation is unavailable. Review had verified both paths numerically identical |
+| CR-P3-5 | `604f09b` consumed the reserved refactor slot | ACKNOWLEDGE — envelope closed at exactly 10/10 with the two fix slices |
+| CR-P3-soft ×4 | 7-param signature; 48-LOC orchestrator; test-helper duplication (~70 LOC); ISO_DATE fold-in | ACKNOWLEDGE — noted for future growth; test-helper extraction is a candidate for a later `tests/_helpers` pass (maint-23 precedent) |
+| SO-1 | PR #212 touched the same Core test file (non-overlapping region) | COORDINATE — resolved in-flight: #212 merged first; the mandated fetch+rebase rewrote cleanly (no conflicts), `--force-with-lease` push with lease guard |
+| SO-2 | #208 mapping: items 1/2/4 shipped, 3 honestly deferred | ACKNOWLEDGE — #208 annotated at DoD; item 3 retargeted to the next adapter-touching story |
+
+**Run provenance:** implementation executed by a `general-purpose` agent carrying the sonnet-implementer spec inline (CLAUDE.md § 6.3), model pinned Sonnet — the registered agent type failed at launch 3× (first stall harness-verified; two subsequent kills were coordinator misdiagnosis via symlink-size measurement — see retro). Tier separation preserved; fix round executed by resuming the same agent with context intact.
+
 ## DoR checklist
 
 - [x] Phase 0 (Model): `No model impact` declared above (R24).

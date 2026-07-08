@@ -146,11 +146,11 @@ Example names (Alex, Sam) are fixtures, never real people.
 
 ## Follow-through
 
-**Everyday definition.** The check on what actually happened: last month's real transfers into the joint account versus this month's suggestion — per partner when the ledger can tell who sent what, as totals otherwise.
+**Everyday definition.** The check on what actually happened: last month's real transfers into the joint account versus this month's suggestion, partner by partner.
 
 **Example.** "In July you sent €2,100 (Alex €1,260, Sam €840); August asks €2,340 — €240 more (Alex +€144, Sam +€96)."
 
-**Technical notes.** **Value object** `FollowThrough`; `attribution: 'per-partner'` only when every Contribution in the window is attributed to a partner, otherwise `'totals-only'` — honest totals over wrong detail. `totalActual` always equals the ledger's net credit sum on the settlement account(s), so corrections net out by construction.
+**Technical notes.** **Value object** `FollowThrough` — always per-partner: every settlement account in `accounting.yaml` names its partner (roster-checked at config load), so every Contribution is attributed by construction. A totals-only fallback was modeled and then dropped at story-4.3a Phase 4 as unreachable (see the model note's Phase-4 refinement). `totalActual` always equals the ledger's net credit sum on the settlement account(s), so corrections net out by construction.
 
 ## Contribution
 

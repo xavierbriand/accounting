@@ -93,7 +93,7 @@ Feature file `tests/features/settlement-variance.feature`. No CLI exists until 4
 2. **Penny-perfect totals across a split boundary** — Given the split changes 60/40 → 50/50 between the two windows, Then `sum(lines.totalDelta) == thisTotal − lastTotal` and each partner's line-delta column sums to their headline delta, with each month's own window-resolved split (a line whose gross is unchanged still shows per-partner movement). *Fails if* per-partner deltas are computed by applying one ratio to the net delta instead of diffing each month's allocations. (in-process, in-memory)
 3. **Buffer top-up movement** — Given a buffer-account expense last month lowered the balance, Then the buffer's top-up line shows the increase like any other cause — using the plan's window/as-of composition (as-of dates one month apart). *Fails if* buffer-topup line items are excluded from the key diff, or both runs receive the same `asOf` (which yields zero topup lines for the past window). (in-process, in-memory with asOf-aware ledger fake)
 4. **Follow-through, per-partner** — Given last month's window contains credits on both mapped settlement accounts, Then follow-through sets `suggested` from **this month's** calculation, shows each partner's actual vs suggested with exact deltas, and `attribution: 'per-partner'`. *Fails if* the adapter's account→partner mapping or the service's delta arithmetic is wrong, or the baseline uses the wrong month's suggestion. (in-process, real adapter + temp DB)
-5. **Follow-through, totals-only fallback** — Given a credit on a settlement account **not** mapped to any partner, Then `attribution: 'totals-only'`, `totalActual` still includes every credit to the cent, and no per-partner detail is fabricated. *Fails if* unattributed credits are dropped (invariant 8) or per-partner mode is claimed with incomplete attribution (invariant 7). (in-process, real adapter + temp DB)
+5. ~~**Follow-through, totals-only fallback**~~ — *Removed at Phase 4: the totals-only fallback was dropped by user decision (unreachable from documented config — every settlement account names a partner). See § Phase-4 review & dispositions. 7 scenarios ship.*
 6. **Corrections net out of actuals** — Given a transfer credit last month was corrected (reversal + correcting entry on the settlement account), Then `totalActual` reflects the net amount. *Fails if* `SqliteContributionQuery` sums only credit-side entries instead of net credits−debits. (in-process, real adapter + temp DB)
 7. **Currency mismatch fails** — Given a contribution in a different currency, Then the service returns `Result.fail`. *Fails if* cross-currency values are silently mixed (invariant 9). (in-process, in-memory)
 8. **Config: settlement section validated** — Given a `settlement:` section naming a partner absent from the splits roster, When the config loads, Then validation fails with a path-cited message (no partner names echoed — PII rule); And a section listing the same `account` twice is rejected via `findDuplicateIndices` (P1-8). *Fails if* the zod schema accepts an unknown partner, a duplicate account, or leaks names. (in-process, config-schema unit)
@@ -173,6 +173,27 @@ Phase-2 review 2026-07-08: `plan-reviewer` (23 findings) + `sibling-overlap` (cl
 | P3-7 | Service class without constructor deps is ceremony | ADOPT | `explainSettlementVariance` as plain exported function; domain-service role unchanged |
 | P3-8 | `Result.all` combinator opportunity | ACKNOWLEDGE | Implementation freedom for Sonnet; `buffer-state-service.ts:59` precedent noted |
 | SO-1 | Sibling overlap: none (PR #201 disjoint; both planned deferred issues confirmed fresh) | ACKNOWLEDGE | No coordination needed. Hygiene note: #156 (Epic-4 Phase-0 umbrella) may be near-closeable — queued for the next maintenance sub-loop |
+
+## Phase-4 review & dispositions (2026-07-08)
+
+`code-reviewer` (9 findings) + `ddd-modeler` Mode B (4 findings, invariants 1–10 all verified enforced) in parallel. Dispositions (Opus-owned):
+
+| # | Finding | Disposition |
+|---|---|---|
+| CR-P1-1 (R2) | `ContributionAccountMapping` supporting type not enumerated in production surface | FIX-NOW — type deleted; adapter consumes Core's `SettlementAccountMapping` directly |
+| CR-P1-2 + DDD-5 (R6) | Totals-only fallback unreachable from documented config; scenario 5's fixture was a test-only affordance | FIX-NOW — **user decision: fallback dropped.** `FollowThrough.attribution`, `ContributionsInWindow.unattributed`, the adapter's null-partner affordance, scenario 5 and their tests removed (rides the tip refactor). Every settlement account names a partner; follow-through is always per-partner |
+| CR-P2-1 + DDD-3 | Determinism property narrower than invariant 10 ("deep-equal report") | DEFER — [#208](https://github.com/xavierbriand/accounting/issues/208) (4.3b intake) |
+| CR-P3-1 | Adapter method at the ~50-LOC style ceiling | DEFER — [#208](https://github.com/xavierbriand/accounting/issues/208) |
+| CR-P3-2 | Window-helper duplication in steps vs `nextCalendarMonth` | DEFER — [#208](https://github.com/xavierbriand/accounting/issues/208) |
+| CR-P3-3 (R13/R28) | Envelope counted 12 slices — the two prep `chore(docs)` subjects drifted from the countSlices-exempt pattern — leaving no headroom | FIX-NOW — branch rebuilt once (user-approved force-push): prep chores squashed into the canonical subject; the fallback drop rides the existing tip refactor. Envelope = 10, dod-check green. Retro proposes **R30** (renumbered from R29 at rebase — maint-24 claimed R29 on main first) |
+| CR-P3-4 | No branch-coverage tooling exists in the repo (100% gate manually verified) | DEFER — [#209](https://github.com/xavierbriand/accounting/issues/209) |
+| CR-P3-5 | Structurally-unreachable `Result.fail` guards untested | ACKNOWLEDGE — verified repo-wide idiom (`safe-transfer-calculator.ts`) |
+| CR-soft | `Result.all` combinator opportunity | ACKNOWLEDGE — implementation freedom (Phase-2 P3-8) |
+| DDD-1 | Synonym drift: Core vs Infra account-mapping types | FIX-NOW — resolved by the same type unification as CR-P1-1 |
+| DDD-2 | `PartnerFollowThrough` not a glossary noun | ACKNOWLEDGE — structural naming of a shape the note carries inline; below the language line |
+| DDD-4 | Inv-10 serializer narrowness | duplicate of CR-P2-1 (deferred) |
+
+**Post-disposition plan deltas:** 7 scenarios ship; `ContributionsInWindow = { attributed, totalActual }`; adapter constructor takes `readonly SettlementAccountMapping[]`; model-note invariant 7 superseded by the Phase-4 refinement (every Contribution partner-attributed by construction); glossary Follow-through entry rewritten accordingly (user-signed).
 
 ## DoR checklist
 

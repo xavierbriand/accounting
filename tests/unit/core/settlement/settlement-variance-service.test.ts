@@ -145,3 +145,29 @@ describe('explainSettlementVariance — report totals', () => {
     expect(result.isFailure).toBe(true);
   });
 });
+
+describe('explainSettlementVariance — per-partner deltas across a split boundary', () => {
+  it('diffs each month\'s own resolved allocation per partner, not one ratio applied to the net delta', () => {
+    // Defect class: computing perPartnerDelta by applying THIS month's (or last month's) split ratio
+    // to the net totalDelta, instead of diffing each month's own window-resolved allocation.
+    // Gross is UNCHANGED (1000.00 both months) but the split moved 60/40 -> 50/50, so each
+    // partner's line-delta must show movement even though totalDelta is zero.
+    const thisMonth = calc([
+      item({ description: 'Rent', gross: eur(100000), perPartnerSplit: new Map([['Alex', eur(50000)], ['Sam', eur(50000)]]) }),
+    ]);
+    const lastMonth = calc([
+      item({ description: 'Rent', gross: eur(100000), perPartnerSplit: new Map([['Alex', eur(60000)], ['Sam', eur(40000)]]) }),
+    ]);
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isSuccess).toBe(true);
+    const line = result.value.lines[0];
+    expect(line.totalDelta.amount).toBe(0);
+    expect(line.perPartnerDelta.get('Alex')!.amount).toBe(-10000);
+    expect(line.perPartnerDelta.get('Sam')!.amount).toBe(10000);
+    // sum(perPartnerDelta) must equal totalDelta for the line (invariant 3)
+    expect(line.perPartnerDelta.get('Alex')!.amount + line.perPartnerDelta.get('Sam')!.amount).toBe(line.totalDelta.amount);
+    // and report-level perPartnerDelta matches thisMonth.perPartner - lastMonth.perPartner (invariant 2)
+    expect(result.value.perPartnerDelta.get('Alex')!.amount).toBe(thisMonth.perPartner.get('Alex')!.amount - lastMonth.perPartner.get('Alex')!.amount);
+    expect(result.value.perPartnerDelta.get('Sam')!.amount).toBe(thisMonth.perPartner.get('Sam')!.amount - lastMonth.perPartner.get('Sam')!.amount);
+  });
+});

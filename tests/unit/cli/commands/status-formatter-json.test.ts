@@ -256,11 +256,11 @@ describe('Property #2: JSON ↔ human total agreement', () => {
         const jsonCents = parseInt(jsonMoneyStr.replace(/\D/g, ''), 10);
 
         const totalLine = humanStr.split('\n').find(line => line.includes('Total transfer for'));
-        if (!totalLine) return;
+        expect(totalLine).toBeDefined();
 
-        const moneyMatch = /EUR\s+\d[\d.]*/.exec(totalLine);
-        if (!moneyMatch) return;
-        const humanCents = parseInt(moneyMatch[0].replace(/\D/g, ''), 10);
+        const moneyMatch = /EUR\s+\d[\d.]*/.exec(totalLine as string);
+        expect(moneyMatch).not.toBeNull();
+        const humanCents = parseInt((moneyMatch as RegExpExecArray)[0].replace(/\D/g, ''), 10);
 
         expect(jsonCents).toBe(humanCents);
         expect(jsonCents).toBe(totalCents);

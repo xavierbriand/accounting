@@ -106,7 +106,10 @@ No new CLAUDE.md § 8 row expected — this refines R29's existing mechanism (ru
 
 Phase 2 review for this story is **Reduced lane** (dev-tooling + test-file restructuring, no Core/domain concept touched): `sibling-overlap` only, `plan-reviewer` dropped (R26). Findings below.
 
-*(Populated after the Phase 2 `sibling-overlap` agent run.)*
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P2 (sibling-overlap) | PR #210 (`story-4.3b`, Settlement Variance CLI)'s own plan commits to a *future* slice (not yet pushed) editing `tests/unit/core/settlement/settlement-variance-service.test.ts` (widening the Invariant-10 determinism property, per issue #208 item 2) — the same file this story's slice 2 mechanically fixes (Invariant-3's `for...of`+early-return loop → `.every()`). Different invariants/regions of the same file; no current diff overlap (PR #210's pushed diff today is only `docs/metrics/loop.csv` + its own plan doc), but a same-file coordination point. | acknowledge | Non-blocking today. This story's fix to `settlement-variance-service.test.ts` is scoped tightly to Invariant-3's existing loop (lines 327/333) — kept minimal so whichever story merges second has a clean, small-surface rebase against the other's Invariant-10 hunk. |
+| P2 (sibling-overlap) | Issue #206 (this story's own tracking issue) — confirmed as the originating issue, not a competing overlap. | acknowledge | Close #206 on merge. |
 
 ## Merge checklist
 

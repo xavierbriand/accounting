@@ -140,6 +140,29 @@ const RecurringRuleRawSchema = z
     }
   });
 
+const SettlementAccountRawSchema = z
+  .object({
+    account: z.string().min(1),
+    partner: z.string().min(1),
+  })
+  .strict();
+
+const SettlementConfigRawSchema = z
+  .object({
+    accounts: z
+      .array(SettlementAccountRawSchema)
+      .superRefine((accounts, ctx) => {
+        for (const i of findDuplicateIndices(accounts, a => a.account)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'account'],
+            message: 'duplicate account',
+          });
+        }
+      }),
+  })
+  .strict();
+
 const AutoTagRuleGroupSchema = z
   .object({
     category: z.string(),
@@ -273,8 +296,24 @@ const RawConfigSchema = z
           }
         }
       }),
+    settlement: SettlementConfigRawSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (!data.settlement) return;
+    // Roster is the partner set of splits[0].rules — splits' own superRefine already
+    // enforces every later window shares the same roster (set equality).
+    const roster = new Set(data.splits[0]?.rules.map(r => r.partner) ?? []);
+    for (let i = 0; i < data.settlement.accounts.length; i++) {
+      if (!roster.has(data.settlement.accounts[i].partner)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['settlement', 'accounts', i, 'partner'],
+          message: 'partner not found in splits roster',
+        });
+      }
+    }
+  });
 
 export function formatZodError(err: ZodError): string {
   const issues = err.issues.map(issue => {
@@ -354,5 +393,6 @@ export function parseRawConfig(raw: unknown): Result<AppConfig> {
     accounts: data.accounts,
     recurring,
     autoTagRules,
+    settlement: data.settlement,
   });
 }

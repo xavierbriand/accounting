@@ -43,6 +43,15 @@ export interface RecurringRule {
   readonly amendments: readonly RecurringAmendment[];
 }
 
+export interface SettlementAccountMapping {
+  readonly account: string;
+  readonly partner: string;
+}
+
+export interface SettlementConfig {
+  readonly accounts: readonly SettlementAccountMapping[];
+}
+
 export interface AppConfig {
   readonly dbPath: string;
   readonly defaultCurrency: string;
@@ -52,4 +61,5 @@ export interface AppConfig {
   readonly accounts: readonly AccountConfig[];
   readonly recurring: readonly RecurringRule[];
   readonly autoTagRules: readonly AutoTagRule[];
+  readonly settlement?: SettlementConfig;
 }

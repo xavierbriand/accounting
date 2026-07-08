@@ -174,6 +174,74 @@ describe('explainSettlementVariance — per-partner deltas across a split bounda
   });
 });
 
+describe('explainSettlementVariance — follow-through assembly', () => {
+  it('sets suggested from THIS month\'s calculation, not last month\'s own suggestion', () => {
+    // fails if the baseline is last month's suggestion instead of this month's (P1-6 binding decision)
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(80000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: eur(48000) }, { partner: 'Sam', amount: eur(46000) }],
+      unattributed: eur(0),
+      totalActual: eur(94000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.followThrough.totalSuggested.amount).toBe(thisMonth.totalRequired.amount);
+    expect(result.value.followThrough.perPartner!.get('Alex')!.suggested.amount).toBe(thisMonth.perPartner.get('Alex')!.amount);
+  });
+
+  it('per-partner mode: shows each partner\'s actual vs suggested with exact deltas when attribution is complete', () => {
+    // fails if attribution:'per-partner' is not set, or delta arithmetic (suggested - actual) is wrong
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: eur(48000) }, { partner: 'Sam', amount: eur(46000) }],
+      unattributed: eur(0),
+      totalActual: eur(94000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isSuccess).toBe(true);
+    const ft = result.value.followThrough;
+    expect(ft.attribution).toBe('per-partner');
+    expect(ft.perPartner!.get('Alex')).toEqual({ suggested: eur(50000), actual: eur(48000), delta: eur(2000) });
+    expect(ft.perPartner!.get('Sam')).toEqual({ suggested: eur(50000), actual: eur(46000), delta: eur(4000) });
+    expect(ft.totalSuggested.amount).toBe(100000);
+    expect(ft.totalActual.amount).toBe(94000);
+    expect(ft.totalDelta.amount).toBe(6000);
+  });
+
+  it('falls back to totals-only when any contribution cannot be attributed to a partner', () => {
+    // fails if unattributed credits are dropped from totalActual, or per-partner mode is claimed anyway
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: eur(48000) }],
+      unattributed: eur(5000),
+      totalActual: eur(53000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isSuccess).toBe(true);
+    const ft = result.value.followThrough;
+    expect(ft.attribution).toBe('totals-only');
+    expect(ft.perPartner).toBeUndefined();
+    expect(ft.totalActual.amount).toBe(53000);
+    expect(ft.totalDelta.amount).toBe(100000 - 53000);
+  });
+
+  it('returns Result.fail when contributions currency differs from this month\'s currency', () => {
+    // fails if cross-currency contributions are silently mixed into follow-through totals (invariant 9)
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: usd(50000) }],
+      unattributed: usd(0),
+      totalActual: usd(50000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isFailure).toBe(true);
+  });
+});
+
 // ─── Property tests ───────────────────────────────────────────────────────────
 // Invariants 1-5 and 10 of the signed-off model note (docs/domain/model-notes/story-4.3.md).
 // Each generated "line" is index-keyed (Cat{i}/Item{i}, alternating kind), guaranteeing

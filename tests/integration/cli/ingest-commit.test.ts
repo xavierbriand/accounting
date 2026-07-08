@@ -16,8 +16,8 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { PassThrough } from 'stream';
 import type { Writable } from 'stream';
+import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
 import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../../src/cli/commands/ingest-command.js';
 import { runMigrations } from '../../../src/infra/db/migrator.js';
@@ -61,14 +61,6 @@ afterEach(() => {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
 });
-
-function makeCapture(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
-}
 
 function makeRealDeps(
   db: Database.Database,

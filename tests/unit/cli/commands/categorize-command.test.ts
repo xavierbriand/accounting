@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
-import { PassThrough } from 'stream';
+import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
 import { runCategorizeCommand } from '../../../../src/cli/commands/categorize-command.js';
 import type { CategorizeCommandOptions, CategorizeCommandDeps } from '../../../../src/cli/commands/categorize-command.js';
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
@@ -29,14 +29,6 @@ const baseConfig: AppConfig = {
   recurring: [],
   autoTagRules: [],
 };
-
-function makeCapture(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
-}
 
 const CSV_HEADER = 'Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation';
 

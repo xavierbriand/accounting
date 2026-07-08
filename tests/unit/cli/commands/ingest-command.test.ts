@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
-import { PassThrough } from 'stream';
+import { makeCapturingStream as makeStdout } from '../../../_helpers/streams.js';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps, IngestCommandOptions } from '../../../../src/cli/commands/ingest-command.js';
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
@@ -58,14 +58,6 @@ function makeLowOutcome(description: string, category: string): BuildOutcome {
   return { ...makeHighOutcome(description, category), confidence: 'low' };
 }
 
-
-function makeStdout(): Writable & { captured: string } {
-  const buf: string[] = [];
-  const stream = new PassThrough() as unknown as Writable & { captured: string };
-  stream.on('data', (chunk: Buffer | string) => buf.push(chunk.toString()));
-  Object.defineProperty(stream, 'captured', { get: () => buf.join('') });
-  return stream;
-}
 
 function makeStderr(): Writable & { captured: string } {
   return makeStdout();

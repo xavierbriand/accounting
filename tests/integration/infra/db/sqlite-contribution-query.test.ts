@@ -86,6 +86,22 @@ describe('SqliteContributionQuery', () => {
     expect(result.value.totalActual.amount).toBe(53000);
   });
 
+  it('a configured account with no transactions in the window contributes zero, not an error', () => {
+    // fails if a mapped account with zero matching rows throws instead of defaulting to zero cents
+    insertEntry(db, 'tx1', '2026-06-10T10:00:00+00:00', 'income:contribution:alex', 'credit', 30000);
+    const query = new SqliteContributionQuery(db, [
+      { account: 'income:contribution:alex', partner: 'Alex' },
+      { account: 'income:contribution:sam', partner: 'Sam' },
+    ]);
+    const result = query.contributionsInWindow('EUR', '2026-06-01', '2026-06-30');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.attributed).toEqual([
+      { partner: 'Alex', amount: expect.objectContaining({ amount: 30000 }) },
+      { partner: 'Sam', amount: expect.objectContaining({ amount: 0 }) },
+    ]);
+    expect(result.value.totalActual.amount).toBe(30000);
+  });
+
   it('nets a reversal + correcting entry to the corrected amount (corrections net out)', () => {
     // fails if SqliteContributionQuery sums only credit-side entries instead of net credits - debits
     insertEntry(db, 'tx-original', '2026-06-10T10:00:00+00:00', 'income:contribution:alex', 'credit', 50000);

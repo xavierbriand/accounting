@@ -214,6 +214,24 @@ describe('explainSettlementVariance — follow-through assembly', () => {
     expect(ft.totalDelta.amount).toBe(6000);
   });
 
+  it('per-partner mode: a roster partner who contributed nothing that month shows actual zero (not omitted)', () => {
+    // fails if a partner absent from contributions.attributed is dropped from perPartner instead of defaulting to zero
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: eur(94000) }],
+      unattributed: eur(0),
+      totalActual: eur(94000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isSuccess).toBe(true);
+    const ft = result.value.followThrough;
+    expect(ft.attribution).toBe('per-partner');
+    expect(ft.perPartner!.get('Sam')!.actual.amount).toBe(0);
+    expect(ft.perPartner!.get('Sam')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner!.get('Sam')!.delta.amount).toBe(50000);
+  });
+
   it('falls back to totals-only when any contribution cannot be attributed to a partner', () => {
     // fails if unattributed credits are dropped from totalActual, or per-partner mode is claimed anyway
     const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);

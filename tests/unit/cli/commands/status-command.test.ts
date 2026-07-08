@@ -430,15 +430,16 @@ describe('Property #4c: transferCalculator wiring recording-fake', () => {
 // ─── Property #5: default-window purity ───────────────────────────────────────
 
 describe('Property #5: nextCalendarMonth purity', () => {
-  it('same input always produces same output (deterministic)', async () => {
-    const { nextCalendarMonth } = await import('../../../../src/cli/commands/status-command.js');
-    const inputs = ['2026-01-15', '2026-12-31', '2026-06-30', '2024-02-01'];
-    for (const input of inputs) {
+  // fails if nextCalendarMonth is non-deterministic for a given input (e.g. reads the system clock)
+  it.each(['2026-01-15', '2026-12-31', '2026-06-30', '2024-02-01'])(
+    'same input always produces same output (deterministic): %s',
+    async (input) => {
+      const { nextCalendarMonth } = await import('../../../../src/cli/commands/status-command.js');
       const result1 = nextCalendarMonth(input);
       const result2 = nextCalendarMonth(input);
       expect(result1).toEqual(result2);
-    }
-  });
+    },
+  );
 
   it('source files in src/cli/commands/status-*.ts contain no parameterless new Date() or Date.now or performance.now', async () => {
     // fails if a future edit silently introduces a system-clock read into the

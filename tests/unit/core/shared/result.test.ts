@@ -159,11 +159,7 @@ describe('Result.all', () => {
             i === actualFailIdx ? Result.fail<string>('fail-at-' + i) : Result.ok(v),
           );
           const combined = Result.all(results);
-          if (results.every((r) => r.isSuccess)) {
-            expect(combined.isSuccess).toBe(true);
-          } else {
-            expect(combined.isFailure).toBe(true);
-          }
+          expect(combined.isFailure).toBe(true);
         },
       ),
     );

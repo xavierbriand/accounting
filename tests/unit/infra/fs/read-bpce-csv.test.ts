@@ -36,25 +36,44 @@ describe('readBpceCsv', () => {
   });
 
   describe('EACCES', () => {
-    it('returns failure with a permission-error message for unreadable file', () => {
-      const filePath = join(TMP, 'test-read-bpce-noaccess.csv');
-      writeFileSync(filePath, 'content', 'latin1');
-      chmodSync(filePath, 0o000);
-      try {
-        const result = readBpceCsv(filePath);
-        if (process.getuid && process.getuid() === 0) {
-          // root can always read — skip EACCES on root
-          expect(result.isSuccess || result.isFailure).toBe(true);
-        } else {
+    // fails if: a non-root process can still read a chmod 0o000 file
+    //           (would mean the permission-error path never triggers)
+    it.skipIf(process.getuid && process.getuid() === 0)(
+      'returns failure with a permission-error message for unreadable file',
+      () => {
+        const filePath = join(TMP, 'test-read-bpce-noaccess.csv');
+        writeFileSync(filePath, 'content', 'latin1');
+        chmodSync(filePath, 0o000);
+        try {
+          const result = readBpceCsv(filePath);
           expect(result.isFailure).toBe(true);
           expect(result.error).toContain('test-read-bpce-noaccess.csv');
           expect(result.error).not.toContain(TMP);
+        } finally {
+          chmodSync(filePath, 0o644);
+          if (existsSync(filePath)) unlinkSync(filePath);
         }
-      } finally {
-        chmodSync(filePath, 0o644);
-        if (existsSync(filePath)) unlinkSync(filePath);
-      }
-    });
+      },
+    );
+
+    // fails if: running as root, readBpceCsv throws instead of returning a
+    //           Result (root bypasses the OS permission check, so EACCES
+    //           never fires — the function must still resolve normally)
+    it.runIf(process.getuid && process.getuid() === 0)(
+      'resolves to a Result (success or failure) for root, which bypasses EACCES',
+      () => {
+        const filePath = join(TMP, 'test-read-bpce-noaccess.csv');
+        writeFileSync(filePath, 'content', 'latin1');
+        chmodSync(filePath, 0o000);
+        try {
+          const result = readBpceCsv(filePath);
+          expect(result.isSuccess || result.isFailure).toBe(true);
+        } finally {
+          chmodSync(filePath, 0o644);
+          if (existsSync(filePath)) unlinkSync(filePath);
+        }
+      },
+    );
   });
 
   describe('PII safety', () => {

@@ -119,15 +119,13 @@ describe('parseRawConfig — recurring: section (Story 3.3)', () => {
       expect(result.isSuccess).toBe(true);
     });
 
-    it('accepts all three cadences: monthly, quarterly, annual', () => {
+    it.each(['monthly', 'quarterly', 'annual'])('accepts cadence %s', (cadence) => {
       // fails if quarterly or annual cadence enum values are rejected
-      for (const cadence of ['monthly', 'quarterly', 'annual']) {
-        const result = parseRawConfig(withRecurring([
-          { name: `Rule-${cadence}`, category: 'X', cadence, amount: 100, validFrom: '2026-01-01' },
-        ]));
-        expect(result.isSuccess).toBe(true);
-        expect(result.value.recurring[0].cadence).toBe(cadence);
-      }
+      const result = parseRawConfig(withRecurring([
+        { name: `Rule-${cadence}`, category: 'X', cadence, amount: 100, validFrom: '2026-01-01' },
+      ]));
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.recurring[0].cadence).toBe(cadence);
     });
   });
 

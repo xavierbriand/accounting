@@ -101,10 +101,7 @@ describe('enumerateMonthStarts', () => {
       fc.assert(
         fc.property(isoDateArb, isoDateArb, (from, to) => {
           const result = enumerateMonthStarts(from, to);
-          for (let i = 1; i < result.length; i++) {
-            if (result[i] <= result[i - 1]) return false;
-          }
-          return true;
+          return result.every((d, i) => i === 0 || d > result[i - 1]);
         }),
       );
     });

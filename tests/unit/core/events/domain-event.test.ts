@@ -118,11 +118,13 @@ describe('Core purity — src/core/events/ and the DomainEventRecorder port', ()
     }
   });
 
-  it('src/core/ports/domain-event-recorder.ts imports no Node APIs, better-sqlite3, or a clock', () => {
-    const filePath = path.join(__dirname, '../../../../src/core/ports/domain-event-recorder.ts');
-    const contents = fs.readFileSync(filePath, 'utf8');
-    for (const pattern of FORBIDDEN_IMPORT_PATTERNS) {
+  // fails if: src/core/ports/domain-event-recorder.ts imports Node APIs, better-sqlite3, or a clock
+  it.each(FORBIDDEN_IMPORT_PATTERNS)(
+    'src/core/ports/domain-event-recorder.ts does not match forbidden pattern %s',
+    (pattern) => {
+      const filePath = path.join(__dirname, '../../../../src/core/ports/domain-event-recorder.ts');
+      const contents = fs.readFileSync(filePath, 'utf8');
       expect(contents, `port file matched forbidden pattern ${pattern}`).not.toMatch(pattern);
-    }
-  });
+    },
+  );
 });

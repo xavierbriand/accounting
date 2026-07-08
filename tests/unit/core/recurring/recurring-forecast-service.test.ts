@@ -296,16 +296,15 @@ describe('RecurringForecastService.forecastBetween', () => {
     );
   });
 
-  it('Property #7: purity — source files contain no Date.now, new Date() (parameterless), performance.now', () => {
+  it.each([
+    ['recurring-forecast-service.ts', path.resolve(__dirname, '../../../../src/core/recurring/recurring-forecast-service.ts')],
+    ['cadence.ts', path.resolve(__dirname, '../../../../src/core/recurring/cadence.ts')],
+  ])('Property #7: purity — %s contains no Date.now, new Date() (parameterless), performance.now', (_name, file) => {
     // fails if: service or cadence reads the system clock
-    const serviceFile = path.resolve(__dirname, '../../../../src/core/recurring/recurring-forecast-service.ts');
-    const cadenceFile = path.resolve(__dirname, '../../../../src/core/recurring/cadence.ts');
-    for (const file of [serviceFile, cadenceFile]) {
-      const source = readFileSync(file, 'utf8');
-      expect(source).not.toMatch(/\bDate\.now\s*\(/);
-      expect(source).not.toMatch(/\bnew\s+Date\s*\(\s*\)/); // parameterless only
-      expect(source).not.toMatch(/\bperformance\.now\s*\(/);
-    }
+    const source = readFileSync(file, 'utf8');
+    expect(source).not.toMatch(/\bDate\.now\s*\(/);
+    expect(source).not.toMatch(/\bnew\s+Date\s*\(\s*\)/); // parameterless only
+    expect(source).not.toMatch(/\bperformance\.now\s*\(/);
   });
 
   // ─── Slice 6: amendments + validTo lifecycle ───────────────────────────────
@@ -323,9 +322,7 @@ describe('RecurringForecastService.forecastBetween', () => {
       ]);
       const result = service.forecastBetween('2026-05-01', '2026-06-01');
       expect(result.isSuccess).toBe(true);
-      for (const occ of result.value) {
-        expect(occ.amount.amount).toBe(100000);
-      }
+      expect(result.value.every(occ => occ.amount.amount === 100000)).toBe(true);
     });
 
     it('uses amendment.amount when occurrence.date >= amendment.validFrom (boundary inclusive)', () => {

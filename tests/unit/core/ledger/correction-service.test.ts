@@ -31,6 +31,15 @@ function makeOriginal(): Transaction {
   }).value;
 }
 
+function netByAccount(entries: readonly Entry[]): Map<string, number> {
+  const net = new Map<string, number>();
+  for (const entry of entries) {
+    const sign = entry.side === 'debit' ? 1 : -1;
+    net.set(entry.account, (net.get(entry.account) ?? 0) + sign * entry.amount.amount);
+  }
+  return net;
+}
+
 const ids = { reversalId: 'tx-reversal', correctingId: 'tx-correcting' };
 
 describe('CorrectionService.correct — amount correction (scenario 1)', () => {
@@ -89,15 +98,9 @@ describe('CorrectionService.correct — amount correction (scenario 1)', () => {
     const result = CorrectionService.correct(original, { amount: makeEur(2500) }, ids, 'fix amount');
     const { reversal } = result.value;
 
-    const netByAccount = new Map<string, number>();
-    for (const entry of [...original.entries, ...reversal.entries]) {
-      const sign = entry.side === 'debit' ? 1 : -1;
-      netByAccount.set(entry.account, (netByAccount.get(entry.account) ?? 0) + sign * entry.amount.amount);
-    }
-
-    for (const net of netByAccount.values()) {
-      expect(net).toBe(0);
-    }
+    expect([...netByAccount([...original.entries, ...reversal.entries]).values()].every((net) => net === 0)).toBe(
+      true,
+    );
   });
 });
 
@@ -359,15 +362,6 @@ describe('CorrectionService.correct — #185 fix: absent-vs-empty-string field d
 });
 
 describe('CorrectionService.correct — core invariants as properties (Story 4.0 model note inv 1, 5)', () => {
-  function netByAccount(entries: readonly Entry[]): Map<string, number> {
-    const net = new Map<string, number>();
-    for (const entry of entries) {
-      const sign = entry.side === 'debit' ? 1 : -1;
-      net.set(entry.account, (net.get(entry.account) ?? 0) + sign * entry.amount.amount);
-    }
-    return net;
-  }
-
   it('invariant 1: reversal + original net to zero on every account, for any balanced two-entry original and any amount correction', () => {
     fc.assert(
       fc.property(
@@ -438,11 +432,10 @@ describe('CorrectionService.correct — core invariants as properties (Story 4.0
           }).value;
           const singleNet = netByAccount(singleCorrected.entries);
 
-          if (threeRowNet.size !== singleNet.size) return false;
-          for (const [account, net] of singleNet) {
-            if (threeRowNet.get(account) !== net) return false;
-          }
-          return true;
+          return (
+            threeRowNet.size === singleNet.size &&
+            [...singleNet].every(([account, net]) => threeRowNet.get(account) === net)
+          );
         },
       ),
     );

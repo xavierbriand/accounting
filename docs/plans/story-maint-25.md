@@ -15,7 +15,7 @@ This story is that triage. A multi-agent workflow (26 parallel per-file agents, 
 
 ## Production-code surface (R2)
 
-None. This story only touches `eslint-rules/test-smells/conditional-test-logic.js` (+ its `RuleTester` spec) and `tests/**/*.test.ts` files (restructuring existing assertions, not adding/removing test coverage or changing what's verified). No `src/` changes.
+None. This story only touches `eslint-rules/test-smells/conditional-test-logic.js` (+ its `RuleTester` spec) and a set of existing test files under `tests/` (restructuring existing assertions, not adding/removing test coverage or changing what's verified — the exact file list is enumerated in § 2 below). No `src/` changes.
 
 ## Recommended approach
 

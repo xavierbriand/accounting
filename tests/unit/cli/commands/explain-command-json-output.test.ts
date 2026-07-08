@@ -76,6 +76,7 @@ function makeRealServices(opts: {
 
 describe('runExplainCommand — JSON output shape', () => {
   it('returns exit 0 and a JSON document with all required top-level keys', async () => {
+    // fails if runExplainCommand's happy path flips the exit code or assembleExplainReport/formatExplainJson drops a top-level section
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
 
@@ -97,6 +98,7 @@ describe('runExplainCommand — JSON output shape', () => {
   });
 
   it('uses --as-of over the clock, and derives thisWindow/lastWindow one calendar month apart', async () => {
+    // fails if runExplainCommand consults clock() despite --as-of, or composes the windows from anything but nextCalendarMonth/previousSettleWindow
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
 
@@ -119,6 +121,7 @@ describe('runExplainCommand — JSON output shape', () => {
   });
 
   it('falls back to the clock when --as-of is omitted', async () => {
+    // fails if runExplainCommand's asOf default (opts.asOf ?? clock()) stops consulting the injected clock, breaking bare `explain` runs
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
 
@@ -139,6 +142,7 @@ describe('runExplainCommand — JSON output shape', () => {
   });
 
   it('returns exit 1 and writes stderr (nothing structural to stdout) when the contribution query fails', async () => {
+    // fails if runExplainCommand tolerates a contributionQuery failure like a calc failure (exit 0 + degraded section) instead of the unrecoverable DB-level exit 1
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
     const stderrCapture = makeCaptureStream();
@@ -166,6 +170,7 @@ describe('runExplainCommand — JSON output shape', () => {
   });
 
   it('never calls the last-month calculation with the same asOf as this month (silent-zero-trap guard)', async () => {
+    // fails if runExplainCommand passes the original asOf to the last-month calculateForWindow run instead of previousSettleWindow's asOfLast — the fill-slot silent-zero trap
     const balancePoints = new Map([
       ['vacation-account', [
         { asOfDate: '2026-05-28', cents: 50000 },
@@ -198,6 +203,7 @@ describe('runExplainCommand — JSON output shape', () => {
   });
 
   it('renders a tolerated calc failure with a Suggested action naming the stale buffer, exit 0', async () => {
+    // fails if buildVarianceSection stops degrading a calc failure to {error, suggestedAction} (buildSuggestedAction naming the bucket) or the failure suppresses follow-through/flips the exit code
     // Fixture: as of last month the buffer was below target and past its targetDate (fails);
     // by this month it has been topped up past target, so status flips away from 'below' and
     // the topup path is skipped entirely (succeeds) — this is the only way one

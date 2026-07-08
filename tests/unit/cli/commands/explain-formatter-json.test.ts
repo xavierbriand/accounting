@@ -70,6 +70,7 @@ describe('formatExplainJson — variance shape', () => {
   });
 
   it('serializes a negative totalDelta as a signed Money string, not a dropped sign', () => {
+    // fails if lineToJson/formatExplainJson routes totalDelta through anything but Money.toString(), losing the sign
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: diverseLines, totalDelta: eur(-105000), perPartnerDelta: new Map() } },
@@ -94,6 +95,7 @@ describe('formatExplainJson — variance shape', () => {
   });
 
   it('serializes a calc-failure variance as { error, suggestedAction }, not a lines array', () => {
+    // fails if formatExplainJson's variance.ok branch check is inverted/missing and an error report leaks an empty lines array
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: false, error: 'buffer "Vacation" is below target', suggestedAction: 'Update Vacation\'s targetDate.' },
@@ -107,6 +109,7 @@ describe('formatExplainJson — variance shape', () => {
 
 describe('formatExplainJson — followThrough shape', () => {
   it('serializes perPartner as an object keyed by partner with suggested/actual/delta strings', () => {
+    // fails if formatExplainJson passes the followThrough.perPartner Map straight to JSON.stringify (serializes as {}) instead of the explicit Map->object loop
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
@@ -131,6 +134,7 @@ describe('formatExplainJson — followThrough shape', () => {
   });
 
   it('serializes { notConfigured: true } distinctly from an empty ok follow-through', () => {
+    // fails if formatExplainJson's notConfigured branch ('notConfigured' in report.followThrough) is dropped and the marker collapses into the error or ok shape
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
@@ -156,6 +160,7 @@ describe('formatExplainJson — document shape', () => {
   });
 
   it('includes asOf, thisWindow, and lastWindow verbatim from the report', () => {
+    // fails if formatExplainJson's doc assembly renames/drops the window keys or re-derives them instead of copying report.thisWindow/lastWindow verbatim
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },

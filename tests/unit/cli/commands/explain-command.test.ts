@@ -222,6 +222,7 @@ describe('assembleExplainReport — tolerant sections', () => {
 
 describe('runExplainCommand — validation', () => {
   it('returns exit code 2 and writes nothing to stdout for an invalid --as-of format', async () => {
+    // fails if runExplainCommand's ISO_DATE gate lets a malformed --as-of through to the calculators (exit 0/1 instead of 2) or leaks the validation error onto stdout
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
     const stderrCapture = makeCaptureStream();

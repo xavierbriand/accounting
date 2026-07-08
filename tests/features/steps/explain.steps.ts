@@ -80,6 +80,7 @@ interface ExplainWorld {
   result?: { exitCode: number; stdout: string; stderr: string };
   subprocessTmpDir?: string;
   subprocessResult?: { status: number; stdout: string; stderr: string };
+  subprocessRowCountsBefore?: { transactions: number; entries: number };
 }
 
 const tmpDirs: string[] = [];
@@ -355,7 +356,19 @@ Given('the settlement CSV fixture has been ingested non-interactively', function
   if (ingestResult.status !== 0) throw new Error(`ingest failed (status ${ingestResult.status}): ${ingestResult.stderr}`);
 });
 
+function countLedgerRows(tmpDir: string): { transactions: number; entries: number } {
+  const db = new Database(path.join(tmpDir, 'test.db'), { readonly: true });
+  try {
+    const transactions = (db.prepare('SELECT COUNT(*) AS n FROM transactions').get() as { n: number }).n;
+    const entries = (db.prepare('SELECT COUNT(*) AS n FROM transaction_entries').get() as { n: number }).n;
+    return { transactions, entries };
+  } finally {
+    db.close();
+  }
+}
+
 When('I run the explain binary with --as-of {string} and --json', function (state: ExplainWorld, asOf: string) {
+  state.subprocessRowCountsBefore = countLedgerRows(state.subprocessTmpDir!);
   state.subprocessResult = spawnCli(['explain', '--as-of', asOf, '--json'], { cwd: state.subprocessTmpDir! });
 });
 
@@ -370,7 +383,9 @@ Then('the explain subprocess JSON output matches the documented shape', function
   expect(parsed.asOf).toBe('2026-06-28');
 });
 
-Then('explain creates no snapshot file \\(read-only guarantee\\)', function (state: ExplainWorld) {
-  const entries = fs.readdirSync(state.subprocessTmpDir!);
-  expect(entries.some(name => name.endsWith('.bak'))).toBe(false);
+Then('explain creates no snapshot and writes no rows \\(read-only guarantee\\)', function (state: ExplainWorld) {
+  const dirEntries = fs.readdirSync(state.subprocessTmpDir!);
+  expect(dirEntries.some(name => name.endsWith('.bak'))).toBe(false);
+  const after = countLedgerRows(state.subprocessTmpDir!);
+  expect(after).toEqual(state.subprocessRowCountsBefore);
 });

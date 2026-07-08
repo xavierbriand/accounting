@@ -27,6 +27,7 @@ describe('previousSettleWindow — month-end clamping', () => {
   });
 
   it('a mid-month date needs no clamp: Jun 15 -> May 15', () => {
+    // fails if oneCalendarMonthBefore's Math.min clamp over-clamps ordinary mid-month days instead of only month-end overflow
     expect(previousSettleWindow('2026-06-15').asOfLast).toBe('2026-05-15');
   });
 });

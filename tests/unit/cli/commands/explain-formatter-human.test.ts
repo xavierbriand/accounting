@@ -130,6 +130,7 @@ describe('formatExplainHuman — variance section', () => {
 
 describe('formatExplainHuman — follow-through section', () => {
   it('renders each partner\'s actual vs suggested with sign-aware delta prose', () => {
+    // fails if formatFollowThroughSection drops a partner row or signedDeltaPhrase renders the raw signed Money instead of the more/less prose
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
@@ -165,6 +166,7 @@ describe('formatExplainHuman — follow-through section', () => {
   });
 
   it('renders the follow-through error and its suggested action when it failed independently of variance', () => {
+    // fails if formatFollowThroughSection's error branch (the non-notConfigured failure arm) is dropped and a follow-through failure renders silently
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
@@ -177,6 +179,7 @@ describe('formatExplainHuman — follow-through section', () => {
 
 describe('formatExplainHuman — footnote', () => {
   it('includes the "movement computed with today\'s configuration" footnote line', () => {
+    // fails if formatExplainHuman drops the today's-configuration caveat — the QA-truthfulness disclaimer that both windows are recomputed under the current config
     const report: ExplainReport = {
       ...baseWindows,
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },

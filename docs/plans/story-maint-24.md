@@ -198,9 +198,9 @@ Phase 2 review for this story is **Reduced lane** (infra-tooling + agent-spec, n
 
 ## Merge checklist
 
-- [ ] `lint` / `build` / `test` green on CI
+- [x] `lint` / `build` / `test` green locally (`npm run lint`: 0 errors/193 warnings; `npm run build`: green; `npm test`: 847 passing, 2 pre-existing unrelated failures) — awaiting CI confirmation
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-24.md`
-- [ ] All suggestion-log items resolved (no blank `Resolution` cells)
-- [ ] Phase-4 review (`code-reviewer` + `sibling-overlap`) findings classified fix-now / defer-issue / acknowledge
+- [x] Retrospective file committed at `docs/retrospectives/story-maint-24.md`
+- [x] All suggestion-log items resolved (no blank `Resolution` cells)
+- [x] Phase-4 review (`code-reviewer` + `sibling-overlap`) findings classified fix-now / defer-issue / acknowledge, plus a final post-fix `sibling-overlap` re-check (clean)
 - [ ] User approval

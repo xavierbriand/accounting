@@ -233,9 +233,7 @@ describe('SafeTransferCalculator — forecast-only path', () => {
     const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
     expect(result.isSuccess).toBe(true);
     const items = result.value.lineItems;
-    for (let i = 1; i < items.length; i++) {
-      expect(items[i].date >= items[i - 1].date).toBe(true);
-    }
+    expect(items.map(i => i.date)).toEqual([...items.map(i => i.date)].sort());
   });
 });
 
@@ -331,19 +329,19 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
             if (addResult.isFailure) return true;
             sumGross = addResult.value;
           }
-          if (!sumGross.equals(totalRequired)) return false;
+          expect(sumGross.equals(totalRequired)).toBe(true);
 
           // Sum per partner via Money.add
           for (const partner of ['Alex', 'Sam']) {
             let sumPartner = makeEur(0);
             for (const item of lineItems) {
               const share = item.perPartnerSplit.get(partner);
-              if (!share) return false;
-              const addResult = sumPartner.add(share);
+              expect(share).toBeDefined();
+              const addResult = sumPartner.add(share!);
               if (addResult.isFailure) return true;
               sumPartner = addResult.value;
             }
-            if (!sumPartner.equals(perPartner.get(partner)!)) return false;
+            expect(sumPartner.equals(perPartner.get(partner)!)).toBe(true);
           }
           return true;
         },
@@ -488,13 +486,13 @@ describe('SafeTransferCalculator — property tests (forecast-only)', () => {
     // fails if any transfer core file reads the system clock, violating the purity invariant
     const transferDir = path.resolve(__dirname, '../../../../src/core/transfer/');
     const files = fs.readdirSync(transferDir).filter(f => f.endsWith('.ts'));
-    for (const file of files) {
+    files.forEach(file => {
       const source = fs.readFileSync(path.join(transferDir, file), 'utf8');
       // new Date(string) for ISO parsing IS allowed; new Date() without args is not.
       expect(source, `${file} contains Date.now`).not.toMatch(/Date\.now/);
       expect(source, `${file} contains new Date()`).not.toMatch(/new Date\(\s*\)/);
       expect(source, `${file} contains performance.now`).not.toMatch(/performance\.now/);
-    }
+    });
   });
 });
 
@@ -534,10 +532,10 @@ describe('SafeTransferCalculator — buffer top-up path', () => {
     expect(result.isSuccess).toBe(true);
     const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
     // Each of first 4 months: 17143 cents (171.43 EUR)
-    for (const item of topups) {
+    topups.forEach(item => {
       expect(item.gross.amount).toBe(17143);
       expect(item.gross.currency).toBe('EUR');
-    }
+    });
   });
 
   it('totalRequired is 4 * 17143 = 68572 cents = 685.72 EUR for 4-month window', () => {
@@ -677,10 +675,7 @@ describe('SafeTransferCalculator — property tests (buffer top-up)', () => {
           const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
           if (topups.length !== monthsInWindow) return true; // guard: full window must expose all slots
 
-          let sumCents = 0;
-          for (const item of topups) {
-            sumCents += item.gross.amount;
-          }
+          const sumCents = topups.reduce((sum, item) => sum + item.gross.amount, 0);
           const expectedShortfall = targetCents - balanceCents;
           return sumCents === expectedShortfall;
         },
@@ -788,15 +783,14 @@ describe('SafeTransferCalculator — property tests (buffer top-up)', () => {
 
           const items1 = result1.value.lineItems;
           const items2 = result2.value.lineItems;
-          if (items1.length !== items2.length) return false;
-
-          for (let i = 0; i < items1.length; i++) {
-            if (items1[i].date !== items2[i].date) return false;
-            if (items1[i].kind !== items2[i].kind) return false;
-            if (items1[i].category !== items2[i].category) return false;
-            if (items1[i].description !== items2[i].description) return false;
-            if (items1[i].gross.amount !== items2[i].gross.amount) return false;
-          }
+          const pick = (item: (typeof items1)[number]) => ({
+            date: item.date,
+            kind: item.kind,
+            category: item.category,
+            description: item.description,
+            amount: item.gross.amount,
+          });
+          expect(items1.map(pick)).toEqual(items2.map(pick));
           return true;
         },
       ),

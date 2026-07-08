@@ -123,15 +123,17 @@ describe('Property #4: DoM clamp determinism', () => {
   it('Feb-29 annual — step i recovers Feb-29 in leap years, uses Feb-28 in non-leap years', () => {
     // fails if: anchor recovery is broken for leap years
     const dates = enumerateOccurrences('2024-02-29', undefined, 'annual', '2024-01-01', '2032-12-31');
-    const leapYears = new Set([2024, 2028, 2032]);
-    for (const d of dates) {
-      const [year, , day] = d.split('-').map(Number);
-      if (leapYears.has(year)) {
-        expect(day).toBe(29);
-      } else {
-        expect(day).toBe(28);
-      }
-    }
+    expect(dates).toEqual([
+      '2024-02-29',
+      '2025-02-28',
+      '2026-02-28',
+      '2027-02-28',
+      '2028-02-29',
+      '2029-02-28',
+      '2030-02-28',
+      '2031-02-28',
+      '2032-02-29',
+    ]);
   });
 
   it('Property: for any validFrom + monthly window, all dates have correct day-of-month', () => {
@@ -147,7 +149,7 @@ describe('Property #4: DoM clamp determinism', () => {
           for (const d of dates) {
             const [year, month, day] = d.split('-').map(Number);
             const daysInMonth = new Date(year, month, 0).getDate();
-            if (day > daysInMonth) return false;
+            expect(day).toBeLessThanOrEqual(daysInMonth);
           }
           return true;
         },

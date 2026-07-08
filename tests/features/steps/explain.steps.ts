@@ -369,3 +369,8 @@ Then('the explain subprocess JSON output matches the documented shape', function
   expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
   expect(parsed.asOf).toBe('2026-06-28');
 });
+
+Then('explain creates no snapshot file \\(read-only guarantee\\)', function (state: ExplainWorld) {
+  const entries = fs.readdirSync(state.subprocessTmpDir!);
+  expect(entries.some(name => name.endsWith('.bak'))).toBe(false);
+});

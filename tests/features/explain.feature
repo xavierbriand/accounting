@@ -93,4 +93,5 @@ Feature: accounting explain CLI command (Story 4.3b)
     When I run the explain binary with --as-of "2026-06-28" and --json
     Then the explain subprocess exits with code 0
     And the explain subprocess JSON output matches the documented shape
+    And explain creates no snapshot file (read-only guarantee)
     # fails if program.ts wiring (adapter, config mapping, clock) is broken.

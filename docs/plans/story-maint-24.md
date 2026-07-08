@@ -1,4 +1,4 @@
-# Story maint-23 — Test-smell lint rules + code-reviewer checklist, grounded in Jorge et al. (SAST'21)
+# Story maint-24 — Test-smell lint rules + code-reviewer checklist, grounded in Jorge et al. (SAST'21)
 
 ## Context
 
@@ -13,7 +13,7 @@ Rather than adopt the immature third-party tool, this story mines the paper's ta
 **Maintenance sub-loop (CLAUDE.md § 6.7).**
 - **Sibling work:** `gh pr list --state open` returns zero open PRs. No branch/PR to reconcile against.
 - **Open issues:** reviewed all 38 open issues (`gh issue list --state open`); none overlap this story's scope. Closest-adjacent is #147 ("lightweight regression guard that `test:quiet` stays wired to a minimal reporter") — different concern (test *runner* config, not test *code* smells), no overlap.
-- **Story-id uniqueness (R23):** this story was originally planned as `story-maint-22`. A local `ls docs/plans/retrospectives/status.d | grep maint-22` against the checked-out worktree branch (one commit behind `origin/main` at the time) came back empty and looked clear. The Phase 2 `sibling-overlap` review caught the actual collision: `story-maint-22` had already been claimed and merged on `origin/main` (PR #199, an unrelated dev-dependencies-group bump) — invisible to a worktree-local `ls` check, only visible via `git fetch origin main` + a check against `origin/main`'s tree. Renumbered to **`story-maint-23`**, confirmed free via `git ls-tree -r --name-only origin/main -- docs/plans docs/retrospectives docs/status.d | grep maint-2` (only `maint-21`/`maint-22` present) and `gh pr list --state open` (zero open branches). The worktree branch was then rebased onto `origin/main` before continuing. Latest sibling is `story-maint-22` (merged, dev-deps bump).
+- **Story-id uniqueness (R23) — two collisions, resolved in two passes.** This story was originally planned as `story-maint-22`. A local `ls docs/plans/retrospectives/status.d | grep maint-22` against the checked-out worktree branch (one commit behind `origin/main` at the time) came back empty and looked clear. The Phase 2 `sibling-overlap` review caught the actual collision: `story-maint-22` had already been claimed and merged on `origin/main` (PR #199, an unrelated dev-dependencies-group bump) — invisible to a worktree-local `ls` check, only visible via `git fetch origin main` + a check against `origin/main`'s tree. Renumbered to `story-maint-23`, confirmed free via `git ls-tree -r --name-only origin/main -- docs/plans docs/retrospectives docs/status.d | grep maint-2` (only `maint-21`/`maint-22` present) and `gh pr list --state open` (zero open branches at that time). The worktree branch was then rebased onto `origin/main` before continuing. **A second, independent collision surfaced later, at Phase 4:** `story-maint-23` turned out to already be claimed by PR #201 (created between Phase 2 and Phase 4, "extract capturing-stream helper," closes #43) — an `origin/main`-tree check can't see an open-but-unmerged PR's files; only `gh pr view <n> --json files` per open PR catches that. Renumbered a second time to **`story-maint-24`**, confirmed free against `origin/main`'s tree *and* every open PR's file list this time. Since this branch's commits were already pushed with an open PR (#205), the fix required rewriting all commit-message `(story-maint-23)` suffixes and force-pushing — done via a non-interactive `git filter-branch --msg-filter` (not `-i` rebase) with explicit user authorization. See [docs/retrospectives/story-maint-24.md](../retrospectives/story-maint-24.md) § Change D for the full narrative. Latest sibling is `story-maint-22` (merged, dev-deps bump); `story-maint-23` remains claimed by PR #201.
 - **Proceed-to-planning.**
 
 ## Motivation
@@ -58,14 +58,15 @@ Ordered by the paper's frequency × quality-correlation evidence (11-project cor
 | Eager Test (EaT) | Checklist only | 35 occurrences. Same cross-file-knowledge problem as LT (does one test invoke several unrelated production methods). |
 | Empty Test (EmT) | **Drop, subsumed by UT** | Zero occurrences in the entire 11-project study; free byproduct of the UT rule (an empty test body trivially has zero assertions). |
 
-Net: **9 ESLint rules**, **4 code-reviewer checklist items** (Mystery Guest residual + Resource Optimism bundled in P1; Eager Test + Lazy Test bundled in P3), **2 drops** (Magic Number Test, Empty Test).
+Net: **10 ESLint rules**, **4 code-reviewer checklist items** (Mystery Guest residual + Resource Optimism bundled in P1; Eager Test + Lazy Test bundled in P3), **2 drops** (Magic Number Test, Empty Test).
 
 ### 2. ESLint rule specs
 
-All nine rules are syntactic AST matches — none need type information (`parserOptions.project`). Safety for BDD step-definition files (`tests/features/steps/*.ts`, which use quickpickle's `Given`/`When`/`Then`, never `it`/`test`) comes from **callee-name scoping in each rule** (only `it`/`test`-family calls are inspected), not glob exclusion — confirmed `correct.steps.ts` never calls `it`/`test`.
+All ten rules are syntactic AST matches — none need type information (`parserOptions.project`). Safety for BDD step-definition files (`tests/features/steps/*.ts`, which use quickpickle's `Given`/`When`/`Then`, never `it`/`test`) comes from **callee-name scoping in each rule** (only `it`/`test`-family calls are inspected), not glob exclusion — confirmed `correct.steps.ts` never calls `it`/`test`.
 
 | Rule | Scope glob | Detects | Must NOT flag (verified against real files) | Severity |
 |---|---|---|---|---|
+| `local/no-ignored-test` | `tests/**/*.ts` | `it.skip`/`test.skip`/`describe.skip`/`it.todo`/`test.todo` (exact property match), or bare `xit`/`xdescribe`/`xtest` identifiers | `it.skipIf(cond)(...)`/`it.runIf(cond)(...)` — conditional, justified runtime skips (property name doesn't match `skip`/`todo` exactly) | `error` immediately |
 | `local/conditional-test-logic` | `tests/**/*.ts` | `if`/`for`/`while`/`switch` inside an `it`/`test` callback body | `Given`/`When`/`Then` handlers branching on Gherkin table data (protected by callee-name scoping, not glob) | `warn` → `error` after audit |
 | `local/duplicate-assert` | `tests/**/*.ts` | Two `expect(<receiver>).<matcher>(<args>)` calls in the same test body with identical source-text receiver + matcher + args | `expect(reversal.entries[0]...).toBe(2000)` vs `expect(original.entries[0]...).toBe(2000)` in `correction-service.test.ts` — different receivers, not a duplicate | `warn` → `error` after audit |
 | `local/no-unasserted-test` | `tests/**/*.ts` | Zero `expect(...)`/`assert(...)` calls anywhere in an `it`/`test` body (subsumes Empty Test) | — (known limitation: an assertion hidden inside a called helper function won't be seen; acceptable for v1) | `warn` → `error` after audit |
@@ -79,7 +80,7 @@ All nine rules are syntactic AST matches — none need type information (`parser
 ### 3. File layout & registration
 
 - New directory `eslint-rules/test-smells/` at repo root (sibling to `src/`, `tests/`, `harness/`). One file per rule + an `index.js` barrel exporting `{ rules: {...} }`.
-- Plain `.js`, manually-authored rule objects (`{ meta, create(context) {...} }`) — not `.ts`, not `ESLintUtils.RuleCreator`. `eslint.config.js` is plain ESM `.js` with no TS-loader in front of `npm run lint` (`eslint .`), so a `.ts` rule module wouldn't resolve, and none of the nine rules need type information.
+- Plain `.js`, manually-authored rule objects (`{ meta, create(context) {...} }`) — not `.ts`, not `ESLintUtils.RuleCreator`. `eslint.config.js` is plain ESM `.js` with no TS-loader in front of `npm run lint` (`eslint .`), so a `.ts` rule module wouldn't resolve, and none of the ten rules need type information.
 - Registered via new `files:`-scoped blocks in `eslint.config.js`'s existing `tseslint.config(...)` array — no new dependencies.
 - Rule unit tests: `eslint`'s own built-in `RuleTester` (confirmed present in `eslint@10.6.0`; `@typescript-eslint/utils@8.62.1` does **not** export a `RuleTester`, and `@typescript-eslint/rule-tester` is not installed — using it would be a real new dependency). Tests at `tests/unit/eslint-rules/test-smells/<rule-name>.test.ts`, mirroring the new source dir per the existing `tests/unit/<mirror-of-src>` convention. Each rule's `valid` cases include the specific false-positive fixtures identified above.
 - `eslint-rules/` gets the same coverage-exemption treatment CLAUDE.md already grants `harness/` (unit + one integration-style `RuleTester` sweep per rule, not the `src/core/` 100%-branch mandate) — same rationale: dev tooling, not shipped product code.
@@ -95,7 +96,7 @@ Both cite existing anchors (R6/R7 test-mechanism-honesty family, the "mock all P
 
 ### 5. Rollout plan
 
-1. Wire all nine rules at their target severity, then run one full `npm run lint` sweep with every new rule temporarily forced to `warn` to get real hit counts/locations (Slice 8) — this decides final severities; the per-rule table above is a strong prior, not a substitute for the sweep.
+1. Wire all ten rules at their target severity, then run one full `npm run lint` sweep with every new rule temporarily forced to `warn` to get real hit counts/locations (Slice 8) — this decides final severities; the per-rule table above is a strong prior, not a substitute for the sweep.
 2. Rules with a confirmed-zero baseline (direct repo-wide grep, not assumption) start at `error` immediately: `no-ignored-test`, `no-redundant-print`, `no-redundant-assertion`, `no-mystery-guest-db`.
 3. Everything else starts at `warn`: `conditional-test-logic`, `duplicate-assert`, `no-unasserted-test` (unmeasured baseline — need the sweep), `no-swallowed-exception` (deliberately conservative heuristic, stays `warn` indefinitely), `assertion-roulette` (paper's own low-yield caveat), `no-sleepy-test` (one confirmed real hit needing human disposition).
 4. `npm run lint` must be 0 errors before merge — any `error`-severity rule with unexpected hits gets fixed in-PR (if trivial) or dialed back to `warn` with a deferred issue. Never merge lint-red.
@@ -144,7 +145,7 @@ Feature: Test-smell detection tooling
     Then the rule reports nothing
 
   Scenario: the whole suite lints clean at the audited severities
-    Given all nine rules wired into eslint.config.js at their rollout-plan severities
+    Given all ten rules wired into eslint.config.js at their rollout-plan severities
     When `npm run lint` runs against the full, unmodified test suite
     Then it exits 0, with the recorded hit-count table (Slice 8) matching the final severities
 
@@ -172,9 +173,9 @@ Feature: Test-smell detection tooling
 5. `test(lint): conditional-test-logic — failing` / `feat(lint): conditional-test-logic, it/test-scoped — minimal green`
 6. `test(lint): no-unasserted-test — failing` / `feat(lint): no-unasserted-test, subsumes Empty Test — minimal green`
 7. `test(lint): no-swallowed-exception — failing` / `feat(lint): no-swallowed-exception, whole-test-body heuristic — minimal green`
-8. `chore(lint): baseline audit across full suite — finalize severities (story-maint-23)`
-9. `feat(agent): code-reviewer.md — Mystery Guest/Resource Optimism (P1) + Eager/Lazy Test (P3) checklist bullets, R29 (story-maint-23)`
-10. `chore(retro): story-maint-23 retrospective + CLAUDE.md § 8 R29 row`
+8. `chore(lint): baseline audit across full suite — finalize severities (story-maint-24)`
+9. `feat(agent): code-reviewer.md — Mystery Guest/Resource Optimism (P1) + Eager/Lazy Test (P3) checklist bullets, R29 (story-maint-24)`
+10. `chore(retro): story-maint-24 retrospective + CLAUDE.md § 8 R29 row`
 
 10 slices sits at the top of R13's 6–10 range; each maps to an independently-reviewable unit (one rule or a tightly-related pair per slice, per R28's slice-counting convention — each `test:`/`feat:` pair is one slice).
 
@@ -184,15 +185,22 @@ Phase 2 review for this story is **Reduced lane** (infra-tooling + agent-spec, n
 
 | Phase | Suggestion | Resolution | Link / Reason |
 | --- | --- | --- | --- |
-| P2 (sibling-overlap) | `story-maint-22` collides with PR #199 (merged, `c94db32`), an unrelated dev-dependencies-group bump story — `docs/plans/plan-story-maint-22.md`/retro/status.d already exist on `origin/main`. Same-path add/add conflict on rebase if unaddressed. | fix-now | Renumbered to `story-maint-23` (confirmed free on `origin/main` + no open PR branches). Plan file renamed; worktree branch rebased onto `origin/main`. See "Story-id uniqueness (R23)" bullet above for the full narration. |
+| P2 (sibling-overlap) | `story-maint-22` collides with PR #199 (merged, `c94db32`), an unrelated dev-dependencies-group bump story — `docs/plans/story-maint-22.md`/retro/status.d already exist on `origin/main`. Same-path add/add conflict on rebase if unaddressed. | fix-now | Renumbered to `story-maint-23` (confirmed free on `origin/main` + no open PR branches at that time). Plan file renamed; worktree branch rebased onto `origin/main`. See "Story-id uniqueness (R23)" bullet above for the full narration. |
 | P2 (sibling-overlap) | Issue #200 (CLAUDE.md § 6 lane-selection table doesn't list R15) touches CLAUDE.md § 6/§ 8 in general proximity to where this story's R29 row lands, but a different rule/section — no line-level conflict risk. | acknowledge | No action needed; confirmed no-conflict. |
 | P2 (sibling-overlap) | Issue #147 (test:quiet reporter regression guard) is adjacent in the "dev-tooling quality" space but concerns the test *runner* config, not test *code* smells. | acknowledge | Confirmed unrelated; no overlap. |
+| P4 (sibling-overlap) | `story-maint-23` (the id chosen after the first collision) itself collides with PR #201, opened between Phase 2 and Phase 4, closing #43 — identical `docs/plans/retrospectives/status.d` paths. | fix-now | Renumbered a second time to `story-maint-24`, confirmed free against `origin/main`'s tree *and* every open PR branch's file list. Required rewriting all commit-message story-id suffixes and force-pushing (non-interactive `git filter-branch --msg-filter`, explicit user authorization). See "Story-id uniqueness (R23)" bullet above and [docs/retrospectives/story-maint-24.md](../retrospectives/story-maint-24.md) § Change D. |
+| P4 (code-reviewer) | Plan/retro/status-fragment/PR-body all undercounted the ESLint rule total as "9" — the diff ships 10 rules (the § 1 mapping table always listed 10 ESLint-rule mechanisms including `no-ignored-test`; only the narrative "Net" summary and § 2's rule-spec table were off-by-one). | fix-now | Corrected throughout: this plan (§ 1 "Net" line, § 2 missing `no-ignored-test` row, rollout-plan prose), the retrospective, and the status.d fragment. |
+| P4 (code-reviewer) | Retrospective's Loop metrics had an inaccurate commit count ("19" vs. actual 18) and an internally-inconsistent test-count figure ("807 → 815... 8 new spec files" reconciled with neither the 10 actual spec files nor the 68 actual cases nor the "847 passing" figure quoted elsewhere in the same file). | fix-now | Recomputed and corrected in the retrospective: 18 commits; 781 → 849 product-test-suite total (cross-checked against story-maint-21's documented 781 baseline), 68 new `RuleTester` cases across 10 spec files. |
+| P4 (code-reviewer, soft) | Two rule-file comments (`duplicate-assert.js:2`, `no-sleepy-test.js:37,53`) describe "what" the matched AST shape is rather than a non-obvious "why," borderline against CLAUDE.md § 4. | acknowledge | Low-value churn for dev-tooling `.js` files explicitly outside the coverage/strict-typing mandate (see plan § 3); not fixed. |
+| P4 (code-reviewer, soft) | No test asserts that `eslint.config.js`'s `local/*` rule registration stays in sync with the files under `eslint-rules/test-smells/` — each `RuleTester` spec imports its rule via the barrel, bypassing the flat-config wiring; a sync check would have mechanically caught the "9 vs 10" narrative drift. | acknowledge | Valid observation, real gap; not worth a dedicated check for a 10-rule, single-contributor-maintained directory. Not filed as a follow-up issue — low enough value/frequency to reconsider only if the rule set grows substantially. |
+| P4 (code-reviewer) | Several `test:`/`feat:` commit pairs share the identical author timestamp to the second, consistent with (but not proof of) the red state not being separately observed between commits; the retrospective was drafted and committed before the Phase 4 review that "the plan itself" says it depends on had actually run. | acknowledge | Both are real observations about this session's fast, tool-driven pace rather than substantive defects — the red state *was* independently verified via a separate `npx vitest run` before every implementation commit in this story (see each slice's commit body); commit timestamps just don't capture that verification step's wall-clock gap. The retro-before-Phase-4 sequencing is corrected in this same fix-up pass (Phase 4 findings are folded into the retro rather than left as a stale "pending" note). |
+| P4 (code-reviewer) | The commit that renamed the plan's "## Commit sequence" heading to "## Slice plan" self-cited the R9 trivial-fix carve-out, but "pre-specified" provenance is debatable — the coordinate came from `dod-check`'s own advisory output, not from the plan or a completed Phase-4 finding (Phase 4 hadn't run yet at that point). | acknowledge | LOC/single-file criteria are unambiguously met (1 line, 1 file); a mechanical tool's own deterministic advisory output identifying an exact, unambiguous fix is a reasonable reading of "pre-specified" even if not literally plan-authored. Not re-litigated with a further edit. |
 
 ## Merge checklist
 
 - [ ] `lint` / `build` / `test` green on CI
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-23.md`
+- [ ] Retrospective file committed at `docs/retrospectives/story-maint-24.md`
 - [ ] All suggestion-log items resolved (no blank `Resolution` cells)
 - [ ] Phase-4 review (`code-reviewer` + `sibling-overlap`) findings classified fix-now / defer-issue / acknowledge
 - [ ] User approval

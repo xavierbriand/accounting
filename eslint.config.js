@@ -9,16 +9,16 @@ export default tseslint.config(
     ignores: ["dist", "node_modules", "coverage", ".claude"],
   },
   {
-    // Test-smell lint rules (story-maint-23) — grounded in Jorge et al., SAST'21.
+    // Test-smell lint rules (story-maint-24) — grounded in Jorge et al., SAST'21.
     // Scoped broadly; safety comes from each rule's it/test-callee-name AST
-    // scoping, not from the glob (see docs/plans/story-maint-23.md § 2).
+    // scoping, not from the glob (see docs/plans/story-maint-24.md § 2).
     files: ["tests/**/*.ts"],
     plugins: { local: { rules: testSmellRules.rules } },
     rules: {
       // error from day one — confirmed-zero baseline via direct repo-wide check.
       "local/no-ignored-test": "error",
       "local/no-redundant-assertion": "error",
-      // promoted after the Slice 8 baseline audit — see docs/plans/story-maint-23.md
+      // promoted after the Slice 8 baseline audit — see docs/plans/story-maint-24.md
       // § "Baseline audit results" — both were warn-only during development,
       // each surfaced and fixed real false positives, and both now sweep the
       // full suite at 0 hits.

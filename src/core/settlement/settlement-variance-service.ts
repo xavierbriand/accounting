@@ -5,7 +5,7 @@ import type { SafeTransferCalculation } from '@core/transfer/safe-transfer-calcu
 import type { ContributionsInWindow } from '@core/ports/contribution-query.js';
 import { LineItemKey } from './line-item-key.js';
 import type { VarianceLine } from './variance-line.js';
-import type { FollowThrough } from './follow-through.js';
+import type { FollowThrough, PartnerFollowThrough } from './follow-through.js';
 import type { SettlementVariance } from './settlement-variance.js';
 
 interface KeyedItem {
@@ -86,18 +86,58 @@ function buildVarianceLine(
   });
 }
 
-function buildFollowThrough(
+function buildPerPartnerFollowThrough(
   thisMonth: SafeTransferCalculation,
   contributions: ContributionsInWindow,
   zero: Money,
+): Result<ReadonlyMap<string, PartnerFollowThrough>> {
+  const actualByPartner = new Map(contributions.attributed.map(c => [c.partner, c.amount]));
+  const partners = new Set([...thisMonth.perPartner.keys(), ...actualByPartner.keys()]);
+  const perPartner = new Map<string, PartnerFollowThrough>();
+  for (const partner of partners) {
+    const suggested = thisMonth.perPartner.get(partner) ?? zero;
+    const actual = actualByPartner.get(partner) ?? zero;
+    const deltaResult = suggested.subtract(actual);
+    if (deltaResult.isFailure) return Result.fail(deltaResult.error);
+    perPartner.set(partner, { suggested, actual, delta: deltaResult.value });
+  }
+  return Result.ok(perPartner);
+}
+
+function buildFollowThrough(
+  thisMonth: SafeTransferCalculation,
+  contributions: ContributionsInWindow,
+  currency: string,
+  zero: Money,
 ): Result<FollowThrough> {
+  if (contributions.totalActual.currency !== currency) {
+    return Result.fail(
+      `currency mismatch: this month is ${currency}, contributions are ${contributions.totalActual.currency}`,
+    );
+  }
+
   const totalDeltaResult = thisMonth.totalRequired.subtract(contributions.totalActual);
   if (totalDeltaResult.isFailure) return Result.fail(totalDeltaResult.error);
+
+  const isFullyAttributed = contributions.unattributed.equals(zero);
+  if (!isFullyAttributed) {
+    return Result.ok({
+      totalSuggested: thisMonth.totalRequired,
+      totalActual: contributions.totalActual,
+      totalDelta: totalDeltaResult.value,
+      attribution: 'totals-only',
+    });
+  }
+
+  const perPartnerResult = buildPerPartnerFollowThrough(thisMonth, contributions, zero);
+  if (perPartnerResult.isFailure) return Result.fail(perPartnerResult.error);
+
   return Result.ok({
+    perPartner: perPartnerResult.value,
     totalSuggested: thisMonth.totalRequired,
     totalActual: contributions.totalActual,
     totalDelta: totalDeltaResult.value,
-    attribution: 'totals-only',
+    attribution: 'per-partner',
   });
 }
 
@@ -139,7 +179,7 @@ export function explainSettlementVariance(
   const perPartnerDeltaResult = buildPerPartnerDelta(thisMonth.perPartner, lastMonth.perPartner, zero);
   if (perPartnerDeltaResult.isFailure) return Result.fail(perPartnerDeltaResult.error);
 
-  const followThroughResult = buildFollowThrough(thisMonth, contributions, zero);
+  const followThroughResult = buildFollowThrough(thisMonth, contributions, currency, zero);
   if (followThroughResult.isFailure) return Result.fail(followThroughResult.error);
 
   return Result.ok({

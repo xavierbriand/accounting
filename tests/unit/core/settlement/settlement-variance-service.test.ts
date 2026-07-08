@@ -203,8 +203,12 @@ describe('explainSettlementVariance — follow-through assembly', () => {
     expect(result.isSuccess).toBe(true);
     const ft = result.value.followThrough;
     expect(ft.attribution).toBe('per-partner');
-    expect(ft.perPartner!.get('Alex')).toEqual({ suggested: eur(50000), actual: eur(48000), delta: eur(2000) });
-    expect(ft.perPartner!.get('Sam')).toEqual({ suggested: eur(50000), actual: eur(46000), delta: eur(4000) });
+    expect(ft.perPartner!.get('Alex')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner!.get('Alex')!.actual.amount).toBe(48000);
+    expect(ft.perPartner!.get('Alex')!.delta.amount).toBe(2000);
+    expect(ft.perPartner!.get('Sam')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner!.get('Sam')!.actual.amount).toBe(46000);
+    expect(ft.perPartner!.get('Sam')!.delta.amount).toBe(4000);
     expect(ft.totalSuggested.amount).toBe(100000);
     expect(ft.totalActual.amount).toBe(94000);
     expect(ft.totalDelta.amount).toBe(6000);

@@ -324,15 +324,14 @@ describe('explainSettlementVariance — property tests', () => {
         const { thisMonth, lastMonth } = buildMonths(generated);
         const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
         if (result.isFailure) return true;
-        for (const partner of ['Alex', 'Sam']) {
+        return ['Alex', 'Sam'].every(partner => {
           const sumLineDeltas = result.value.lines.reduce(
             (acc, l) => acc + (l.perPartnerDelta.get(partner)?.amount ?? 0),
             0,
           );
           const expected = (thisMonth.perPartner.get(partner)?.amount ?? 0) - (lastMonth.perPartner.get(partner)?.amount ?? 0);
-          if (sumLineDeltas !== expected) return false;
-        }
-        return true;
+          return sumLineDeltas === expected;
+        });
       }),
       { numRuns: 100 },
     );

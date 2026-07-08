@@ -292,10 +292,7 @@ describe('IdempotencyService.filterNew', () => {
       expect(fresh).toHaveLength(3);
 
       // Each item appears exactly once → seq=1 → hash equals unmodified canonical
-      for (let i = 0; i < items.length; i++) {
-        const expectedHash = canonicalize(items[i]).value;
-        expect(fresh[i].idempotencyHash).toBe(expectedHash);
-      }
+      expect(fresh.map((f) => f.idempotencyHash)).toEqual(items.map((i) => canonicalize(i).value));
     });
   });
 
@@ -372,26 +369,22 @@ describe('IdempotencyService.filterNew', () => {
             const { fresh, duplicates } = result.value;
 
             // fresh + duplicates = total items
-            if (fresh.length + duplicates.length !== n) return false;
+            expect(fresh.length + duplicates.length).toBe(n);
 
             // Verify that items at duplicateIndices land in duplicates, others in fresh
             const expectedFreshCount = n - dupeIndexSet.size;
             const expectedDupCount = dupeIndexSet.size;
-            if (fresh.length !== expectedFreshCount) return false;
-            if (duplicates.length !== expectedDupCount) return false;
+            expect(fresh.length).toBe(expectedFreshCount);
+            expect(duplicates.length).toBe(expectedDupCount);
 
             // Verify relative order of fresh (items NOT in duplicateIndices, in input order)
             // Story 2.5: fresh[i] is FreshIngestItem { item, idempotencyHash }
             const expectedFreshItems = items.filter((_, i) => !dupeIndexSet.has(i));
-            for (let i = 0; i < expectedFreshItems.length; i++) {
-              if (fresh[i].item !== expectedFreshItems[i]) return false;
-            }
+            expect(fresh.map((f) => f.item)).toEqual(expectedFreshItems);
 
             // Verify relative order of duplicates (items IN duplicateIndices, in input order)
             const expectedDupItems = items.filter((_, i) => dupeIndexSet.has(i));
-            for (let i = 0; i < expectedDupItems.length; i++) {
-              if (duplicates[i].item !== expectedDupItems[i]) return false;
-            }
+            expect(duplicates.map((d) => d.item)).toEqual(expectedDupItems);
 
             return true;
           },

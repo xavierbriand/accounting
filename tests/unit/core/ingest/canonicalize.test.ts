@@ -188,22 +188,20 @@ describe('canonicalize', () => {
       // ("contains") in the error template, producing false positives. The
       // PII-safety contract is that the *user-supplied value* is not echoed; the
       // full string is the meaningful witness for that.
+      type TamperField = 'sourceAccount' | 'occurredAt' | 'direction' | 'description';
+      const tamperers: Record<TamperField, (v: string) => IngestItem> = {
+        sourceAccount: (v) => makeItem({ sourceAccount: v }),
+        occurredAt: (v) => makeItem({ occurredAt: v }),
+        direction: (v) => makeItem({ direction: v as IngestItem['direction'] }),
+        description: (v) => makeItem({ description: v }),
+      };
       fc.assert(
         fc.property(
           fc.constantFrom('sourceAccount', 'occurredAt', 'direction', 'description'),
           fc.string({ minLength: 3 }),
           (field, content) => {
             const withUs = `${content}${US}injection`;
-            let item: IngestItem;
-            if (field === 'sourceAccount') {
-              item = makeItem({ sourceAccount: withUs });
-            } else if (field === 'occurredAt') {
-              item = makeItem({ occurredAt: withUs });
-            } else if (field === 'direction') {
-              item = makeItem({ description: withUs });
-            } else {
-              item = makeItem({ description: withUs });
-            }
+            const item = tamperers[field](withUs);
             const r = canonicalize(item);
             if (r.isFailure) {
               return !r.error.includes(withUs);

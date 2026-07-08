@@ -120,6 +120,46 @@ Example names (Alex, Sam) are fixtures, never real people.
 
 **Technical notes.** **Value object** — `LineItem` ([src/core/transfer/line-item.ts](../../src/core/transfer/line-item.ts)): `kind: 'forecast' | 'buffer-topup'`, date, category, description, `gross`, `perPartnerSplit`.
 
+## Settlement
+
+**Everyday definition.** The monthly moment when both partners square up: each moves their share to the joint account, and the couple checks how last month actually went.
+
+**Example.** On August 1st, Alex moves €1,404 and Sam €936 to the joint account, and together they check July: the transfers landed as suggested, and the car buffer's top-up explains why August asks for more.
+
+**Technical notes.** A domain moment, not a stored record — the `settle` write-command remains future PRD scope; story-4.3 ships the read model that powers the conversation (`src/core/settlement/`). See [model-notes/story-4.3.md](model-notes/story-4.3.md).
+
+## Settlement variance
+
+**Everyday definition.** The itemized story of why this month's suggested transfer differs from last month's, plus the follow-through check — every number backed by math either partner can recheck.
+
+**Example.** "August asks €240 more than July: car insurance is due (+€720), June's one-off vet top-up dropped away (−€480). In July you actually sent €2,100, matching the suggestion."
+
+**Technical notes.** **Value object** `SettlementVariance` (`src/core/settlement/`), assembled by `SettlementVarianceService` (**domain service**) from two `SafeTransferCalculation`s — the existing calculator run for this settlement window and the previous one — plus last month's Contributions. Pure read model: nothing persisted, no events. Penny-perfect by invariant: line deltas sum exactly to the total change (property-tested). See [model-notes/story-4.3.md](model-notes/story-4.3.md).
+
+## Variance line
+
+**Everyday definition.** One row of that story: a single cause (a bill, a buffer top-up) with its signed change, total and per partner. A cause is tracked month-to-month by the same name; a renamed rule honestly reads as one cause disappearing and a new one appearing.
+
+**Example.** "Car insurance · new this month · +€720 → Alex +€432 / Sam +€288" is one variance line; "Vet top-up · gone · −€480" is another.
+
+**Technical notes.** **Value object** `VarianceLine`: identity via `LineItemKey` (`kind`, `category`, `description` — exact match, total order for stable output), `presence: 'both' | 'this-only' | 'last-only'`, signed `Money` deltas (total and per partner). Per-partner deltas use each month's own window-resolved split rule, so a split change surfaces as movement even when the line's total is unchanged.
+
+## Follow-through
+
+**Everyday definition.** The check on what actually happened: last month's real transfers into the joint account versus this month's suggestion — per partner when the ledger can tell who sent what, as totals otherwise.
+
+**Example.** "In July you sent €2,100 (Alex €1,260, Sam €840); August asks €2,340 — €240 more (Alex +€144, Sam +€96)."
+
+**Technical notes.** **Value object** `FollowThrough`; `attribution: 'per-partner'` only when every Contribution in the window is attributed to a partner, otherwise `'totals-only'` — honest totals over wrong detail. `totalActual` always equals the ledger's net credit sum on the settlement account(s), so corrections net out by construction.
+
+## Contribution
+
+**Everyday definition.** One partner's real transfer into the joint account, as recorded in the ledger. (The word the status prose already uses: "Alex contributes €960".)
+
+**Example.** July's two credits — Alex's €1,260 on the 1st, Sam's €840 on the 2nd — are July's contributions.
+
+**Technical notes.** Read through the `ContributionQuery` **port**: credit entries on the settlement account(s) named in `accounting.yaml`'s `settlement:` section, attributed to partners by the account each transfer was tagged to at ingest (autoTagRules). Bank statement wording never enters the domain — the anti-corruption layer keeps it at the edge.
+
 ## Idempotency hash
 
 **Everyday definition.** A fingerprint of each imported bank row, so importing the same statement twice can never create duplicate records.

@@ -1,16 +1,7 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import type { StatusReport } from './status-report.js';
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-function monthLabel(from: string): string {
-  const [year, month] = from.split('-').map(Number) as [number, number];
-  return `${MONTH_NAMES[month - 1]} ${year}`;
-}
+import { monthLabel } from '../utils/report-format.js';
 
 function statusColor(status: string): string {
   if (status === 'below') return chalk.yellow(status);

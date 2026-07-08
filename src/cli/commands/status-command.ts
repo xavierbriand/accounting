@@ -6,6 +6,7 @@ import type { StatusReport } from './status-report.js';
 import { formatStatusJson } from './status-formatter-json.js';
 import { formatStatusHuman } from './status-formatter-human.js';
 import { nextCalendarMonth } from '../utils/settle-window.js';
+import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
 
 // Re-exported for existing importers (status unit tests import nextCalendarMonth
 // from this module) — the window/as-of composition itself now lives in
@@ -26,17 +27,6 @@ export interface StatusCommandOptions {
   readonly from?: string;
   readonly to?: string;
   readonly json: boolean;
-}
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function buildSuggestedAction(error: string): string {
-  const match = /buffer "([^"]+)"/.exec(error);
-  if (match) {
-    const bucketName = match[1];
-    return `Update ${bucketName}'s targetDate in accounting.yaml (buffers[].targetDate) to a future date.`;
-  }
-  return 'Check the accounting.yaml buffers configuration.';
 }
 
 export function assembleStatusReport(

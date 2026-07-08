@@ -8,6 +8,7 @@ import type { ExplainReport, ExplainWindow } from './explain-report.js';
 import { formatExplainJson } from './explain-formatter-json.js';
 import { formatExplainHuman } from './explain-formatter-human.js';
 import { nextCalendarMonth, previousSettleWindow } from '../utils/settle-window.js';
+import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
 
 export interface ExplainCommandDeps {
   readonly transferCalculator: SafeTransferCalculator;
@@ -23,16 +24,7 @@ export interface ExplainCommandOptions {
   readonly json: boolean;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function buildSuggestedAction(error: string): string {
-  const match = /buffer "([^"]+)"/.exec(error);
-  if (match) {
-    const bucketName = match[1];
-    return `Update ${bucketName}'s targetDate in accounting.yaml (buffers[].targetDate) to a future date.`;
-  }
-  return 'Check the accounting.yaml buffers configuration.';
-}
+const DATA_CHECK_ACTION = 'Check the settlement configuration and ledger data for this window.';
 
 function zeroMoney(currency: string): Money {
   return Money.fromCents(0, currency).value;
@@ -46,65 +38,79 @@ function emptyCalculation(currency: string): SafeTransferCalculation {
   return { totalRequired: zeroMoney(currency), perPartner: new Map(), lineItems: [] };
 }
 
-function buildVarianceSection(
+const NOT_CONFIGURED: ExplainReport['followThrough'] = { ok: false, notConfigured: true };
+
+interface ReportSections {
+  readonly variance: ExplainReport['variance'];
+  readonly followThrough: ExplainReport['followThrough'];
+}
+
+// Fallback for when the full variance computation is unavailable (last-month calc
+// failed, or the domain call itself failed): buildFollowThrough (private to the
+// domain service) reads only thisMonth + contributions — never lastMonth — so a
+// synthetic empty "last month" is a safe stand-in; the variance section reports
+// the underlying failure separately.
+function followThroughViaEmptyLastMonth(
+  thisCalc: SafeTransferCalculation,
+  contributions: ContributionsInWindow,
+): ExplainReport['followThrough'] {
+  const result = explainSettlementVariance(thisCalc, emptyCalculation(thisCalc.totalRequired.currency), contributions);
+  if (result.isFailure) {
+    return { ok: false, error: result.error, suggestedAction: DATA_CHECK_ACTION };
+  }
+  return { ok: true, value: result.value.followThrough };
+}
+
+function buildReportSections(
   thisCalcResult: Result<SafeTransferCalculation>,
   lastCalcResult: Result<SafeTransferCalculation>,
   contributions: ContributionsInWindow | undefined,
-): ExplainReport['variance'] {
+  settlementConfigured: boolean,
+): ReportSections {
   if (thisCalcResult.isFailure) {
-    return { ok: false, error: thisCalcResult.error, suggestedAction: buildSuggestedAction(thisCalcResult.error) };
-  }
-  if (lastCalcResult.isFailure) {
-    return { ok: false, error: lastCalcResult.error, suggestedAction: buildSuggestedAction(lastCalcResult.error) };
+    const failure = {
+      ok: false as const,
+      error: thisCalcResult.error,
+      suggestedAction: buildSuggestedAction(thisCalcResult.error),
+    };
+    return { variance: failure, followThrough: settlementConfigured ? failure : NOT_CONFIGURED };
   }
 
-  const currency = thisCalcResult.value.totalRequired.currency;
-  const effectiveContributions = contributions ?? emptyContributions(currency);
-  const varianceResult = explainSettlementVariance(thisCalcResult.value, lastCalcResult.value, effectiveContributions);
+  const thisCalc = thisCalcResult.value;
+  const effectiveContributions = contributions ?? emptyContributions(thisCalc.totalRequired.currency);
+
+  if (lastCalcResult.isFailure) {
+    return {
+      variance: { ok: false, error: lastCalcResult.error, suggestedAction: buildSuggestedAction(lastCalcResult.error) },
+      followThrough: settlementConfigured
+        ? followThroughViaEmptyLastMonth(thisCalc, effectiveContributions)
+        : NOT_CONFIGURED,
+    };
+  }
+
+  const varianceResult = explainSettlementVariance(thisCalc, lastCalcResult.value, effectiveContributions);
   if (varianceResult.isFailure) {
     return {
-      ok: false,
-      error: varianceResult.error,
-      suggestedAction: 'Check the settlement configuration and ledger data for this window.',
+      variance: { ok: false, error: varianceResult.error, suggestedAction: DATA_CHECK_ACTION },
+      followThrough: settlementConfigured
+        ? followThroughViaEmptyLastMonth(thisCalc, effectiveContributions)
+        : NOT_CONFIGURED,
     };
   }
 
   return {
-    ok: true,
-    value: {
-      lines: varianceResult.value.lines,
-      totalDelta: varianceResult.value.totalDelta,
-      perPartnerDelta: varianceResult.value.perPartnerDelta,
+    variance: {
+      ok: true,
+      value: {
+        lines: varianceResult.value.lines,
+        totalDelta: varianceResult.value.totalDelta,
+        perPartnerDelta: varianceResult.value.perPartnerDelta,
+      },
     },
+    followThrough: settlementConfigured
+      ? { ok: true, value: varianceResult.value.followThrough }
+      : NOT_CONFIGURED,
   };
-}
-
-function buildFollowThroughSection(
-  thisCalcResult: Result<SafeTransferCalculation>,
-  contributions: ContributionsInWindow | undefined,
-  settlementConfigured: boolean,
-): ExplainReport['followThrough'] {
-  if (!settlementConfigured) {
-    return { ok: false, notConfigured: true };
-  }
-  if (thisCalcResult.isFailure) {
-    return { ok: false, error: thisCalcResult.error, suggestedAction: buildSuggestedAction(thisCalcResult.error) };
-  }
-
-  const currency = thisCalcResult.value.totalRequired.currency;
-  const effectiveContributions = contributions ?? emptyContributions(currency);
-  // buildFollowThrough (private to the domain service) reads only thisMonth + contributions —
-  // never lastMonth — so a synthetic empty "last month" is a safe stand-in when the real
-  // last-month calculation failed (variance section already reports that failure separately).
-  const result = explainSettlementVariance(thisCalcResult.value, emptyCalculation(currency), effectiveContributions);
-  if (result.isFailure) {
-    return {
-      ok: false,
-      error: result.error,
-      suggestedAction: 'Check the settlement configuration and ledger data for this window.',
-    };
-  }
-  return { ok: true, value: result.value.followThrough };
 }
 
 export function assembleExplainReport(
@@ -116,13 +122,8 @@ export function assembleExplainReport(
   contributions: ContributionsInWindow | undefined,
   settlementConfigured: boolean,
 ): ExplainReport {
-  return {
-    asOf,
-    thisWindow,
-    lastWindow,
-    variance: buildVarianceSection(thisCalcResult, lastCalcResult, contributions),
-    followThrough: buildFollowThroughSection(thisCalcResult, contributions, settlementConfigured),
-  };
+  const sections = buildReportSections(thisCalcResult, lastCalcResult, contributions, settlementConfigured);
+  return { asOf, thisWindow, lastWindow, ...sections };
 }
 
 export async function runExplainCommand(

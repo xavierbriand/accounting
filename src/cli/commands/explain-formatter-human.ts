@@ -3,16 +3,7 @@ import chalk from 'chalk';
 import { Money } from '@core/shared/money.js';
 import type { VarianceLine } from '@core/settlement/variance-line.js';
 import type { ExplainReport } from './explain-report.js';
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-function monthLabel(from: string): string {
-  const [year, month] = from.split('-').map(Number) as [number, number];
-  return `${MONTH_NAMES[month - 1]} ${year}`;
-}
+import { monthLabel } from '../utils/report-format.js';
 
 // Sign-aware prose for a signed Money delta — "EUR 40.00 less" reads better in a
 // sentence than the raw "EUR -40.00" that Money.toString() would produce.

@@ -135,9 +135,7 @@ describe('SqliteHashRepository.listKnownHashes', () => {
     const result = repo.listKnownHashes(candidates);
     expect(result.isSuccess).toBe(true);
     expect(result.value.size).toBe(250);
-    for (const h of knownHashes) {
-      expect(result.value.has(h)).toBe(true);
-    }
+    expect(result.value).toEqual(new Set(knownHashes));
   });
 
   it('handles 999 candidates correctly — boundary of the defensive cap', () => {

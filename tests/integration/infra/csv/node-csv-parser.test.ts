@@ -227,7 +227,7 @@ describe('NodeCsvParser — property: row-count conservation + sourceAccount sta
           const { items, errors } = result.value;
 
           // Row-count conservation
-          if (items.length + errors.length !== rowValidity.length) return false;
+          expect(items.length + errors.length).toBe(rowValidity.length);
 
           // sourceAccount stamped correctly on every item
           return items.every(item => item.sourceAccount === sourceAccount);
@@ -257,7 +257,8 @@ describe('NodeCsvParser — property: DST-aware local-midnight offset resolution
           const opts: ParseOptions = { format: 'bpce', currency: 'EUR', timezone: 'Europe/Paris', sourceAccount: 'test' };
           const result = parser.parse(content, opts);
 
-          if (!result.isSuccess || result.value.items.length !== 1) return false;
+          expect(result.isSuccess).toBe(true);
+          expect(result.value.items.length).toBe(1);
 
           const occurredAt = result.value.items[0].occurredAt;
 

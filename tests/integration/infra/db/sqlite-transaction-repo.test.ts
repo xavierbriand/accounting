@@ -282,11 +282,12 @@ describe('SqliteTransactionRepository', () => {
       expect(result.value.written).toBe(3);
 
       // Verify header rows + hash equality
-      for (const outcome of outcomes) {
-        const row = db.prepare('SELECT idempotency_hash FROM transactions WHERE id = ?').get(outcome.transaction.id) as { idempotency_hash: string } | undefined;
-        expect(row).toBeDefined();
-        expect(row!.idempotency_hash).toBe(outcome.idempotencyHash);
-      }
+      const headerRows = outcomes.map(
+        (outcome) =>
+          db.prepare('SELECT idempotency_hash FROM transactions WHERE id = ?').get(outcome.transaction.id) as { idempotency_hash: string } | undefined,
+      );
+      expect(headerRows.every((row) => row !== undefined)).toBe(true);
+      expect(headerRows.map((row) => row!.idempotency_hash)).toEqual(outcomes.map((outcome) => outcome.idempotencyHash));
 
       // 6 entry rows total
       const entryCount = (db.prepare('SELECT COUNT(*) as n FROM transaction_entries').get() as { n: number }).n;
@@ -374,14 +375,10 @@ describe('SqliteTransactionRepository', () => {
               return false; // unexpected failure
             }
 
-            let allMatch = true;
-            for (const outcome of outcomes) {
+            const allMatch = outcomes.every((outcome) => {
               const row = db2.prepare('SELECT idempotency_hash FROM transactions WHERE id = ?').get(outcome.transaction.id) as { idempotency_hash: string } | undefined;
-              if (!row || row.idempotency_hash !== outcome.idempotencyHash) {
-                allMatch = false;
-                break;
-              }
-            }
+              return !!row && row.idempotency_hash === outcome.idempotencyHash;
+            });
 
             // Also check no NULL rows
             const nullCount = (db2.prepare('SELECT COUNT(*) as n FROM transactions WHERE idempotency_hash IS NULL').get() as { n: number }).n;
@@ -451,9 +448,7 @@ describe('SqliteTransactionRepository', () => {
         .prepare('SELECT id, idempotency_hash FROM transactions WHERE id IN (?, ?)')
         .all('tx-corr-nohash-reversal', 'tx-corr-nohash-correcting') as Array<{ id: string; idempotency_hash: string | null }>;
       expect(rows).toHaveLength(2);
-      for (const row of rows) {
-        expect(row.idempotency_hash).toBeNull();
-      }
+      expect(rows.every((row) => row.idempotency_hash === null)).toBe(true);
     });
 
     it('(c) a dangling corrects_id (FK violation) rolls back the whole pair — neither row persists', () => {

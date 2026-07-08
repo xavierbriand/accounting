@@ -101,7 +101,7 @@ describe('YamlConfigWriter — Gherkin scenario 9: create new category group whe
 });
 
 describe('YamlConfigWriter — Gherkin scenario 13: atomic write (tmp + rename)', () => {
-  it('writes atomically: final file differs from original, no tmp sibling remains, permissions 0o600 on POSIX', async () => {
+  it('writes atomically: final file differs from original, no tmp sibling remains', async () => {
     const tmpDir = makeTmpDir();
     const { yamlPath, mtimeNs } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
     const originalContent = fs.readFileSync(yamlPath, 'utf8');
@@ -120,13 +120,24 @@ describe('YamlConfigWriter — Gherkin scenario 13: atomic write (tmp + rename)'
     const files = fs.readdirSync(tmpDir);
     const tmpFiles = files.filter((f) => f.includes('.tmp.'));
     expect(tmpFiles).toHaveLength(0);
+  });
 
-    // File permissions 0o600 on POSIX
-    if (process.platform !== 'win32') {
+  it.skipIf(process.platform === 'win32')(
+    'writes atomically: file permissions 0o600 on POSIX',
+    async () => {
+      const tmpDir = makeTmpDir();
+      const { yamlPath, mtimeNs } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
+
+      const writer = new YamlConfigWriter(yamlPath, mtimeNs);
+      const result = await writer.appendAutoTagRules([{ category: 'Transport', pattern: 'taxi' }]);
+
+      expect(result.isSuccess).toBe(true);
+
+      // fails if the writer does not set 0o600 permissions on the atomically-renamed file (POSIX only)
       const stat = fs.statSync(yamlPath);
       expect(stat.mode & 0o777).toBe(0o600);
-    }
-  });
+    },
+  );
 });
 
 describe('YamlConfigWriter — Gherkin scenario 10: mtime race detection', () => {
@@ -202,31 +213,32 @@ describe('YamlConfigWriter — autoTagRules section absent', () => {
 });
 
 describe('YamlConfigWriter — io.message sanitisation', () => {
-  it('io error message does not contain absolute paths (sanitizeFsError)', async () => {
-    // Use a yamlPath that cannot be written to (read-only dir) to trigger io error
-    // We test sanitisation by checking the error message does not contain the dir path
-    const tmpDir = makeTmpDir();
-    const { yamlPath } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
+  it.skipIf(process.platform === 'win32')(
+    'io error message does not contain absolute paths (sanitizeFsError)',
+    async () => {
+      // Use a yamlPath that cannot be written to (read-only dir) to trigger io error
+      // We test sanitisation by checking the error message does not contain the dir path
+      const tmpDir = makeTmpDir();
+      const { yamlPath } = writeYaml(tmpDir, YAML_WITH_TRANSPORT);
 
-    // Make the file read-only and the directory read-only on POSIX to force a write error
-    if (process.platform === 'win32') return; // skip on Windows
+      // Make the file read-only and the directory read-only on POSIX to force a write error
+      fs.chmodSync(yamlPath, 0o400);
+      fs.chmodSync(tmpDir, 0o500);
 
-    fs.chmodSync(yamlPath, 0o400);
-    fs.chmodSync(tmpDir, 0o500);
+      try {
+        // Re-read mtime after chmod (mtime unchanged since we only changed permissions)
+        const actualMtime = fs.statSync(yamlPath, { bigint: true }).mtimeNs;
+        const writer2 = new YamlConfigWriter(yamlPath, actualMtime);
+        const result = await writer2.appendAutoTagRules([{ category: 'Transport', pattern: 'taxi' }]);
 
-    try {
-      // Re-read mtime after chmod (mtime unchanged since we only changed permissions)
-      const actualMtime = fs.statSync(yamlPath, { bigint: true }).mtimeNs;
-      const writer2 = new YamlConfigWriter(yamlPath, actualMtime);
-      const result = await writer2.appendAutoTagRules([{ category: 'Transport', pattern: 'taxi' }]);
-
-      if (result.isFailure && result.error.kind === 'io') {
-        expect(result.error.message).not.toContain(tmpDir);
-        expect(result.error.message).not.toContain('/tmp/');
+        if (result.isFailure && result.error.kind === 'io') {
+          expect(result.error.message).not.toContain(tmpDir);
+          expect(result.error.message).not.toContain('/tmp/');
+        }
+      } finally {
+        fs.chmodSync(tmpDir, 0o700);
+        fs.chmodSync(yamlPath, 0o600);
       }
-    } finally {
-      fs.chmodSync(tmpDir, 0o700);
-      fs.chmodSync(yamlPath, 0o600);
-    }
-  });
+    },
+  );
 });

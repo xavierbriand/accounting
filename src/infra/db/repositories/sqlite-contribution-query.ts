@@ -2,13 +2,7 @@ import Database from 'better-sqlite3';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { ContributionQuery, ContributionsInWindow, PartnerContribution } from '@core/ports/contribution-query.js';
-
-export interface ContributionAccountMapping {
-  readonly account: string;
-  // null: a known settlement account with no assigned partner yet — its net credit
-  // still counts toward totalActual (invariant 8), driving the totals-only fallback.
-  readonly partner: string | null;
-}
+import type { SettlementAccountMapping } from '@core/config/app-config.js';
 
 interface SideRow {
   account: string;
@@ -20,15 +14,19 @@ interface SideRow {
 export class SqliteContributionQuery implements ContributionQuery {
   constructor(
     private readonly db: Database.Database,
-    private readonly accounts: readonly ContributionAccountMapping[],
+    private readonly accounts: readonly SettlementAccountMapping[],
   ) {}
 
   contributionsInWindow(currency: string, from: string, to: string): Result<ContributionsInWindow> {
-    const zero = Money.fromCents(0, currency);
-    if (zero.isFailure) return Result.fail(zero.error);
+    const zeroResult = Money.fromCents(0, currency);
+    if (zeroResult.isFailure) return Result.fail(zeroResult.error);
+    const zero = zeroResult.value;
+    // currency is proven valid by zeroResult above, so every later Money.fromCents(_, currency)
+    // call in this method is guaranteed to succeed — .value is safe without re-checking isFailure.
+    const moneyOf = (cents: number): Money => Money.fromCents(cents, currency).value;
 
     if (this.accounts.length === 0) {
-      return Result.ok({ attributed: [], unattributed: zero.value, totalActual: zero.value });
+      return Result.ok({ attributed: [], totalActual: zero });
     }
 
     const placeholders = this.accounts.map(() => '?').join(',');
@@ -57,34 +55,20 @@ export class SqliteContributionQuery implements ContributionQuery {
     }
 
     const partnerCents = new Map<string, number>();
-    let unattributedCents = 0;
     let totalActualCents = 0;
     for (const mapping of this.accounts) {
       const net = netByAccount.get(mapping.account) ?? 0;
       totalActualCents += net;
-      if (mapping.partner === null) {
-        unattributedCents += net;
-      } else {
-        partnerCents.set(mapping.partner, (partnerCents.get(mapping.partner) ?? 0) + net);
-      }
+      partnerCents.set(mapping.partner, (partnerCents.get(mapping.partner) ?? 0) + net);
     }
 
-    const attributed: PartnerContribution[] = [];
-    for (const [partner, cents] of [...partnerCents.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-      const amountResult = Money.fromCents(cents, currency);
-      if (amountResult.isFailure) return Result.fail(amountResult.error);
-      attributed.push({ partner, amount: amountResult.value });
-    }
-
-    const unattributedResult = Money.fromCents(unattributedCents, currency);
-    if (unattributedResult.isFailure) return Result.fail(unattributedResult.error);
-    const totalActualResult = Money.fromCents(totalActualCents, currency);
-    if (totalActualResult.isFailure) return Result.fail(totalActualResult.error);
+    const attributed: PartnerContribution[] = [...partnerCents.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([partner, cents]) => ({ partner, amount: moneyOf(cents) }));
 
     return Result.ok({
       attributed,
-      unattributed: unattributedResult.value,
-      totalActual: totalActualResult.value,
+      totalActual: moneyOf(totalActualCents),
     });
   }
 }

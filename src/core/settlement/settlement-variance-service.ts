@@ -119,16 +119,6 @@ function buildFollowThrough(
   const totalDeltaResult = thisMonth.totalRequired.subtract(contributions.totalActual);
   if (totalDeltaResult.isFailure) return Result.fail(totalDeltaResult.error);
 
-  const isFullyAttributed = contributions.unattributed.equals(zero);
-  if (!isFullyAttributed) {
-    return Result.ok({
-      totalSuggested: thisMonth.totalRequired,
-      totalActual: contributions.totalActual,
-      totalDelta: totalDeltaResult.value,
-      attribution: 'totals-only',
-    });
-  }
-
   const perPartnerResult = buildPerPartnerFollowThrough(thisMonth, contributions, zero);
   if (perPartnerResult.isFailure) return Result.fail(perPartnerResult.error);
 
@@ -137,7 +127,6 @@ function buildFollowThrough(
     totalSuggested: thisMonth.totalRequired,
     totalActual: contributions.totalActual,
     totalDelta: totalDeltaResult.value,
-    attribution: 'per-partner',
   });
 }
 

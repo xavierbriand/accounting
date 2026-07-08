@@ -42,7 +42,6 @@ describe('SqliteContributionQuery', () => {
     const result = query.contributionsInWindow('EUR', '2026-06-01', '2026-06-30');
     expect(result.isSuccess).toBe(true);
     expect(result.value.attributed).toHaveLength(0);
-    expect(result.value.unattributed.amount).toBe(0);
     expect(result.value.totalActual.amount).toBe(0);
   });
 
@@ -54,7 +53,6 @@ describe('SqliteContributionQuery', () => {
     expect(result.isSuccess).toBe(true);
     expect(result.value.attributed).toEqual([{ partner: 'Alex', amount: expect.objectContaining({ amount: 48000 }) }]);
     expect(result.value.totalActual.amount).toBe(48000);
-    expect(result.value.unattributed.amount).toBe(0);
   });
 
   it('aggregates multiple mapped accounts belonging to the same partner', () => {
@@ -71,20 +69,6 @@ describe('SqliteContributionQuery', () => {
     expect(result.value.attributed[0].amount.amount).toBe(35000);
   });
 
-  it('includes an account with no partner mapping in totalActual but not in attributed (unattributed)', () => {
-    // fails if unattributed credits are dropped from totalActual (invariant 8), or fabricated into attributed (invariant 7)
-    insertEntry(db, 'tx1', '2026-06-15T10:00:00+00:00', 'income:contribution:alex', 'credit', 48000);
-    insertEntry(db, 'tx2', '2026-06-20T10:00:00+00:00', 'income:contribution:unmapped', 'credit', 5000);
-    const query = new SqliteContributionQuery(db, [
-      { account: 'income:contribution:alex', partner: 'Alex' },
-      { account: 'income:contribution:unmapped', partner: null },
-    ]);
-    const result = query.contributionsInWindow('EUR', '2026-06-01', '2026-06-30');
-    expect(result.isSuccess).toBe(true);
-    expect(result.value.attributed).toEqual([{ partner: 'Alex', amount: expect.objectContaining({ amount: 48000 }) }]);
-    expect(result.value.unattributed.amount).toBe(5000);
-    expect(result.value.totalActual.amount).toBe(53000);
-  });
 
   it('a configured account with no transactions in the window contributes zero, not an error', () => {
     // fails if a mapped account with zero matching rows throws instead of defaulting to zero cents

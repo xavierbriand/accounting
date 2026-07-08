@@ -8,7 +8,6 @@ export interface PartnerContribution {
 
 export interface ContributionsInWindow {
   readonly attributed: readonly PartnerContribution[];
-  readonly unattributed: Money;
   readonly totalActual: Money;
 }
 

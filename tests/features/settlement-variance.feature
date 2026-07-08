@@ -45,25 +45,10 @@ Feature: Settlement variance (Story 4.3a)
     And a credit of 460.00 EUR on "income:contribution:sam" occurred at "2026-06-16T10:00:00+00:00"
     When I explain the settlement variance for asOf "2026-06-28" using the real contributions query
     Then the result is success
-    And follow-through attribution is "per-partner"
     And follow-through for "Alex" has suggested 500.00 EUR, actual 480.00 EUR, and delta 20.00 EUR
     And follow-through for "Sam" has suggested 500.00 EUR, actual 460.00 EUR, and delta 40.00 EUR
     # fails if the adapter's account→partner mapping or the service's delta arithmetic is wrong, or the baseline uses the wrong month's suggestion
 
-  Scenario: Follow-through, totals-only fallback
-    Given split window Alex 50% and Sam 50% valid from "2024-01-01"
-    And a recurring rule "Rent" in category "Rent" for 1000.00 EUR monthly valid from "2024-01-01"
-    And settlement accounts:
-      | account                       | partner |
-      | income:contribution:alex     | Alex    |
-      | income:contribution:unmapped |         |
-    And a credit of 480.00 EUR on "income:contribution:alex" occurred at "2026-06-15T10:00:00+00:00"
-    And a credit of 50.00 EUR on "income:contribution:unmapped" occurred at "2026-06-20T10:00:00+00:00"
-    When I explain the settlement variance for asOf "2026-06-28" using the real contributions query
-    Then the result is success
-    And follow-through attribution is "totals-only"
-    And follow-through totalActual is 530.00 EUR
-    # fails if unattributed credits are dropped (invariant 8) or per-partner mode is claimed with incomplete attribution (invariant 7)
 
   Scenario: Corrections net out of actuals
     Given split window Alex 50% and Sam 50% valid from "2024-01-01"

@@ -47,7 +47,6 @@ function calc(lineItems: LineItem[], perPartner?: Map<string, Money>): SafeTrans
 
 const noContributions: ContributionsInWindow = {
   attributed: [],
-  unattributed: eur(0),
   totalActual: eur(0),
 };
 
@@ -181,74 +180,52 @@ describe('explainSettlementVariance — follow-through assembly', () => {
     const lastMonth = calc([item({ description: 'Rent', gross: eur(80000) })]);
     const contributions: ContributionsInWindow = {
       attributed: [{ partner: 'Alex', amount: eur(48000) }, { partner: 'Sam', amount: eur(46000) }],
-      unattributed: eur(0),
       totalActual: eur(94000),
     };
     const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
     expect(result.isSuccess).toBe(true);
     expect(result.value.followThrough.totalSuggested.amount).toBe(thisMonth.totalRequired.amount);
-    expect(result.value.followThrough.perPartner!.get('Alex')!.suggested.amount).toBe(thisMonth.perPartner.get('Alex')!.amount);
+    expect(result.value.followThrough.perPartner.get('Alex')!.suggested.amount).toBe(thisMonth.perPartner.get('Alex')!.amount);
   });
 
-  it('per-partner mode: shows each partner\'s actual vs suggested with exact deltas when attribution is complete', () => {
-    // fails if attribution:'per-partner' is not set, or delta arithmetic (suggested - actual) is wrong
+  it('shows each partner\'s actual vs suggested with exact deltas', () => {
+    // fails if per-partner delta arithmetic (suggested - actual) is wrong or a partner row is missing
     const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
     const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
     const contributions: ContributionsInWindow = {
       attributed: [{ partner: 'Alex', amount: eur(48000) }, { partner: 'Sam', amount: eur(46000) }],
-      unattributed: eur(0),
       totalActual: eur(94000),
     };
     const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
     expect(result.isSuccess).toBe(true);
     const ft = result.value.followThrough;
-    expect(ft.attribution).toBe('per-partner');
-    expect(ft.perPartner!.get('Alex')!.suggested.amount).toBe(50000);
-    expect(ft.perPartner!.get('Alex')!.actual.amount).toBe(48000);
-    expect(ft.perPartner!.get('Alex')!.delta.amount).toBe(2000);
-    expect(ft.perPartner!.get('Sam')!.suggested.amount).toBe(50000);
-    expect(ft.perPartner!.get('Sam')!.actual.amount).toBe(46000);
-    expect(ft.perPartner!.get('Sam')!.delta.amount).toBe(4000);
+    expect(ft.perPartner.get('Alex')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner.get('Alex')!.actual.amount).toBe(48000);
+    expect(ft.perPartner.get('Alex')!.delta.amount).toBe(2000);
+    expect(ft.perPartner.get('Sam')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner.get('Sam')!.actual.amount).toBe(46000);
+    expect(ft.perPartner.get('Sam')!.delta.amount).toBe(4000);
     expect(ft.totalSuggested.amount).toBe(100000);
     expect(ft.totalActual.amount).toBe(94000);
     expect(ft.totalDelta.amount).toBe(6000);
   });
 
-  it('per-partner mode: a roster partner who contributed nothing that month shows actual zero (not omitted)', () => {
+  it('a roster partner who contributed nothing that month shows actual zero (not omitted)', () => {
     // fails if a partner absent from contributions.attributed is dropped from perPartner instead of defaulting to zero
     const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
     const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
     const contributions: ContributionsInWindow = {
       attributed: [{ partner: 'Alex', amount: eur(94000) }],
-      unattributed: eur(0),
       totalActual: eur(94000),
     };
     const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
     expect(result.isSuccess).toBe(true);
     const ft = result.value.followThrough;
-    expect(ft.attribution).toBe('per-partner');
-    expect(ft.perPartner!.get('Sam')!.actual.amount).toBe(0);
-    expect(ft.perPartner!.get('Sam')!.suggested.amount).toBe(50000);
-    expect(ft.perPartner!.get('Sam')!.delta.amount).toBe(50000);
+    expect(ft.perPartner.get('Sam')!.actual.amount).toBe(0);
+    expect(ft.perPartner.get('Sam')!.suggested.amount).toBe(50000);
+    expect(ft.perPartner.get('Sam')!.delta.amount).toBe(50000);
   });
 
-  it('falls back to totals-only when any contribution cannot be attributed to a partner', () => {
-    // fails if unattributed credits are dropped from totalActual, or per-partner mode is claimed anyway
-    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
-    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
-    const contributions: ContributionsInWindow = {
-      attributed: [{ partner: 'Alex', amount: eur(48000) }],
-      unattributed: eur(5000),
-      totalActual: eur(53000),
-    };
-    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
-    expect(result.isSuccess).toBe(true);
-    const ft = result.value.followThrough;
-    expect(ft.attribution).toBe('totals-only');
-    expect(ft.perPartner).toBeUndefined();
-    expect(ft.totalActual.amount).toBe(53000);
-    expect(ft.totalDelta.amount).toBe(100000 - 53000);
-  });
 
   it('returns Result.fail when contributions currency differs from this month\'s currency', () => {
     // fails if cross-currency contributions are silently mixed into follow-through totals (invariant 9)
@@ -256,7 +233,6 @@ describe('explainSettlementVariance — follow-through assembly', () => {
     const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
     const contributions: ContributionsInWindow = {
       attributed: [{ partner: 'Alex', amount: usd(50000) }],
-      unattributed: usd(0),
       totalActual: usd(50000),
     };
     const result = explainSettlementVariance(thisMonth, lastMonth, contributions);

@@ -58,7 +58,7 @@ interface BalancePoint {
 
 interface SettlementAccountRow {
   account: string;
-  partner: string | null;
+  partner: string;
 }
 
 interface World {
@@ -146,6 +146,15 @@ function insertEntry(
   ).run(id, account, side, amountCents, 'EUR');
 }
 
+function resolveCalcs(state: World, asOf: string): { thisMonth: SafeTransferCalculation; lastMonth: SafeTransferCalculation } {
+  const { thisMonth, lastMonth } = computeCalcs(state, asOf);
+  if (thisMonth.isFailure) throw new Error(`this month calc failed: ${thisMonth.error}`);
+  if (lastMonth.isFailure) throw new Error(`last month calc failed: ${lastMonth.error}`);
+  state.thisCalc = thisMonth.value;
+  state.lastCalc = lastMonth.value;
+  return { thisMonth: thisMonth.value, lastMonth: lastMonth.value };
+}
+
 function computeCalcs(state: World, asOf: string): { thisMonth: Result<SafeTransferCalculation>; lastMonth: Result<SafeTransferCalculation> } {
   const asOfLast = oneMonthBefore(asOf);
   const thisWindow = nextMonthWindow(asOf);
@@ -192,7 +201,6 @@ function computeCalcs(state: World, asOf: string): { thisMonth: Result<SafeTrans
 
 const emptyContributions: ContributionsInWindow = {
   attributed: [],
-  unattributed: Money.fromCents(0, 'EUR').value,
   totalActual: Money.fromCents(0, 'EUR').value,
 };
 
@@ -240,7 +248,7 @@ Given('settlement accounts:', function (state: World, table: { hashes: () => Arr
   const rows = table.hashes();
   state.settlementAccounts = rows.map(r => ({
     account: r.account.trim(),
-    partner: r.partner.trim() === '' ? null : r.partner.trim(),
+    partner: r.partner.trim(),
   }));
 });
 
@@ -248,12 +256,11 @@ Given('a hand-built contribution of {float} USD attributed to {string}', functio
   const cents = Math.round(amount * 100);
   state.contributions = {
     attributed: [{ partner, amount: Money.fromCents(cents, 'USD').value }],
-    unattributed: Money.fromCents(0, 'USD').value,
     totalActual: Money.fromCents(cents, 'USD').value,
   };
 });
 
-// ─── Given: real-adapter fixtures (scenarios 4, 5, 6) ─────────────────────────
+// ─── Given: real-adapter fixtures (scenarios 4 and 5) ─────────────────────────
 
 let creditCounter = 0;
 
@@ -277,22 +284,14 @@ Given('that credit is corrected to {float} EUR occurred at {string}', function (
 // ─── When ──────────────────────────────────────────────────────────────────────
 
 When('I explain the settlement variance for asOf {string}', function (state: World, asOf: string) {
-  const { thisMonth, lastMonth } = computeCalcs(state, asOf);
-  if (thisMonth.isFailure) throw new Error(`this month calc failed: ${thisMonth.error}`);
-  if (lastMonth.isFailure) throw new Error(`last month calc failed: ${lastMonth.error}`);
-  state.thisCalc = thisMonth.value;
-  state.lastCalc = lastMonth.value;
-  const result = explainSettlementVariance(thisMonth.value, lastMonth.value, state.contributions ?? emptyContributions);
+  const { thisMonth, lastMonth } = resolveCalcs(state, asOf);
+  const result = explainSettlementVariance(thisMonth, lastMonth, state.contributions ?? emptyContributions);
   state.varianceResult = result;
   state.stateResult = result;
 });
 
 When('I explain the settlement variance for asOf {string} using the real contributions query', function (state: World, asOf: string) {
-  const { thisMonth, lastMonth } = computeCalcs(state, asOf);
-  if (thisMonth.isFailure) throw new Error(`this month calc failed: ${thisMonth.error}`);
-  if (lastMonth.isFailure) throw new Error(`last month calc failed: ${lastMonth.error}`);
-  state.thisCalc = thisMonth.value;
-  state.lastCalc = lastMonth.value;
+  const { thisMonth, lastMonth } = resolveCalcs(state, asOf);
 
   const asOfLast = oneMonthBefore(asOf);
   const lastWindow = nextMonthWindow(asOfLast);
@@ -301,7 +300,7 @@ When('I explain the settlement variance for asOf {string} using the real contrib
   const contributionsResult = query.contributionsInWindow('EUR', lastWindow.from, lastWindow.to);
   if (contributionsResult.isFailure) throw new Error(`contributions query failed: ${contributionsResult.error}`);
 
-  const result = explainSettlementVariance(thisMonth.value, lastMonth.value, contributionsResult.value);
+  const result = explainSettlementVariance(thisMonth, lastMonth, contributionsResult.value);
   state.varianceResult = result;
   state.stateResult = result;
 });
@@ -356,10 +355,6 @@ Then(
     expect(line!.totalDelta.amount).toBe(Math.round(totalDelta * 100));
   },
 );
-
-Then('follow-through attribution is {string}', function (state: World, attribution: string) {
-  expect(state.varianceResult!.value.followThrough.attribution).toBe(attribution);
-});
 
 Then(
   'follow-through for {string} has suggested {float} EUR, actual {float} EUR, and delta {float} EUR',

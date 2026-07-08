@@ -114,10 +114,10 @@ Phase 2 review for this story is **Reduced lane** (dev-tooling + test-file restr
 
 ## Merge checklist
 
-- [ ] `lint` / `build` / `test` green
+- [x] `lint` / `build` / `test` green locally (0 lint errors/96 warnings; build green; 928 passing + 1 correctly-skipped) — awaiting CI confirmation
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-25.md`
-- [ ] All suggestion-log items resolved (no blank `Resolution` cells)
-- [ ] Phase-4 review (`code-reviewer` + `sibling-overlap`) findings classified fix-now / defer-issue / acknowledge
-- [ ] Follow-up issue filed for the 15 deferred items
+- [x] Retrospective file committed at `docs/retrospectives/story-maint-25.md`
+- [x] All suggestion-log items resolved (no blank `Resolution` cells)
+- [x] Phase-4 review (`code-reviewer` + `sibling-overlap`) findings classified fix-now / defer-issue / acknowledge
+- [x] Follow-up issue filed for the 15 deferred items ([#211](https://github.com/xavierbriand/accounting/issues/211))
 - [ ] User approval

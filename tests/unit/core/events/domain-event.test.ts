@@ -118,6 +118,7 @@ describe('Core purity — src/core/events/ and the DomainEventRecorder port', ()
     }
   });
 
+  // fails if: src/core/ports/domain-event-recorder.ts imports Node APIs, better-sqlite3, or a clock
   it.each(FORBIDDEN_IMPORT_PATTERNS)(
     'src/core/ports/domain-event-recorder.ts does not match forbidden pattern %s',
     (pattern) => {

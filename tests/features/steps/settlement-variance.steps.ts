@@ -24,6 +24,7 @@ import { RecurringForecastService } from '../../../src/core/recurring/recurring-
 import { SafeTransferCalculator } from '../../../src/core/transfer/safe-transfer-calculator.js';
 import { explainSettlementVariance } from '../../../src/core/settlement/settlement-variance-service.js';
 import { SqliteContributionQuery } from '../../../src/infra/db/repositories/sqlite-contribution-query.js';
+import { nextCalendarMonth, previousSettleWindow } from '../../../src/cli/utils/settle-window.js';
 import { Money } from '../../../src/core/shared/money.js';
 import type { Result } from '../../../src/core/shared/result.js';
 import type { BufferLedgerQuery } from '../../../src/core/ports/buffer-ledger-query.js';
@@ -92,29 +93,6 @@ afterEach(() => {
   }
 });
 
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : `${n}`;
-}
-
-// Mirrors src/cli/commands/status-command.ts's nextCalendarMonth, duplicated here as
-// test-only glue: 4.3a has no CLI surface (4.3b), so acceptance steps don't import CLI.
-function nextMonthWindow(asOf: string): { from: string; to: string } {
-  const [year, month] = asOf.split('-').map(Number) as [number, number];
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  const from = `${nextYear}-${pad2(nextMonth)}-01`;
-  const lastDay = new Date(nextYear, nextMonth, 0).getDate();
-  const to = `${nextYear}-${pad2(nextMonth)}-${pad2(lastDay)}`;
-  return { from, to };
-}
-
-function oneMonthBefore(date: string): string {
-  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  return `${prevYear}-${pad2(prevMonth)}-${pad2(day)}`;
-}
-
 function ensureDb(state: World): Database.Database {
   if (!state.db) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-settlement-bdd-'));
@@ -156,9 +134,9 @@ function resolveCalcs(state: World, asOf: string): { thisMonth: SafeTransferCalc
 }
 
 function computeCalcs(state: World, asOf: string): { thisMonth: Result<SafeTransferCalculation>; lastMonth: Result<SafeTransferCalculation> } {
-  const asOfLast = oneMonthBefore(asOf);
-  const thisWindow = nextMonthWindow(asOf);
-  const lastWindow = nextMonthWindow(asOfLast);
+  const thisWindow = nextCalendarMonth(asOf);
+  const { asOfLast, from: lastFrom, to: lastTo } = previousSettleWindow(asOf);
+  const lastWindow = { from: lastFrom, to: lastTo };
 
   const splitWindows = state.splitWindows ?? [
     { validFrom: '2024-01-01', rules: [{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }] },
@@ -293,8 +271,8 @@ When('I explain the settlement variance for asOf {string}', function (state: Wor
 When('I explain the settlement variance for asOf {string} using the real contributions query', function (state: World, asOf: string) {
   const { thisMonth, lastMonth } = resolveCalcs(state, asOf);
 
-  const asOfLast = oneMonthBefore(asOf);
-  const lastWindow = nextMonthWindow(asOfLast);
+  const { from: lastFrom, to: lastTo } = previousSettleWindow(asOf);
+  const lastWindow = { from: lastFrom, to: lastTo };
   const mappings = (state.settlementAccounts ?? []).map(a => ({ account: a.account, partner: a.partner }));
   const query = new SqliteContributionQuery(state.db!, mappings);
   const contributionsResult = query.contributionsInWindow('EUR', lastWindow.from, lastWindow.to);

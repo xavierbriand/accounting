@@ -20,6 +20,7 @@ import { runIngestCommand } from './commands/ingest-command.js';
 import { runCategorizeCommand } from './commands/categorize-command.js';
 import { runStatusCommand } from './commands/status-command.js';
 import { runCorrectCommand } from './commands/correct-command.js';
+import { runExplainCommand } from './commands/explain-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
@@ -28,6 +29,7 @@ import { BufferStateService } from '../core/buffers/buffer-state-service.js';
 import { RecurringForecastService } from '../core/recurring/recurring-forecast-service.js';
 import { SafeTransferCalculator } from '../core/transfer/safe-transfer-calculator.js';
 import { SqliteBufferLedgerQuery } from '../infra/db/repositories/sqlite-buffer-ledger-query.js';
+import { SqliteContributionQuery } from '../infra/db/repositories/sqlite-contribution-query.js';
 import { nodeClock } from './utils/node-clock.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
@@ -259,6 +261,49 @@ program
         buffersService,
         forecastService,
         transferCalculator,
+        clock: () => nodeClock(config.timezone),
+        stdout: process.stdout,
+        stderr: process.stderr,
+      },
+    );
+
+    process.exit(exitCode);
+  });
+
+program
+  .command('explain')
+  .description('Explain how this month\'s suggested transfer differs from last month\'s and last month\'s follow-through')
+  .option('--as-of <YYYY-MM-DD>', 'Override today\'s date (determinism / past-state inspection)')
+  .option('--json', 'Output JSON instead of human-readable tables', false)
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { asOf?: string; json: boolean; dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { config, resolvedDbPath } = result.value;
+    const db = getDb(resolvedDbPath);
+
+    const migrationCheck = assertMigrated(db, resolvedDbPath);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+
+    const ledger = new SqliteBufferLedgerQuery(db);
+    const splitsService = new SplitRulesService(config.splits);
+    const buffersService = new BufferStateService(config.buffers, config.defaultCurrency, ledger);
+    const forecastService = new RecurringForecastService(config.recurring);
+    const transferCalculator = new SafeTransferCalculator(splitsService, buffersService, forecastService, config.defaultCurrency);
+    const contributionQuery = new SqliteContributionQuery(db, config.settlement?.accounts ?? []);
+
+    const exitCode = await runExplainCommand(
+      { asOf: options.asOf, json: options.json },
+      {
+        transferCalculator,
+        contributionQuery,
+        settlementConfigured: config.settlement !== undefined,
         clock: () => nodeClock(config.timezone),
         stdout: process.stdout,
         stderr: process.stderr,

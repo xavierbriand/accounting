@@ -304,6 +304,35 @@ function serializeLines(lines: readonly VarianceLine[]): Array<{ key: string; pr
   return lines.map(l => ({ key: l.key.toString(), presence: l.presence, totalDelta: l.totalDelta.amount }));
 }
 
+// #208 item 2 (story-4.3b): serializes the FULL SettlementVariance report — lines,
+// report-level perPartnerDelta, and followThrough (incl. its own perPartner map) —
+// not just the lines array, so Invariant 10 covers every field a caller can observe.
+function serializeFullReport(variance: {
+  lines: readonly VarianceLine[];
+  totalDelta: Money;
+  perPartnerDelta: ReadonlyMap<string, Money>;
+  followThrough: {
+    perPartner: ReadonlyMap<string, { suggested: Money; actual: Money; delta: Money }>;
+    totalSuggested: Money;
+    totalActual: Money;
+    totalDelta: Money;
+  };
+}): string {
+  return JSON.stringify({
+    lines: serializeLines(variance.lines),
+    totalDelta: variance.totalDelta.amount,
+    perPartnerDelta: [...variance.perPartnerDelta.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([p, m]) => [p, m.amount]),
+    followThrough: {
+      perPartner: [...variance.followThrough.perPartner.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([p, pf]) => [p, pf.suggested.amount, pf.actual.amount, pf.delta.amount]),
+      totalSuggested: variance.followThrough.totalSuggested.amount,
+      totalActual: variance.followThrough.totalActual.amount,
+      totalDelta: variance.followThrough.totalDelta.amount,
+    },
+  });
+}
+
 describe('explainSettlementVariance — property tests', () => {
   it('Invariant 1: sum(lines.totalDelta) === thisMonth.totalRequired - lastMonth.totalRequired', () => {
     fc.assert(
@@ -385,14 +414,21 @@ describe('explainSettlementVariance — property tests', () => {
     );
   });
 
-  it('Invariant 10: determinism — identical inputs produce a deep-equal report with stable line ordering', () => {
+  it('Invariant 10: determinism — identical inputs produce a deep-equal FULL report (lines + perPartnerDelta + followThrough), stably ordered', () => {
+    // #208 item 2: widened from lines-only to the full SettlementVariance — a followThrough
+    // built off a non-trivial (non-empty) contributions fixture, so this also exercises
+    // followThrough.perPartner's determinism, not just the lines array.
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: eur(12345) }, { partner: 'Sam', amount: eur(6789) }],
+      totalActual: eur(19134),
+    };
     fc.assert(
       fc.property(generatedLinesArb, (generated) => {
         const { thisMonth, lastMonth } = buildMonths(generated);
-        const first = explainSettlementVariance(thisMonth, lastMonth, noContributions);
-        const second = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+        const first = explainSettlementVariance(thisMonth, lastMonth, contributions);
+        const second = explainSettlementVariance(thisMonth, lastMonth, contributions);
         if (first.isFailure || second.isFailure) return first.isFailure === second.isFailure;
-        return JSON.stringify(serializeLines(first.value.lines)) === JSON.stringify(serializeLines(second.value.lines));
+        return serializeFullReport(first.value) === serializeFullReport(second.value);
       }),
       { numRuns: 100 },
     );

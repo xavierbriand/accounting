@@ -5,6 +5,13 @@ import type { SafeTransferCalculator } from '@core/transfer/safe-transfer-calcul
 import type { StatusReport } from './status-report.js';
 import { formatStatusJson } from './status-formatter-json.js';
 import { formatStatusHuman } from './status-formatter-human.js';
+import { nextCalendarMonth } from '../utils/settle-window.js';
+import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
+
+// Re-exported for existing importers (status unit tests import nextCalendarMonth
+// from this module) — the window/as-of composition itself now lives in
+// ../utils/settle-window.ts, shared with the explain command (story-4.3b, #208 item 1).
+export { nextCalendarMonth };
 
 export interface StatusCommandDeps {
   readonly buffersService: BufferStateService;
@@ -20,37 +27,6 @@ export interface StatusCommandOptions {
   readonly from?: string;
   readonly to?: string;
   readonly json: boolean;
-}
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : `${n}`;
-}
-
-export function nextCalendarMonth(asOf: string): { from: string; to: string } {
-  const [year, month] = asOf.split('-').map(Number) as [number, number];
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-
-  const from = `${nextYear}-${pad2(nextMonth)}-01`;
-
-  // Last day of nextMonth: new Date(year, monthIndex+1, 0) gives last day of month at monthIndex
-  // monthIndex is 0-based, so nextMonth-1 is the 0-based index; nextMonth is the 1-based index.
-  // new Date(nextYear, nextMonth, 0) gives last day of month nextMonth in year nextYear.
-  const lastDay = new Date(nextYear, nextMonth, 0).getDate();
-  const to = `${nextYear}-${pad2(nextMonth)}-${pad2(lastDay)}`;
-
-  return { from, to };
-}
-
-function buildSuggestedAction(error: string): string {
-  const match = /buffer "([^"]+)"/.exec(error);
-  if (match) {
-    const bucketName = match[1];
-    return `Update ${bucketName}'s targetDate in accounting.yaml (buffers[].targetDate) to a future date.`;
-  }
-  return 'Check the accounting.yaml buffers configuration.';
 }
 
 export function assembleStatusReport(

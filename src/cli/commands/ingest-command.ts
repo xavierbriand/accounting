@@ -313,6 +313,15 @@ async function runInteractiveLoop(
   return { resolved, rememberedRules: Array.from(rememberedMap.values()) };
 }
 
+function toDuplicatesPayload(
+  duplicates: readonly DuplicateIngestItem[],
+): Array<{ description: string; idempotencyHash: string }> {
+  return duplicates.map((d) => ({
+    description: d.item.description,
+    idempotencyHash: d.idempotencyHash,
+  }));
+}
+
 async function runNonInteractive(
   opts: IngestCommandOptions,
   account: AccountConfig,
@@ -334,10 +343,7 @@ async function runNonInteractive(
 
     if (opts.json) {
       const lowConfidenceIds = lowConfidence.map((o) => o.transaction.id);
-      const duplicatesPayload = duplicates.map((d) => ({
-        description: d.item.description,
-        idempotencyHash: d.idempotencyHash,
-      }));
+      const duplicatesPayload = toDuplicatesPayload(duplicates);
       stdout.write(
         JSON.stringify({
           file: opts.file,
@@ -371,10 +377,7 @@ async function runNonInteractive(
       };
     });
 
-    const duplicatesPayload = duplicates.map((d) => ({
-      description: d.item.description,
-      idempotencyHash: d.idempotencyHash,
-    }));
+    const duplicatesPayload = toDuplicatesPayload(duplicates);
 
     stdout.write(
       JSON.stringify({

@@ -362,7 +362,8 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
 
 describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
   // fails if: snapshot not called before saveBatch, wrong exit codes, PII-leaked in stderr,
-  //   remove called after failure, --non-interactive triggers writes
+  //   remove called after failure, or the non-interactive path skips the commit (story-4.4a
+  //   flipped the old "--non-interactive triggers no writes" guard — dry-run was bug #181)
 
   function makeBaseInteractiveDeps(
     overrides: Partial<IngestCommandDeps> = {},
@@ -559,6 +560,30 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
       transactionIds: ['tx-CARREFOUR', 'tx-EDF', 'tx-AMAZON'],
       sourceAccount: 'main-X',
     });
+  });
+
+  it('(h) --json commit failure: success-shaped JSON already on stdout, exit 4 + stderr carry the truth (story-4.4a)', async () => {
+    // fails if: the emit-then-commit order changes (stdout JSON would vanish entirely —
+    //   commitBatch's exitCode(0) is process.exit at the composition root, so nothing
+    //   prints after it), or the failed commit stops being detectable by a scripted
+    //   consumer via exit 4 + "rolled back" on stderr
+    const snapshotService: SnapshotService = {
+      create: vi.fn().mockResolvedValue(Result.ok()),
+      restore: vi.fn().mockResolvedValue(Result.ok()),
+      remove: vi.fn().mockResolvedValue(Result.ok()),
+    };
+    const transactionRepository: Pick<TransactionRepository, 'saveBatch'> = {
+      saveBatch: vi.fn().mockReturnValue(Result.fail('SQLITE_CONSTRAINT: UNIQUE constraint failed: transactions.idempotency_hash')),
+    };
+
+    const { deps, stdout, stderr, exitCodes } = makeBaseInteractiveDeps({ snapshotService, transactionRepository });
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: true }, deps);
+
+    expect((JSON.parse(stdout.captured) as { summary: { total: number } }).summary.total).toBe(3);
+    expect(exitCodes).toContain(4);
+    expect(snapshotService.remove).not.toHaveBeenCalled();
+    expect(stderr.captured).toContain('Commit failed (batch rolled back)');
   });
 });
 

@@ -121,11 +121,12 @@ describe('--non-interactive mode', () => {
     expect(transactionRepository.saveBatch).toHaveBeenCalledOnce();
   }, 500);
 
-  it('exits 2 with low-confidence items — stderr names the count, no hang', async () => {
+  it('exits 2 with low-confidence items — stderr names the count, no hang, no commit (story-4.4a guard regression pin)', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
     const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
+    const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -138,7 +139,7 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
-      transactionRepository: makeNoOpTransactionRepo(),
+      transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
@@ -150,6 +151,8 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(2);
     expect((stderr as unknown as { captured: string }).captured).toContain('1 item');
     expect(prompter.selectCategory).not.toHaveBeenCalled();
+    // fails if: the lowConfidence.length > 0 guard is removed or the commit is hoisted above it
+    expect(transactionRepository.saveBatch).not.toHaveBeenCalled();
   }, 500);
 });
 
@@ -203,12 +206,13 @@ describe('--json mode', () => {
     expect(transactionRepository.saveBatch).toHaveBeenCalledOnce();
   });
 
-  it('exits 2 with lowConfidence list when low-confidence items present', async () => {
+  it('exits 2 with lowConfidence list when low-confidence items present, no commit (story-4.4a guard regression pin)', async () => {
     const outcomes = [makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
     const dupItem = { item: { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR }, idempotencyHash: 'hash-DUP' };
     const parseErrorRow = { line: 2, reason: 'missing amount', raw: 'y' };
+    const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -221,7 +225,7 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
-      transactionRepository: makeNoOpTransactionRepo(),
+      transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
@@ -245,6 +249,8 @@ describe('--json mode', () => {
     expect(parsed.source_account).toBe('acct-77');
     expect(parsed.summary.duplicates).toBe(2);
     expect(parsed.summary.parseErrors).toBe(2);
+    // fails if: the lowConfidence.length > 0 guard is removed or the commit is hoisted above it
+    expect(transactionRepository.saveBatch).not.toHaveBeenCalled();
   });
 
   it('ambiguous filename match exits 2', async () => {

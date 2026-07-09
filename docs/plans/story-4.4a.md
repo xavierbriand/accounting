@@ -157,6 +157,20 @@ Set aside:
   ingest-command-flags.test.ts, tests/features/ingest.feature non-interactive scenarios)
   flip to assert persistence — enumerated in the Gherkin mapping (R5).
 
+*Phase-4 amendments (as-built corrections to the above):*
+
+- **Emit-then-commit order** (deviation adopted): the JSON/summary is written *before*
+  `commitBatch` because `commitBatch`'s final `exitCode(0)` is `process.exit` at the
+  composition root — committing first would drop the stdout document entirely.
+  Consequence pinned by test (h) (ingest-command.test.ts): on commit failure the
+  success-shaped JSON is already on stdout; exit 4 + stderr carry the truth. The 4.4b
+  contract doc must state "branch on exit code before trusting stdout".
+- **Empty-batch reachability** (plan under-enumerated): with zero fresh rows
+  (all-duplicate re-ingest) the unconditional `commitBatch` call now runs the full
+  lifecycle — snapshot, `saveBatch([])`, `TransactionIngested` with empty
+  `transactionIds`, `0 transaction(s) committed.` on stderr — from scripted callers.
+  Behaviour decision deferred to #215.
+
 ## Gherkin acceptance scenarios
 
 **Scenario 1 — clean batch commits.**
@@ -243,6 +257,20 @@ Phase 2 run 2026-07-09, Reduced lane: `sibling-overlap` only (plan-reviewer drop
 | 3 | #180 (B1 audit-event non-atomicity) is inside the reused `commitBatch`; this story widens its reachability to scripted callers; plan didn't name it | ADOPT | Risk row + cross-reference added; no code change (UnitOfWork stays #180) |
 | 4 | #103 / #93 interactive-path bugs — confirmed non-overlapping | ACKNOWLEDGE | Already scoped in maintenance sub-loop notes |
 | 5 | #107 shared command-deps base type — dormant, rebase-shape friction only | ACKNOWLEDGE | No new `IngestCommandDeps` fields in this story; no action |
+
+Phase 4 run 2026-07-09 (`code-reviewer` + `sibling-overlap` in parallel):
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 6 | Stale describe-block `fails if` note still listed "--non-interactive triggers writes" as a failure condition (R6) | FIX-NOW | Refreshed in 0cc498b |
+| 7 | No test exercised commit failure (exit 3/4) via the non-interactive path, despite the plan naming it newly reachable | FIX-NOW | Test (h) added in 0cc498b — pins exit 4 + JSON-already-on-stdout interleaving |
+| 8 | Plan's "commits nothing … as today" undersold empty-batch lifecycle reachability (phantom `TransactionIngested`, empty ids) (R2) | FIX-NOW (plan) + DEFER (behaviour) | Plan § R2 amended; behaviour decision → [#215](https://github.com/xavierbriand/accounting/issues/215) |
+| 9 | Emit-then-commit: success-shaped stdout JSON when the commit later fails — undocumented for machine consumers | FIX-NOW (pin) + DEFER (doc) | Pinned by test (h); "branch on exit code" rule → 4.4b contract doc |
+| 10 | `a959c32` `— failing` bundle partially red (scenario 2 already green) (R10/R12) | ACKNOWLEDGE | Historical commit, self-disclosed; retro Change item |
+| 11 | `runNonInteractive` ~78 LOC > ~50 guideline (P3) | ACKNOWLEDGE | 4.4b's envelope/formatter extraction restructures this exact emission code; splitting now is churn |
+| 12 | `4bb7121` subject borderline enumeration (R12) | ACKNOWLEDGE | Historical; noted |
+| 13 | Soft: `makeRealDeps` at 7 positional params; 8-assertion integration test; `0 transaction(s) committed.` phrasing | ACKNOWLEDGE | Next-touch candidates; phrasing folded into #215 |
+| 14 | Overlap: #180 note refinement (empty-ids event detail) worth recording on the issue | ADOPT | Comment posted on #180 |
 
 ## DoR checklist
 

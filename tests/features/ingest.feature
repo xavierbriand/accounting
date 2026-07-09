@@ -88,6 +88,27 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # already imply that the first commit landed all 4 rows. Two separate scenarios
     # under this Given/When skeleton were strictly subsumed.
 
+  Scenario: Non-interactive ingest commits a clean batch (story-4.4a, closes #181)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a BPCE CSV copied to that temp dir as "bpce-in-batch-dups.csv"
+    When I run ingest with "--non-interactive --json"
+    Then the process exits with code 0
+    And the transactions table has 4 rows
+    And the JSON payload's "summary.total" equals 4
+    And stderr contains "4 transaction(s) committed."
+    # fails if: runNonInteractive (ingest-command.ts:310-388) returns without calling
+    # commitBatch on the no-pending-decision path — the #181 production bug where
+    # --non-interactive/--json silently dry-ran even with zero decisions to take.
+
+  Scenario: Non-interactive ingest blocks the commit when a decision is pending (story-4.4a)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a BPCE CSV copied to that temp dir as "bpce-valid_real.csv"
+    When I run ingest with "--non-interactive --json"
+    Then the process exits with code 2
+    And the transactions table has 0 rows
+    # fails if: the lowConfidence.length > 0 guard (ingest-command.ts:321-348) is removed
+    # or the commit is hoisted above it, letting a pending-review batch persist.
+
   Scenario: Define-new + remember + re-ingest auto-tags (Story C round-trip — closes Story A retro carry-over)
     Given a fresh migrated DB and accounting.yaml at a temp dir
     And a single-row CSV at "bpce-valid_first.csv" with description "ALTIMA COURTAGE"

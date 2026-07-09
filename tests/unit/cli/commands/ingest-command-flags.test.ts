@@ -87,11 +87,12 @@ function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writa
 }
 
 describe('--non-interactive mode', () => {
-  it('exits 0 with only high-confidence items — no prompts fired', async () => {
+  it('exits 0 with only high-confidence items — no prompts fired, batch committed (story-4.4a, closes #181)', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
     const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
+    const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -104,7 +105,7 @@ describe('--non-interactive mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
-      transactionRepository: makeNoOpTransactionRepo(),
+      transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
@@ -116,6 +117,8 @@ describe('--non-interactive mode', () => {
     expect(exitCodes).toContain(0);
     expect(prompter.selectCategory).not.toHaveBeenCalled();
     expect(prompter.confirmBatch).not.toHaveBeenCalled();
+    // fails if: runNonInteractive returns without calling commitBatch (the #181 dry-run bug)
+    expect(transactionRepository.saveBatch).toHaveBeenCalledOnce();
   }, 500);
 
   it('exits 2 with low-confidence items — stderr names the count, no hang', async () => {
@@ -151,12 +154,13 @@ describe('--non-interactive mode', () => {
 });
 
 describe('--json mode', () => {
-  it('emits JSON to stdout with debit/credit/category fields and no idempotencyHash — all high-confidence exits 0', async () => {
+  it('emits JSON to stdout with debit/credit/category fields and no idempotencyHash — all high-confidence exits 0 and commits (story-4.4a, closes #181)', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
     const dupItem = { item: { sourceAccount: 'main-X', occurredAt: outcomes[0].transaction.occurredAt, description: 'DUP', direction: 'outflow' as const, amount: EUR }, idempotencyHash: 'hash-DUP' };
     const parseErrorRow = { line: 1, reason: 'bad date', raw: 'x' };
+    const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
       config: baseConfig,
@@ -169,7 +173,7 @@ describe('--json mode', () => {
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
-      transactionRepository: makeNoOpTransactionRepo(),
+      transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
       configWriter: makeNoOpConfigWriterStub(),
@@ -195,6 +199,8 @@ describe('--json mode', () => {
     expect(parsed.summary.duplicates).toBe(1);
     expect(parsed.summary.parseErrors).toBe(1);
     expect(exitCodes).toContain(0);
+    // fails if: --json alone (nonInteractive: false) fails to route through commitBatch too
+    expect(transactionRepository.saveBatch).toHaveBeenCalledOnce();
   });
 
   it('exits 2 with lowConfidence list when low-confidence items present', async () => {

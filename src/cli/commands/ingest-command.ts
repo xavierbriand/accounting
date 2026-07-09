@@ -130,7 +130,13 @@ export async function runIngestCommand(
   }
 
   if (opts.nonInteractive || opts.json) {
-    return runNonInteractive(opts, account, built, lowConfidence, duplicates, parseOutcome.errors.length, stdout, stderr, exitCode);
+    await runNonInteractive(opts, account, built, lowConfidence, duplicates, parseOutcome.errors.length, stdout, stderr, exitCode, {
+      transactionRepository,
+      snapshotService,
+      dbPath,
+      domainEventRecorder,
+    });
+    return;
   }
 
   const loopResult = await runInteractiveLoop(built, lowConfidence, prompt, stderr, exitCode);
@@ -307,7 +313,7 @@ async function runInteractiveLoop(
   return { resolved, rememberedRules: Array.from(rememberedMap.values()) };
 }
 
-function runNonInteractive(
+async function runNonInteractive(
   opts: IngestCommandOptions,
   account: AccountConfig,
   built: readonly BuildOutcome[],
@@ -317,7 +323,8 @@ function runNonInteractive(
   stdout: Writable,
   stderr: Writable,
   exitCode: (code: number) => void,
-): void {
+  commitDeps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'domainEventRecorder'>,
+): Promise<void> {
   if (lowConfidence.length > 0) {
     writeln(
       stderr,
@@ -379,10 +386,14 @@ function runNonInteractive(
         duplicates: duplicatesPayload,
       }) + '\n',
     );
-    exitCode(0);
-    return;
+  } else {
+    stdout.write(formatSummaryTable(built) + '\n');
   }
 
-  stdout.write(formatSummaryTable(built) + '\n');
-  exitCode(0);
+  // Emitted before commitBatch, mirroring the interactive flow's summary-table-then-commit
+  // order: commitBatch's own exitCode(0) call is process.exit() at the composition root
+  // (program.ts), which halts the process synchronously — any stdout write attempted after
+  // that call would be silently dropped (story-4.4a finding; verified empirically, not just
+  // in the mocked exitCode of these unit tests).
+  await commitBatch(built, account.id, { ...commitDeps, stderr, exitCode });
 }

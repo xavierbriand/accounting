@@ -7,6 +7,7 @@ import { formatStatusJson } from './status-formatter-json.js';
 import { formatStatusHuman } from './status-formatter-human.js';
 import { nextCalendarMonth } from '../utils/settle-window.js';
 import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
+import { formatJsonError } from '../utils/json-envelope.js';
 
 // Re-exported for existing importers (status unit tests import nextCalendarMonth
 // from this module) — the window/as-of composition itself now lives in
@@ -59,6 +60,15 @@ export function assembleStatusReport(
   };
 }
 
+function writeValidationError(
+  stderr: NodeJS.WritableStream,
+  json: boolean,
+  message: string,
+): void {
+  stderr.write(`error: ${message}\n`);
+  if (json) stderr.write(formatJsonError('status', { code: 'INVALID_ARGUMENT', message }));
+}
+
 export async function runStatusCommand(
   opts: StatusCommandOptions,
   deps: StatusCommandDeps,
@@ -66,15 +76,15 @@ export async function runStatusCommand(
   const { stdout, stderr, clock } = deps;
 
   if (opts.asOf !== undefined && !ISO_DATE.test(opts.asOf)) {
-    stderr.write(`error: --as-of must be ISO 8601 date (YYYY-MM-DD), got "${opts.asOf}"\n`);
+    writeValidationError(stderr, opts.json, `--as-of must be ISO 8601 date (YYYY-MM-DD), got "${opts.asOf}"`);
     return 2;
   }
   if (opts.from !== undefined && !ISO_DATE.test(opts.from)) {
-    stderr.write(`error: --from must be ISO 8601 date (YYYY-MM-DD), got "${opts.from}"\n`);
+    writeValidationError(stderr, opts.json, `--from must be ISO 8601 date (YYYY-MM-DD), got "${opts.from}"`);
     return 2;
   }
   if (opts.to !== undefined && !ISO_DATE.test(opts.to)) {
-    stderr.write(`error: --to must be ISO 8601 date (YYYY-MM-DD), got "${opts.to}"\n`);
+    writeValidationError(stderr, opts.json, `--to must be ISO 8601 date (YYYY-MM-DD), got "${opts.to}"`);
     return 2;
   }
 
@@ -84,7 +94,7 @@ export async function runStatusCommand(
   let to: string;
   if (opts.from !== undefined && opts.to !== undefined) {
     if (opts.from > opts.to) {
-      stderr.write(`error: --from must be <= --to, got from="${opts.from}", to="${opts.to}"\n`);
+      writeValidationError(stderr, opts.json, `--from must be <= --to, got from="${opts.from}", to="${opts.to}"`);
       return 2;
     }
     from = opts.from;
@@ -100,6 +110,7 @@ export async function runStatusCommand(
   const bufferStateResult = deps.buffersService.getStateAsOf(asOf);
   if (bufferStateResult.isFailure) {
     stderr.write(`error: ${bufferStateResult.error}\n`);
+    if (opts.json) stderr.write(formatJsonError('status', { code: 'QUERY_FAILURE', message: bufferStateResult.error }));
     return 1;
   }
 

@@ -345,10 +345,10 @@ Then('both invocations produce byte-identical stdout', function (state: StatusWo
 Then(
   'forecast contains entries on 2026-07-15, 2026-08-15, 2026-09-15',
   function (state: StatusWorld) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as {
-      forecast: Array<{ date: string }>;
+    const envelope = JSON.parse(state.statusResult!.stdout) as {
+      data: { forecast: Array<{ date: string }> };
     };
-    const dates = parsed.forecast.map(f => f.date);
+    const dates = envelope.data.forecast.map(f => f.date);
     expect(dates).toContain('2026-07-15');
     expect(dates).toContain('2026-08-15');
     expect(dates).toContain('2026-09-15');

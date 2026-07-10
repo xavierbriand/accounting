@@ -1,4 +1,5 @@
 import type { StatusReport } from './status-report.js';
+import { formatJsonSuccess } from '../utils/json-envelope.js';
 
 export function formatStatusJson(report: StatusReport): string {
   const buffersJson = report.buffers.map(b => ({
@@ -63,5 +64,5 @@ export function formatStatusJson(report: StatusReport): string {
     forecast: forecastJson,
   };
 
-  return JSON.stringify(doc, null, 2) + '\n';
+  return formatJsonSuccess('status', doc);
 }

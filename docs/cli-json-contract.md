@@ -94,7 +94,8 @@ from "a human decision is needed."
   replace them).
 - **Money renders as `Money.toString()`** — a string like `"EUR 45.30"`, never a bare
   number or a `{cents, currency}` pair. Never do float arithmetic on these strings;
-  they are for display/round-trip, not computation.
+  they are pass-through display values — never parse them back into numbers for
+  arithmetic.
 - **Calendar dates** (config validity windows, buffer target dates, status/explain
   window boundaries) are ISO 8601 date-only: `YYYY-MM-DD`.
 - **Transaction timestamps** (`occurredAt`) keep their ISO 8601 offset verbatim:

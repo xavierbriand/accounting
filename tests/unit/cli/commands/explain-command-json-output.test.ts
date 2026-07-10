@@ -143,7 +143,7 @@ describe('runExplainCommand — JSON output shape', () => {
     expect(envelope.data.asOf).toBe('2026-06-28');
   });
 
-  it('returns exit 1, nothing structural to stdout, and a final-line QUERY_FAILURE envelope on stderr when the contribution query fails (story-4.4b newly-reachable path)', async () => {
+  it('returns exit 1, nothing structural to stdout, when the contribution query fails', async () => {
     // fails if runExplainCommand tolerates a contributionQuery failure like a calc failure (exit 0 + degraded section) instead of the unrecoverable DB-level exit 1
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
@@ -169,6 +169,31 @@ describe('runExplainCommand — JSON output shape', () => {
     expect(exitCode).toBe(1);
     expect(stderrCapture.getText()).toContain('currency mismatch');
     expect(stdoutCapture.getText()).toBe('');
+  });
+
+  it('adds a final-line QUERY_FAILURE envelope on stderr when the contribution query fails (story-4.4b newly-reachable path)', async () => {
+    // fails if: explain-command.ts:154-159's writeJsonErrorIf(..., 'QUERY_FAILURE', ...)
+    // (line 157) is missing or the contributionsResult.error message is dropped
+    const { transferCalculator } = makeRealServices();
+    const stdoutCapture = makeCaptureStream();
+    const stderrCapture = makeCaptureStream();
+    const failingQuery: ContributionQuery = {
+      contributionsInWindow(): Result<ContributionsInWindow> {
+        return Result.fail('main-account: currency mismatch — expected EUR, found USD');
+      },
+    };
+
+    await runExplainCommand(
+      { asOf: '2026-06-28', json: true },
+      {
+        transferCalculator,
+        contributionQuery: failingQuery,
+        settlementConfigured: true,
+        clock: () => '2026-06-28',
+        stdout: stdoutCapture.stream,
+        stderr: stderrCapture.stream,
+      },
+    );
 
     const lines = stderrCapture.getText().trim().split('\n');
     const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };

@@ -107,7 +107,10 @@ function makeRealServices(opts: {
 // ─── Structural report tests ───────────────────────────────────────────────────
 
 describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () => {
-  it('returns exit code 0, wraps in {command: "status", ok: true, data}, and data has all required keys', async () => {
+  it('returns exit code 0, wraps in {command: "status", ok: true, data}, stderr stays empty', async () => {
+    // fails if runStatusCommand's success path stops returning 0, formatStatusJson's
+    // formatJsonSuccess('status', ...) call (status-formatter-json.ts) is dropped, or a
+    // stray prose/warning write lands on stderr under a clean --json run
     const services = makeRealServices();
     const stdoutCapture = makeCaptureStream();
     const stderrCapture = makeCaptureStream();
@@ -126,9 +129,29 @@ describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () =>
     const envelope = JSON.parse(stdoutCapture.getText()) as { command: string; ok: boolean; data: Record<string, unknown> };
     expect(envelope.command).toBe('status');
     expect(envelope.ok).toBe(true);
+    expect(stderrCapture.getText()).toBe('');
+  });
+
+  it('data has all required top-level keys, no extras', async () => {
+    // fails if formatStatusJson (status-formatter-json.ts) drops a top-level report
+    // section (asOf/window/buffers/transfer/forecast) from `data`, or leaks an extra key
+    const services = makeRealServices();
+    const stdoutCapture = makeCaptureStream();
+    const stderrCapture = makeCaptureStream();
+
+    await runStatusCommand(
+      { asOf: '2026-04-29', json: true },
+      {
+        ...services,
+        clock: () => '2026-04-29',
+        stdout: stdoutCapture.stream,
+        stderr: stderrCapture.stream,
+      },
+    );
+
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: Record<string, unknown> };
     expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
     expect(Object.keys(envelope.data)).toHaveLength(5);
-    expect(stderrCapture.getText()).toBe('');
   });
 
   it('sets asOf from the --as-of option', async () => {
@@ -172,7 +195,9 @@ describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () =>
     expect(envelope.data.window.to).toBe('2026-09-30');
   });
 
-  it('returns exit code 2 for invalid --as-of format, prose stays, and a final-line INVALID_ARGUMENT envelope is added under --json', async () => {
+  it('returns exit code 2 for invalid --as-of format, prose stays', async () => {
+    // fails if: status-command.ts's --as-of ISO_DATE gate stops exiting 2, or
+    // writeValidationError's prose write (status-command.ts:63-70) is dropped/reworded
     // story-4.4b newly-reachable path (R10): status/explain failure envelopes.
     const services = makeRealServices();
     const stderrCapture = makeCaptureStream();
@@ -185,6 +210,18 @@ describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () =>
     expect(exitCode).toBe(2);
     expect(stderrCapture.getText()).toContain('must be ISO 8601');
     expect(stderrCapture.getText()).toContain('got');
+  });
+
+  it('adds a final-line INVALID_ARGUMENT envelope on stderr under --json', async () => {
+    // fails if: status-command.ts:63-70's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    // (writeValidationError's call, line 69) is missing or the envelope isn't the final line
+    const services = makeRealServices();
+    const stderrCapture = makeCaptureStream();
+
+    await runStatusCommand(
+      { asOf: 'not-a-date', json: true },
+      { ...services, clock: () => '2026-04-29', stdout: makeCaptureStream().stream, stderr: stderrCapture.stream },
+    );
 
     const lines = stderrCapture.getText().trim().split('\n');
     const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
@@ -195,6 +232,9 @@ describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () =>
   });
 
   it('validation failure under non-json mode stays prose-only (no envelope line)', async () => {
+    // fails if: the `json` gate is dropped from writeValidationError
+    // (status-command.ts:63-70, line 69) or the buffer-state QUERY_FAILURE site
+    // (line 113), leaking an envelope line onto stderr when --json was never requested
     const services = makeRealServices();
     const stderrCapture = makeCaptureStream();
 

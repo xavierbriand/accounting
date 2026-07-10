@@ -133,6 +133,9 @@ describe('runCategorizeCommand — --non-interactive bail', () => {
   });
 
   it('exits 2 with a NEEDS_REVIEW envelope on the final stderr line when groups exist, --non-interactive, --json (story-4.4b newly-reachable path)', async () => {
+    // fails if: categorize-command.ts:123-129's writeJsonErrorIf(..., 'NEEDS_REVIEW', ...)
+    //   (line 126) is missing or never reached under --json — this path was prose-only
+    //   before story-4.4b
     const { deps, stdout, stderr, exitCodes } = makeBaseDeps();
 
     await runCategorizeCommand({ ...baseOpts, nonInteractive: true, json: true }, deps);
@@ -167,6 +170,9 @@ describe('runCategorizeCommand — --json zero-groups success envelope (story-4.
   });
 
   it('does not write to stdout under non-json mode (existing "0 rules added" stderr prose only)', async () => {
+    // fails if: categorize-command.ts:131-149's `if (opts.json)` guard (line 133) fires
+    //   (or the stdout.write call moves outside it) when --json is not set, regressing
+    //   the pre-4.4b prose-only zero-groups behaviour
     const configWithRules: AppConfig = {
       ...baseConfig,
       autoTagRules: [
@@ -327,6 +333,8 @@ describe('runCategorizeCommand — pickSourceAccount failure', () => {
 // same failure discipline (a coded envelope on the final stderr line under --json).
 describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4b)', () => {
   it('pickSourceAccount failure + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    // fails if: categorize-command.ts:80-86's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    //   (line 83) is missing or drops the source message
     const { deps, exitCodes, stderr } = makeBaseDeps({
       pickSourceAccount: () => Result.fail('no account configured for this filename'),
     });
@@ -340,6 +348,8 @@ describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4
   });
 
   it('readFile failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    // fails if: categorize-command.ts:88-94's writeJsonErrorIf(..., 'READ_FAILURE', ...)
+    //   (line 91) is missing
     const { deps, exitCodes, stderr } = makeBaseDeps({
       readFile: () => Result.fail('ENOENT: no such file or directory'),
     });
@@ -352,6 +362,9 @@ describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4
   });
 
   it('CSV parse failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    // fails if: categorize-command.ts:96-108's writeJsonErrorIf(..., 'READ_FAILURE', ...)
+    //   (line 105) is missing or the "Parse error: " prefix leaks into error.code instead
+    //   of error.message
     const { deps, exitCodes, stderr } = makeBaseDeps({
       csvParser: { parse: () => Result.fail('malformed header row') },
     });
@@ -365,6 +378,9 @@ describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4
   });
 
   it('configWriter failure + --json: final stderr line is a CONFIG_WRITE_FAILURE envelope', async () => {
+    // fails if: categorize-command.ts:203-220's writeJsonErrorIf(..., 'CONFIG_WRITE_FAILURE', ...)
+    //   (line 216) is missing — this is the interactive-loop configWriter failure, reachable
+    //   under --json here (unlike ingest, where --json forces the non-interactive branch)
     const configWriter: ConfigWriter = {
       appendAutoTagRules: vi.fn().mockResolvedValue(Result.fail({ kind: 'mtime-race' as const })),
     };
@@ -383,6 +399,9 @@ describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4
   });
 
   it('non-json mode stays prose-only (no envelope line)', async () => {
+    // fails if: writeJsonErrorIf's `json` gate is dropped from any of the four call sites
+    //   above (categorize-command.ts:83,91,105,216), leaking an envelope line onto stderr
+    //   when --json was never requested
     const { deps, exitCodes, stderr } = makeBaseDeps({
       pickSourceAccount: () => Result.fail('no account configured for this filename'),
     });

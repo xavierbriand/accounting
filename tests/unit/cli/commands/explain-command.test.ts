@@ -245,6 +245,8 @@ describe('runExplainCommand — validation', () => {
   });
 
   it('adds a final-line INVALID_ARGUMENT envelope on stderr under --json (story-4.4b newly-reachable path)', async () => {
+    // fails if: explain-command.ts:136-140's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    //   (line 139) is missing
     const { transferCalculator } = makeRealServices();
     const stderrCapture = makeCaptureStream();
 
@@ -270,6 +272,9 @@ describe('runExplainCommand — validation', () => {
   });
 
   it('validation failure under non-json mode stays prose-only (no envelope line)', async () => {
+    // fails if: the `json` gate is dropped from explain-command.ts's writeJsonErrorIf
+    //   call sites (lines 139, 157), leaking an envelope line onto stderr when --json
+    //   was never requested — exercised here via the --as-of validation path (line 139)
     const { transferCalculator } = makeRealServices();
     const stderrCapture = makeCaptureStream();
 

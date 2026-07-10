@@ -118,6 +118,9 @@ function parseEnvelope(json: string): { command: string; ok: boolean; data: Stat
 
 describe('formatStatusJson — global envelope (story-4.4b)', () => {
   it('wraps the report in {command: "status", ok: true, data} as a single compact line', () => {
+    // fails if formatStatusJson (status-formatter-json.ts) stops calling
+    // formatJsonSuccess('status', doc) — reintroducing a bare document or the old
+    // `, null, 2` pretty-printing
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
 

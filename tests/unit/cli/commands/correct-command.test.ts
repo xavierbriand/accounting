@@ -275,6 +275,8 @@ describe('runCorrectCommand — error paths → exit codes (scenarios 4, 5, 6, 6
 // coded error envelope under --json; prose stays, non-json mode is untouched.
 describe('runCorrectCommand — error paths emit a coded envelope under --json (story-4.4b)', () => {
   it('(scenario 2 example) transaction not found + --json: final stderr line is a NOT_FOUND envelope naming the id', async () => {
+    // fails if: correct-command.ts:51-57's writeJsonErrorIf(..., 'NOT_FOUND', ...)
+    //   (line 54) is missing or drops the transaction id from the message
     const { deps, stderr, exitCodes } = makeDeps({
       transactionRepository: {
         findById: vi.fn().mockReturnValue(Result.ok(null)),
@@ -294,6 +296,8 @@ describe('runCorrectCommand — error paths emit a coded envelope under --json (
   });
 
   it('findById read failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    // fails if: correct-command.ts:43-50's writeJsonErrorIf(..., 'QUERY_FAILURE', ...)
+    //   (line 47) is missing
     const { deps, stderr, exitCodes } = makeDeps({
       transactionRepository: {
         findById: vi.fn().mockReturnValue(Result.fail('SqliteError: database disk image is malformed')),
@@ -312,6 +316,9 @@ describe('runCorrectCommand — error paths emit a coded envelope under --json (
   });
 
   it('no fields to correct + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    // fails if: correct-command.ts:140-147's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    //   (line 144, the CorrectionService.correct business-rule branch — distinct from the
+    //   zod-parse INVALID_ARGUMENT at line 128) is missing
     const { deps, stderr, exitCodes } = makeDeps();
 
     await runCorrectCommand(baseOptions({ json: true }), deps);
@@ -326,6 +333,9 @@ describe('runCorrectCommand — error paths emit a coded envelope under --json (
   });
 
   it('saveCorrection write failure + --json: final stderr line is a WRITE_FAILURE envelope, no raw hash leaked', async () => {
+    // fails if: correct-command.ts:85-92's writeJsonErrorIf(..., 'WRITE_FAILURE', ...)
+    //   (line 89) is missing, or the raw sanitizeSqlError-redacted hash leaks into
+    //   error.message
     const collidingHash = 'a'.repeat(64);
     const { deps, stderr, exitCodes } = makeDeps({
       transactionRepository: {
@@ -348,6 +358,9 @@ describe('runCorrectCommand — error paths emit a coded envelope under --json (
   });
 
   it('validation failure under non-json mode stays prose-only (no envelope line)', async () => {
+    // fails if: the `json` gate is dropped from any writeJsonErrorIf call site
+    //   (correct-command.ts:47,54,89,128,144), leaking an envelope line onto stderr when
+    //   --json was never requested — exercised here via the NOT_FOUND path (line 54)
     const { deps, stderr, exitCodes } = makeDeps({
       transactionRepository: {
         findById: vi.fn().mockReturnValue(Result.ok(null)),

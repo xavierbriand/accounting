@@ -289,6 +289,8 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
 // envelope, ahead of the existing prose line; exit codes unchanged.
 describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   it('source-account resolution failure + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    // fails if: ingest-command.ts:58-64's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    //   (line 61) is missing or drops the source message
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 
@@ -319,6 +321,8 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   });
 
   it('read failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    // fails if: ingest-command.ts:67-73's writeJsonErrorIf(..., 'READ_FAILURE', ...)
+    //   (line 70) is missing
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 
@@ -349,6 +353,8 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   });
 
   it('CSV parse failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    // fails if: ingest-command.ts:81-87's writeJsonErrorIf(..., 'READ_FAILURE', ...)
+    //   (line 84) is missing
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 
@@ -379,6 +385,8 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   });
 
   it('idempotency check failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    // fails if: ingest-command.ts:108-115's writeJsonErrorIf(..., 'QUERY_FAILURE', ...)
+    //   (line 112) is missing
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 
@@ -409,6 +417,9 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   });
 
   it('build failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    // fails if: ingest-command.ts:119-126's writeJsonErrorIf(..., 'QUERY_FAILURE', ...)
+    //   (line 123) is missing — distinct call site from the idempotency-check
+    //   QUERY_FAILURE above (line 112), same code
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 
@@ -439,6 +450,10 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
   });
 
   it('non-json mode stays prose-only for all of the above (no envelope line)', async () => {
+    // fails if: the `json` gate is dropped from any writeJsonErrorIf call site in
+    //   loadAndParse/runIngestCommand (ingest-command.ts:61,70,84,112,123), leaking an
+    //   envelope line onto stderr when --json was never requested — exercised here via
+    //   the source-account resolution path (line 61)
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
 

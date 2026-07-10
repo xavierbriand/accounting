@@ -2,20 +2,11 @@
 // (story-4.4b) — one parse rule for every command's `--json` output, reused by
 // unit tests, feature steps, and integration tests alike instead of each
 // duplicating its own JSON.parse + field-access logic.
-
-export interface JsonErrorShape {
-  readonly code: string;
-  readonly message: string;
-  readonly suggestedAction?: string;
-  readonly details?: unknown;
-}
-
-interface RawEnvelope {
-  readonly command: string;
-  readonly ok: boolean;
-  readonly data?: unknown;
-  readonly error?: JsonErrorShape;
-}
+//
+// Reuses the production envelope types directly (src/cli/utils/json-envelope.ts)
+// rather than a hand-duplicated shape, so the test-side parse target can never
+// drift from what formatJsonSuccess/formatJsonError actually emit.
+import type { JsonEnvelope, JsonError } from '../../src/cli/utils/json-envelope.js';
 
 export interface CliStreams {
   readonly stdout: string;
@@ -27,14 +18,14 @@ function lastNonEmptyLine(text: string): string | undefined {
   return lines[lines.length - 1];
 }
 
-export function parseEnvelope(raw: string): RawEnvelope {
-  return JSON.parse(raw.trim()) as RawEnvelope;
+export function parseEnvelope<T = Record<string, unknown>>(raw: string): JsonEnvelope<T> {
+  return JSON.parse(raw.trim()) as JsonEnvelope<T>;
 }
 
 export function unwrapSuccess<T = Record<string, unknown>>(raw: string): T {
-  const envelope = parseEnvelope(raw);
+  const envelope = parseEnvelope<T>(raw);
   if (!envelope.ok) throw new Error(`Expected ok:true envelope, got ok:false: ${raw}`);
-  return envelope.data as T;
+  return envelope.data;
 }
 
 export function lastStderrLine(stderr: string): string {
@@ -49,11 +40,18 @@ export function lastStderrLine(stderr: string): string {
  * contract's "final line" rule, see docs/cli-json-contract.md) or an
  * already-isolated single JSON line; extracts the last non-empty line either way.
  */
-export function unwrapError(rawStderr: string): JsonErrorShape {
+export function unwrapError(rawStderr: string): JsonError {
   const raw = lastStderrLine(rawStderr);
-  const envelope = parseEnvelope(raw);
+  let envelope: JsonEnvelope<unknown>;
+  try {
+    envelope = parseEnvelope<unknown>(raw);
+  } catch {
+    // A bare JSON.parse SyntaxError here ("Unexpected token...") gives no clue which
+    // stderr line broke the contract — naming the offending line makes a regression
+    // (e.g. prose accidentally appended after the envelope) diagnosable at a glance.
+    throw new Error(`expected the final stderr line to be a JSON error envelope, got: ${raw}`);
+  }
   if (envelope.ok) throw new Error(`Expected ok:false envelope, got ok:true: ${raw}`);
-  if (envelope.error === undefined) throw new Error(`ok:false envelope missing error field: ${raw}`);
   return envelope.error;
 }
 
@@ -69,8 +67,8 @@ export function payloadFrom(result: CliStreams): Record<string, unknown> {
   const stdoutTrimmed = result.stdout.trim();
   if (stdoutTrimmed.length > 0) {
     const envelope = parseEnvelope(stdoutTrimmed);
-    if (envelope.ok) return envelope.data as Record<string, unknown>;
+    if (envelope.ok) return envelope.data;
   }
-  const error = unwrapError(lastStderrLine(result.stderr));
+  const error = unwrapError(result.stderr);
   return (error.details ?? {}) as Record<string, unknown>;
 }

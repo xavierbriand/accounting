@@ -9,7 +9,7 @@ import { formatExplainJson } from './explain-formatter-json.js';
 import { formatExplainHuman } from './explain-formatter-human.js';
 import { nextCalendarMonth, previousSettleWindow } from '../utils/settle-window.js';
 import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
-import { formatJsonError } from '../utils/json-envelope.js';
+import { writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface ExplainCommandDeps {
   readonly transferCalculator: SafeTransferCalculator;
@@ -136,7 +136,7 @@ export async function runExplainCommand(
   if (opts.asOf !== undefined && !ISO_DATE.test(opts.asOf)) {
     const message = `--as-of must be ISO 8601 date (YYYY-MM-DD), got "${opts.asOf}"`;
     stderr.write(`error: ${message}\n`);
-    if (opts.json) stderr.write(formatJsonError('explain', { code: 'INVALID_ARGUMENT', message }));
+    writeJsonErrorIf(stderr, opts.json, 'explain', { code: 'INVALID_ARGUMENT', message });
     return 2;
   }
 
@@ -154,7 +154,7 @@ export async function runExplainCommand(
     const contributionsResult = deps.contributionQuery.contributionsInWindow(currency, lastWindow.from, lastWindow.to);
     if (contributionsResult.isFailure) {
       stderr.write(`error: ${contributionsResult.error}\n`);
-      if (opts.json) stderr.write(formatJsonError('explain', { code: 'QUERY_FAILURE', message: contributionsResult.error }));
+      writeJsonErrorIf(stderr, opts.json, 'explain', { code: 'QUERY_FAILURE', message: contributionsResult.error });
       return 1;
     }
     contributions = contributionsResult.value;

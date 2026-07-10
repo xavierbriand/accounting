@@ -10,7 +10,7 @@ import { expenseAccount } from '@core/ingest/account-names.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { parseCorrectOptions, type CorrectCommandOptions, type ParsedCorrectOptions } from './correct-command-options.js';
 import { formatCorrectJson, toDisplayFieldName } from './correct-formatter-json.js';
-import { formatJsonError } from '../utils/json-envelope.js';
+import { writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface CorrectCommandDeps {
   readonly transactionRepository: Pick<TransactionRepository, 'findById' | 'saveCorrection'>;
@@ -44,14 +44,14 @@ function loadOriginal(
   if (result.isFailure) {
     const message = `could not load transaction "${transactionId}": ${sanitizeSqlError(result.error)}`;
     writeln(stderr, `error: ${message}`);
-    if (json) stderr.write(formatJsonError('correct', { code: 'QUERY_FAILURE', message }));
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'QUERY_FAILURE', message });
     exitCode(1);
     return null;
   }
   if (result.value === null) {
     const message = `no transaction found with id "${transactionId}"`;
     writeln(stderr, `error: ${message}`);
-    if (json) stderr.write(formatJsonError('correct', { code: 'NOT_FOUND', message }));
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'NOT_FOUND', message });
     exitCode(2);
     return null;
   }
@@ -86,7 +86,7 @@ async function persistAndRecord(
   if (writeResult.isFailure) {
     const message = `Correction failed: ${sanitizeSqlError(writeResult.error)}`;
     writeln(stderr, message);
-    if (json) stderr.write(formatJsonError('correct', { code: 'WRITE_FAILURE', message }));
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'WRITE_FAILURE', message });
     exitCode(4);
     return;
   }
@@ -125,7 +125,7 @@ export async function runCorrectCommand(
   if (parsedResult.isFailure) {
     const message = parsedResult.error;
     writeln(stderr, `error: ${message}`);
-    if (options.json) stderr.write(formatJsonError('correct', { code: 'INVALID_ARGUMENT', message }));
+    writeJsonErrorIf(stderr, options.json, 'correct', { code: 'INVALID_ARGUMENT', message });
     exitCode(2);
     return;
   }
@@ -141,7 +141,7 @@ export async function runCorrectCommand(
   if (correctionResult.isFailure) {
     const message = correctionResult.error;
     writeln(stderr, `error: ${message}`);
-    if (parsed.json) stderr.write(formatJsonError('correct', { code: 'INVALID_ARGUMENT', message }));
+    writeJsonErrorIf(stderr, parsed.json, 'correct', { code: 'INVALID_ARGUMENT', message });
     exitCode(2);
     return;
   }

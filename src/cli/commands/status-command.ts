@@ -7,7 +7,7 @@ import { formatStatusJson } from './status-formatter-json.js';
 import { formatStatusHuman } from './status-formatter-human.js';
 import { nextCalendarMonth } from '../utils/settle-window.js';
 import { ISO_DATE, buildSuggestedAction } from '../utils/report-command.js';
-import { formatJsonError } from '../utils/json-envelope.js';
+import { writeJsonErrorIf } from '../utils/json-envelope.js';
 
 // Re-exported for existing importers (status unit tests import nextCalendarMonth
 // from this module) — the window/as-of composition itself now lives in
@@ -66,7 +66,7 @@ function writeValidationError(
   message: string,
 ): void {
   stderr.write(`error: ${message}\n`);
-  if (json) stderr.write(formatJsonError('status', { code: 'INVALID_ARGUMENT', message }));
+  writeJsonErrorIf(stderr, json, 'status', { code: 'INVALID_ARGUMENT', message });
 }
 
 export async function runStatusCommand(
@@ -110,7 +110,7 @@ export async function runStatusCommand(
   const bufferStateResult = deps.buffersService.getStateAsOf(asOf);
   if (bufferStateResult.isFailure) {
     stderr.write(`error: ${bufferStateResult.error}\n`);
-    if (opts.json) stderr.write(formatJsonError('status', { code: 'QUERY_FAILURE', message: bufferStateResult.error }));
+    writeJsonErrorIf(stderr, opts.json, 'status', { code: 'QUERY_FAILURE', message: bufferStateResult.error });
     return 1;
   }
 

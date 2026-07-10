@@ -45,3 +45,19 @@ export function formatJsonError(command: string, error: JsonError): string {
   const envelope: JsonErrorEnvelope = { command, ok: false, error };
   return JSON.stringify(envelope) + '\n';
 }
+
+/**
+ * Writes the error envelope to `stream` only when `json` is true — the
+ * "prose always, envelope only under --json" pattern repeated at every
+ * failure site across the five commands. `stream` is typed structurally
+ * (not `NodeJS.WritableStream`) so callers can pass either a real stream or
+ * a test double without a cast.
+ */
+export function writeJsonErrorIf(
+  stream: { write(chunk: string): unknown },
+  json: boolean,
+  command: string,
+  error: JsonError,
+): void {
+  if (json) stream.write(formatJsonError(command, error));
+}

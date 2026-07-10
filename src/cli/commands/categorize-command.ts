@@ -8,7 +8,7 @@ import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.
 import { scanForUnmatched } from '@core/ingest/categorize-scanner.js';
 import { isAlreadyClassified } from '@core/ingest/auto-classify.js';
 import { suggestPattern } from '@core/ingest/pattern-suggester.js';
-import { formatJsonSuccess, formatJsonError } from '../utils/json-envelope.js';
+import { formatJsonSuccess, writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface CategorizeCommandOptions {
   readonly file: string;
@@ -80,7 +80,7 @@ export async function runCategorizeCommand(
   const accountResult = pickSourceAccount(opts.file, config.accounts);
   if (accountResult.isFailure) {
     writeln(stderr, accountResult.error);
-    if (opts.json) stderr.write(formatJsonError('categorize', { code: 'INVALID_ARGUMENT', message: accountResult.error }));
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'INVALID_ARGUMENT', message: accountResult.error });
     exitCode(2);
     return;
   }
@@ -88,7 +88,7 @@ export async function runCategorizeCommand(
   const readResult = readFile(opts.file);
   if (readResult.isFailure) {
     writeln(stderr, readResult.error);
-    if (opts.json) stderr.write(formatJsonError('categorize', { code: 'READ_FAILURE', message: readResult.error }));
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'READ_FAILURE', message: readResult.error });
     exitCode(1);
     return;
   }
@@ -102,7 +102,7 @@ export async function runCategorizeCommand(
   if (parseResult.isFailure) {
     const message = `Parse error: ${parseResult.error}`;
     writeln(stderr, message);
-    if (opts.json) stderr.write(formatJsonError('categorize', { code: 'READ_FAILURE', message }));
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'READ_FAILURE', message });
     exitCode(1);
     return;
   }
@@ -123,7 +123,7 @@ export async function runCategorizeCommand(
   if (opts.nonInteractive && groups.length > 0) {
     const message = `${groups.length} group(s) need review; re-run without --non-interactive`;
     writeln(stderr, message);
-    if (opts.json) stderr.write(formatJsonError('categorize', { code: 'NEEDS_REVIEW', message }));
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'NEEDS_REVIEW', message });
     exitCode(2);
     return;
   }
@@ -213,7 +213,7 @@ export async function runCategorizeCommand(
         message = `Config write failed: ${err.message}`;
       }
       writeln(stderr, message);
-      if (opts.json) stderr.write(formatJsonError('categorize', { code: 'CONFIG_WRITE_FAILURE', message }));
+      writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'CONFIG_WRITE_FAILURE', message });
       exitCode(5);
       return;
     }

@@ -13,7 +13,7 @@ import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pi
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
 import { formatSummaryTable } from '../utils/printer.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
-import { formatJsonSuccess, formatJsonError } from '../utils/json-envelope.js';
+import { formatJsonSuccess, formatJsonError, writeJsonErrorIf } from '../utils/json-envelope.js';
 import { suggestPattern } from '@core/ingest/pattern-suggester.js';
 import { expenseAccount } from '@core/ingest/account-names.js';
 import { Transaction, type EntryDraft } from '@core/ledger/transaction.js';
@@ -58,7 +58,7 @@ async function loadAndParse(
   const accountResult = pickSourceAccount(opts.file, config.accounts);
   if (accountResult.isFailure) {
     writeln(stderr, accountResult.error);
-    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'INVALID_ARGUMENT', message: accountResult.error }));
+    writeJsonErrorIf(stderr, opts.json, 'ingest', { code: 'INVALID_ARGUMENT', message: accountResult.error });
     exitCode(2);
     return null;
   }
@@ -67,7 +67,7 @@ async function loadAndParse(
   const readResult = readFile(opts.file);
   if (readResult.isFailure) {
     writeln(stderr, readResult.error);
-    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'READ_FAILURE', message: readResult.error }));
+    writeJsonErrorIf(stderr, opts.json, 'ingest', { code: 'READ_FAILURE', message: readResult.error });
     exitCode(1);
     return null;
   }
@@ -81,7 +81,7 @@ async function loadAndParse(
   if (parseResult.isFailure) {
     const message = `Parse error: ${parseResult.error}`;
     writeln(stderr, message);
-    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'READ_FAILURE', message }));
+    writeJsonErrorIf(stderr, opts.json, 'ingest', { code: 'READ_FAILURE', message });
     exitCode(1);
     return null;
   }
@@ -109,7 +109,7 @@ export async function runIngestCommand(
   if (idempotencyResult.isFailure) {
     const message = `Idempotency check failed: ${idempotencyResult.error}`;
     writeln(stderr, message);
-    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'QUERY_FAILURE', message }));
+    writeJsonErrorIf(stderr, opts.json, 'ingest', { code: 'QUERY_FAILURE', message });
     exitCode(1);
     return;
   }
@@ -120,7 +120,7 @@ export async function runIngestCommand(
   if (buildResult.isFailure) {
     const message = `Build error: ${buildResult.error}`;
     writeln(stderr, message);
-    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'QUERY_FAILURE', message }));
+    writeJsonErrorIf(stderr, opts.json, 'ingest', { code: 'QUERY_FAILURE', message });
     exitCode(1);
     return;
   }
@@ -194,7 +194,7 @@ async function commitBatch(
   if (snapResult.isFailure) {
     const message = `Snapshot failed: ${snapResult.error}`;
     writeln(stderr, message);
-    if (json) stderr.write(formatJsonError('ingest', { code: 'SNAPSHOT_FAILURE', message }));
+    writeJsonErrorIf(stderr, json, 'ingest', { code: 'SNAPSHOT_FAILURE', message });
     exitCode(3);
     return;
   }
@@ -207,7 +207,7 @@ async function commitBatch(
     const message = `Commit failed (batch rolled back): ${sanitizeSqlError(writeResult.error)}`;
     writeln(stderr, message);
     writeln(stderr, `Snapshot retained at ${snapshotPath} for recovery.`);
-    if (json) stderr.write(formatJsonError('ingest', { code: 'WRITE_FAILURE', message }));
+    writeJsonErrorIf(stderr, json, 'ingest', { code: 'WRITE_FAILURE', message });
     exitCode(4);
     return;
   }

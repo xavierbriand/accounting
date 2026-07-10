@@ -72,6 +72,7 @@ See `accounting.example.yaml` for the full schema with inline documentation.
 - [docs/status.md](docs/status.md) — Current epic position (per-story log fragments live in [docs/status.d/](docs/status.d/))
 - [docs/prd.md](docs/prd.md) — Product requirements & non-functional requirements
 - [docs/architecture.md](docs/architecture.md) — Architectural decisions (layering, money storage, versioning)
+- [docs/cli-json-contract.md](docs/cli-json-contract.md) — The `--json` envelope, error codes, streams discipline, and per-command output schemas (FR20)
 - [docs/epics.md](docs/epics.md) — Epics and stories roadmap
 - [docs/product-brief.md](docs/product-brief.md) — Problem statement, target users, success criteria
 - [docs/harness/glossary.md](docs/harness/glossary.md) — Dev Harness ubiquitous language

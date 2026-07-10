@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
+import { unwrapSuccess, unwrapError } from '../../../_helpers/json-envelope.js';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../../../src/cli/commands/ingest-command.js';
 import { Result } from '@core/shared/result.js';
@@ -156,8 +157,8 @@ describe('--non-interactive mode', () => {
   }, 500);
 });
 
-describe('--json mode', () => {
-  it('emits JSON to stdout with debit/credit/category fields and no idempotencyHash — all high-confidence exits 0 and commits (story-4.4a, closes #181)', async () => {
+describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conventions)', () => {
+  it('emits an enveloped document with camelCase sourceAccount, Money.toString() amount, debit/credit/category fields and no idempotencyHash — all high-confidence exits 0 and commits (story-4.4a, closes #181)', async () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -186,27 +187,31 @@ describe('--json mode', () => {
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
 
     const captured = (stdout as unknown as { captured: string }).captured;
-    const parsed = JSON.parse(captured.trim()) as {
-      source_account: string;
+    const data = unwrapSuccess<{
+      sourceAccount: string;
       summary: { duplicates: number; parseErrors: number };
-      items: Array<{ debit: string; credit: string; category: string; classification: string; idempotencyHash?: string }>;
-    };
+      items: Array<{ amount: string; debit: string; credit: string; category: string; classification: string; idempotencyHash?: string }>;
+    }>(captured);
 
-    expect(parsed.items).toHaveLength(1);
-    expect(parsed.items[0]).toHaveProperty('debit');
-    expect(parsed.items[0]).toHaveProperty('credit');
-    expect(parsed.items[0]).toHaveProperty('category', 'Groceries');
-    expect(parsed.items[0]).toHaveProperty('classification', 'expense');
-    expect(parsed.items[0]).not.toHaveProperty('idempotencyHash');
-    expect(parsed.source_account).toBe('acct-42');
-    expect(parsed.summary.duplicates).toBe(1);
-    expect(parsed.summary.parseErrors).toBe(1);
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0].amount).toMatch(/^[A-Z]{3} -?\d+\.\d{2}$/);
+    expect(data.items[0]).toHaveProperty('debit');
+    expect(data.items[0]).toHaveProperty('credit');
+    expect(data.items[0]).toHaveProperty('category', 'Groceries');
+    expect(data.items[0]).toHaveProperty('classification', 'expense');
+    expect(data.items[0]).not.toHaveProperty('idempotencyHash');
+    expect(data.sourceAccount).toBe('acct-42');
+    expect(data.summary.duplicates).toBe(1);
+    expect(data.summary.parseErrors).toBe(1);
     expect(exitCodes).toContain(0);
     // fails if: --json alone (nonInteractive: false) fails to route through commitBatch too
     expect(transactionRepository.saveBatch).toHaveBeenCalledOnce();
+    // fails if a snake_case field survives the conventions normalization
+    expect(captured).not.toContain('source_account');
+    expect(captured).not.toContain('amount_cents');
   });
 
-  it('exits 2 with lowConfidence list when low-confidence items present, no commit (story-4.4a guard regression pin)', async () => {
+  it('exits 2 with a NEEDS_REVIEW envelope on the final stderr line when low-confidence items present, no commit (story-4.4a guard regression pin; story-4.4b moves the payload off stdout)', async () => {
     const outcomes = [makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
@@ -234,21 +239,18 @@ describe('--json mode', () => {
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
 
-    const captured = (stdout as unknown as { captured: string }).captured;
-    const parsed = JSON.parse(captured.trim()) as {
-      source_account: string;
-      summary: { duplicates: number; parseErrors: number };
-      lowConfidence: string[];
-      items: unknown[];
-    };
+    expect((stdout as unknown as { captured: string }).captured).toBe('');
+
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('NEEDS_REVIEW');
+    const details = error.details as { sourceAccount: string; summary: { duplicates: number; parseErrors: number }; lowConfidence: string[] };
 
     expect(exitCodes).toContain(2);
-    expect(parsed.lowConfidence).toHaveLength(1);
-    expect(parsed.lowConfidence[0]).toBe('tx-UBER TRIP');
-    expect(parsed.items).toHaveLength(0);
-    expect(parsed.source_account).toBe('acct-77');
-    expect(parsed.summary.duplicates).toBe(2);
-    expect(parsed.summary.parseErrors).toBe(2);
+    expect(details.lowConfidence).toHaveLength(1);
+    expect(details.lowConfidence[0]).toBe('tx-UBER TRIP');
+    expect(details.sourceAccount).toBe('acct-77');
+    expect(details.summary.duplicates).toBe(2);
+    expect(details.summary.parseErrors).toBe(2);
     // fails if: the lowConfidence.length > 0 guard is removed or the commit is hoisted above it
     expect(transactionRepository.saveBatch).not.toHaveBeenCalled();
   });

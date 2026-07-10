@@ -22,6 +22,7 @@ import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { Result } from '../../../src/core/shared/result.js';
+import { payloadFrom, unwrapError } from '../../_helpers/json-envelope.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,10 +172,14 @@ Then('stderr contains no {string} lines', function (state: IngestWorld, text: st
   expect(state.lastResult!.stderr).not.toContain(text);
 });
 
+// story-4.4b: the JSON payload lives under the envelope's `data` on success, or
+// under the final stderr line's `error.details` on a NEEDS_REVIEW/failure path —
+// payloadFrom picks the right stream so these dotted-path steps work either way.
+
 Then('the JSON payload\'s {string} equals {int}', function (state: IngestWorld, fieldPath: string, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const payload = payloadFrom(state.lastResult!);
   const parts = fieldPath.split('.');
-  let value: unknown = json;
+  let value: unknown = payload;
   for (const part of parts) {
     value = (value as Record<string, unknown>)[part];
   }
@@ -182,9 +187,9 @@ Then('the JSON payload\'s {string} equals {int}', function (state: IngestWorld, 
 });
 
 Then('the JSON payload\'s {string} array length equals {int}', function (state: IngestWorld, fieldPath: string, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const payload = payloadFrom(state.lastResult!);
   const parts = fieldPath.split('.');
-  let value: unknown = json;
+  let value: unknown = payload;
   for (const part of parts) {
     value = (value as Record<string, unknown>)[part];
   }
@@ -193,9 +198,9 @@ Then('the JSON payload\'s {string} array length equals {int}', function (state: 
 });
 
 Then('the JSON payload\'s {string} has {string} and {string} fields populated', function (state: IngestWorld, jsonPath: string, field1: string, field2: string) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
+  const payload = payloadFrom(state.lastResult!);
   const parts = jsonPath.split('.');
-  let value: unknown = json;
+  let value: unknown = payload;
   for (const part of parts) {
     if (part.endsWith(']')) {
       const bracket = part.indexOf('[');
@@ -213,21 +218,58 @@ Then('the JSON payload\'s {string} has {string} and {string} fields populated', 
   expect(typeof obj[field2]).toBe('string');
 });
 
-Then('the JSON payload\'s {string} array is empty', function (state: IngestWorld, fieldPath: string) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
-  const parts = fieldPath.split('.');
-  let value: unknown = json;
-  for (const part of parts) {
-    value = (value as Record<string, unknown>)[part];
-  }
-  expect(Array.isArray(value)).toBe(true);
-  expect((value as unknown[]).length).toBe(0);
+Then('the JSON payload does not include a {string} key', function (state: IngestWorld, key: string) {
+  const payload = payloadFrom(state.lastResult!);
+  expect(key in payload).toBe(false);
 });
 
 Then('the JSON payload contains no partner names verbatim', function (state: IngestWorld) {
-  const raw = state.lastResult!.stdout;
+  const raw = state.lastResult!.stdout + state.lastResult!.stderr;
   expect(raw).not.toContain('Alice');
   expect(raw).not.toContain('Bob');
+});
+
+Then('stdout is empty', function (state: IngestWorld) {
+  expect(state.lastResult!.stdout).toBe('');
+});
+
+Then('the final stderr line parses as a NEEDS_REVIEW envelope', function (state: IngestWorld) {
+  const error = unwrapError(state.lastResult!.stderr);
+  expect(error.code).toBe('NEEDS_REVIEW');
+});
+
+Then('stderr contains no JSON document', function (state: IngestWorld) {
+  const lines = state.lastResult!.stderr.trim().split('\n');
+  for (const line of lines) {
+    expect(() => JSON.parse(line)).toThrow();
+  }
+});
+
+Then('the raw stdout document contains no {string} or {string} text', function (state: IngestWorld, needle1: string, needle2: string) {
+  expect(state.lastResult!.stdout).not.toContain(needle1);
+  expect(state.lastResult!.stdout).not.toContain(needle2);
+});
+
+Then('each item\'s amount matches the Money-string shape', function (state: IngestWorld) {
+  const payload = payloadFrom(state.lastResult!) as { items: Array<{ amount: string }> };
+  expect(payload.items.length).toBeGreaterThan(0);
+  for (const item of payload.items) {
+    expect(item.amount).toMatch(/^[A-Z]{3} -?\d+\.\d{2}$/);
+  }
+});
+
+Then('each item\'s occurredAt keeps its ISO 8601 offset', function (state: IngestWorld) {
+  const payload = payloadFrom(state.lastResult!) as { items: Array<{ occurredAt: string }> };
+  expect(payload.items.length).toBeGreaterThan(0);
+  for (const item of payload.items) {
+    expect(item.occurredAt).toMatch(/(?:[+-]\d{2}:\d{2}|Z)$/);
+  }
+});
+
+Then('the JSON document is a single compact line', function (state: IngestWorld) {
+  const lines = state.lastResult!.stdout.trim().split('\n');
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).not.toMatch(/\n\s+"/);
 });
 
 // Step definitions for YAML-authoritative dbPath scenarios (story-maint-11)

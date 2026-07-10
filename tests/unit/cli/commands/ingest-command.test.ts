@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeStdout } from '../../../_helpers/streams.js';
+import { unwrapSuccess } from '../../../_helpers/json-envelope.js';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps, IngestCommandOptions } from '../../../../src/cli/commands/ingest-command.js';
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
@@ -580,7 +581,8 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
 
     await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: true, json: true }, deps);
 
-    expect((JSON.parse(stdout.captured) as { summary: { total: number } }).summary.total).toBe(3);
+    const data = unwrapSuccess<{ summary: { total: number } }>(stdout.captured);
+    expect(data.summary.total).toBe(3);
     expect(exitCodes).toContain(4);
     expect(snapshotService.remove).not.toHaveBeenCalled();
     expect(stderr.captured).toContain('Commit failed (batch rolled back)');

@@ -227,8 +227,9 @@ Then('exit code is {int}', function (state: StatusWorld, code: number) {
 // Shared across feature files (quickpickle global step registry) — generic
 // envelope-discriminator check, story-4.4b. Each feature file's World names its
 // last-invocation-result field differently (statusResult/lastResult/result/
-// subprocessResult); check them in a fixed, documented order rather than
-// adding a per-file variant of this step.
+// subprocessResult carry {stdout: string}; correct.steps.ts's `stdout` is a
+// captured Writable stream with a `.captured` getter instead) — check them in
+// a fixed, documented order rather than adding a per-file variant of this step.
 Then(
   'the JSON envelope\'s command is {string} and ok is true',
   function (
@@ -237,10 +238,12 @@ Then(
       lastResult?: { stdout: string };
       result?: { stdout: string };
       subprocessResult?: { stdout: string };
+      stdout?: { captured: string };
     },
     command: string,
   ) {
-    const stdout = (state.statusResult ?? state.result ?? state.subprocessResult ?? state.lastResult)!.stdout;
+    const stdout = (state.statusResult ?? state.result ?? state.subprocessResult ?? state.lastResult)?.stdout
+      ?? state.stdout!.captured;
     const envelope = JSON.parse(stdout.trim()) as { command: string; ok: boolean };
     expect(envelope.command).toBe(command);
     expect(envelope.ok).toBe(true);

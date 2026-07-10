@@ -6,6 +6,8 @@
  *   - "mid-batch failure — ENTIRE batch rolled back, snapshot retained and intact"
  *   - "commit-failure stderr excludes idempotency_hash values (PII hygiene)"
  *   - "round-trip idempotency — second ingest of same CSV yields zero fresh"
+ *   - "Re-ingest is idempotent" (story-4.4a Scenario 3) — non-interactive/--json re-ingest,
+ *     two sequential runs against a real DB
  *
  * fails if: snapshot skipped, partial writes, hashes stored as NULL, snapshot retained
  *   after success, snapshot removed after failure, raw SQL UNIQUE error leaked to stderr,
@@ -38,6 +40,7 @@ import type { SnapshotService } from '@core/ports/snapshot-service.js';
 import type { BatchWriteOutcome } from '@core/ports/transaction-repository.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
 import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
+import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
 
 function makeNoOpConfigWriter(): ConfigWriter {
   return { appendAutoTagRules: async () => Result.ok() };
@@ -69,6 +72,7 @@ function makeRealDeps(
   snapshotOverride?: SnapshotService,
   repoOverride?: { saveBatch: IngestCommandDeps['transactionRepository']['saveBatch'] },
   recorderOverride?: DomainEventRecorder,
+  autoTagRulesOverride?: readonly AutoTagRule[],
 ): { deps: IngestCommandDeps; stdout: Writable & { captured: string }; stderr: Writable & { captured: string }; exitCodes: number[] } {
   const stdout = makeCapture();
   const stderr = makeCapture();
@@ -90,7 +94,7 @@ function makeRealDeps(
     buffers: [],
     accounts: [mainAccount],
     recurring: [],
-    autoTagRules: [],
+    autoTagRules: autoTagRulesOverride ?? [],
   };
 
   const deps: IngestCommandDeps = {
@@ -301,6 +305,49 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
     expect(stderr.captured).toContain('Commit failed (batch rolled back)');
     // The redacted form should be present
     expect(stderr.captured).toContain('<redacted>');
+
+    db.close();
+  });
+
+  it('(story-4.4a, closes #181) non-interactive/--json re-ingest is idempotent: first run commits, second run 0 new + duplicates = batch size, exit 0', async () => {
+    // fails if: the new non-interactive commit path bypasses idempotencyService.filterNew
+    // (ingest-command.ts:103-109) or commits duplicate outcomes on the second pass.
+    const autoTagRules: AutoTagRule[] = [
+      { pattern: /supermarche/i, category: 'Groceries' },
+      { pattern: /pharmacie/i, category: 'Health' },
+      { pattern: /transport fictif/i, category: 'Transport' },
+      { pattern: /mutuelle/i, category: 'Insurance' },
+      { pattern: /abonnement/i, category: 'Subscriptions' },
+    ];
+    const tmpDir = makeTmpDir();
+    const dbPath = path.join(tmpDir, 'ingest-non-interactive.db');
+    const csvPath = path.join(tmpDir, 'bpce-valid.csv');
+    fs.copyFileSync(FIXTURE_CSV, csvPath);
+
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    runMigrations(db);
+
+    const firstDeps = makeRealDeps(db, dbPath, csvPath, undefined, undefined, undefined, autoTagRules);
+    await runIngestCommand({ file: csvPath, nonInteractive: true, json: true }, firstDeps.deps);
+    expect(firstDeps.exitCodes).toContain(0);
+
+    const firstCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
+    expect(firstCount).toBe(5);
+    const firstParsed = JSON.parse(firstDeps.stdout.captured.trim()) as { summary: { total: number; lowConfidence: number } };
+    expect(firstParsed.summary.total).toBe(5);
+    expect(firstParsed.summary.lowConfidence).toBe(0);
+
+    const secondDeps = makeRealDeps(db, dbPath, csvPath, undefined, undefined, undefined, autoTagRules);
+    await runIngestCommand({ file: csvPath, nonInteractive: true, json: true }, secondDeps.deps);
+    expect(secondDeps.exitCodes).toContain(0);
+
+    const secondCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
+    expect(secondCount).toBe(5);
+    const secondParsed = JSON.parse(secondDeps.stdout.captured.trim()) as { summary: { total: number; duplicates: number } };
+    expect(secondParsed.summary.total).toBe(0);
+    expect(secondParsed.summary.duplicates).toBe(5);
 
     db.close();
   });

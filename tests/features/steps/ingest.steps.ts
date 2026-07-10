@@ -155,6 +155,13 @@ Then('stderr contains {string}', function (state: IngestWorld, text: string) {
   expect(state.lastResult!.stderr).toContain(text);
 });
 
+Then('the transactions table has {int} rows', function (state: IngestWorld, expected: number) {
+  const db = new Database(state.dbPath!);
+  const count = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
+  db.close();
+  expect(count).toBe(expected);
+});
+
 Then('stderr contains no {string} or {string} lines', function (state: IngestWorld, text1: string, text2: string) {
   expect(state.lastResult!.stderr).not.toContain(text1);
   expect(state.lastResult!.stderr).not.toContain(text2);

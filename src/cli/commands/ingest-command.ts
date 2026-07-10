@@ -13,6 +13,7 @@ import type { pickSourceAccount as PickSourceAccountFn } from '../../infra/fs/pi
 import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.js';
 import { formatSummaryTable } from '../utils/printer.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
+import { formatJsonSuccess, formatJsonError } from '../utils/json-envelope.js';
 import { suggestPattern } from '@core/ingest/pattern-suggester.js';
 import { expenseAccount } from '@core/ingest/account-names.js';
 import { Transaction, type EntryDraft } from '@core/ledger/transaction.js';
@@ -169,12 +170,13 @@ export async function runIngestCommand(
     }
   }
 
-  await commitBatch(resolvedOutcomes, account.id, { transactionRepository, snapshotService, dbPath, stderr, exitCode, domainEventRecorder });
+  await commitBatch(resolvedOutcomes, account.id, opts.json, { transactionRepository, snapshotService, dbPath, stderr, exitCode, domainEventRecorder });
 }
 
 async function commitBatch(
   outcomes: readonly BuildOutcome[],
   sourceAccount: string,
+  json: boolean,
   deps: Pick<IngestCommandDeps, 'transactionRepository' | 'snapshotService' | 'dbPath' | 'stderr' | 'exitCode' | 'domainEventRecorder'>,
 ): Promise<void> {
   const { transactionRepository, snapshotService, dbPath, stderr, exitCode, domainEventRecorder } = deps;
@@ -182,7 +184,9 @@ async function commitBatch(
 
   const snapResult = await snapshotService.create(dbPath, snapshotPath);
   if (snapResult.isFailure) {
-    writeln(stderr, `Snapshot failed: ${snapResult.error}`);
+    const message = `Snapshot failed: ${snapResult.error}`;
+    writeln(stderr, message);
+    if (json) stderr.write(formatJsonError('ingest', { code: 'SNAPSHOT_FAILURE', message }));
     exitCode(3);
     return;
   }
@@ -192,8 +196,10 @@ async function commitBatch(
     // sanitizeSqlError redacts hex-like tokens (≥32 consecutive hex chars) from
     // SQLite's raw UNIQUE/CHECK-violation messages; hashes are PII-adjacent
     // fingerprints per security-checklist.md (P2 adopt #1).
-    writeln(stderr, `Commit failed (batch rolled back): ${sanitizeSqlError(writeResult.error)}`);
+    const message = `Commit failed (batch rolled back): ${sanitizeSqlError(writeResult.error)}`;
+    writeln(stderr, message);
     writeln(stderr, `Snapshot retained at ${snapshotPath} for recovery.`);
+    if (json) stderr.write(formatJsonError('ingest', { code: 'WRITE_FAILURE', message }));
     exitCode(4);
     return;
   }
@@ -322,6 +328,25 @@ function toDuplicatesPayload(
   }));
 }
 
+function toItemsPayload(
+  built: readonly BuildOutcome[],
+): Array<{ id: string; occurredAt: string; description: string; amount: string; debit: string; credit: string; category: string; classification: string }> {
+  return built.map((o) => {
+    const debitEntry = o.transaction.entries.find((e) => e.side === 'debit');
+    const creditEntry = o.transaction.entries.find((e) => e.side === 'credit');
+    return {
+      id: o.transaction.id,
+      occurredAt: o.transaction.occurredAt,
+      description: o.transaction.description,
+      amount: debitEntry !== undefined ? debitEntry.amount.toString() : '',
+      debit: debitEntry?.account ?? '',
+      credit: creditEntry?.account ?? '',
+      category: o.category,
+      classification: o.classification,
+    };
+  });
+}
+
 async function runNonInteractive(
   opts: IngestCommandOptions,
   account: AccountConfig,
@@ -344,16 +369,18 @@ async function runNonInteractive(
     if (opts.json) {
       const lowConfidenceIds = lowConfidence.map((o) => o.transaction.id);
       const duplicatesPayload = toDuplicatesPayload(duplicates);
-      stdout.write(
-        JSON.stringify({
+      stderr.write(formatJsonError('ingest', {
+        code: 'NEEDS_REVIEW',
+        message: `${lowConfidence.length} item(s) need manual review.`,
+        suggestedAction: 'Run without --non-interactive to review them (you can define new categories inline), or re-ingest after updating accounting.yaml\'s auto-tag-rules.',
+        details: {
           file: opts.file,
-          source_account: account.id,
+          sourceAccount: account.id,
           summary: { total: built.length, autoTagged: built.length - lowConfidence.length, lowConfidence: lowConfidence.length, duplicates: duplicates.length, parseErrors: parseErrorsCount },
-          items: [],
           lowConfidence: lowConfidenceIds,
           duplicates: duplicatesPayload,
-        }) + '\n',
-      );
+        },
+      }));
     }
 
     exitCode(2);
@@ -361,34 +388,16 @@ async function runNonInteractive(
   }
 
   if (opts.json) {
-    const items = built.map((o) => {
-      const debitEntry = o.transaction.entries.find((e) => e.side === 'debit');
-      const creditEntry = o.transaction.entries.find((e) => e.side === 'credit');
-      return {
-        id: o.transaction.id,
-        occurredAt: o.transaction.occurredAt,
-        description: o.transaction.description,
-        amount_cents: debitEntry?.amount.amount ?? 0,
-        currency: debitEntry?.amount.currency ?? '',
-        debit: debitEntry?.account ?? '',
-        credit: creditEntry?.account ?? '',
-        category: o.category,
-        classification: o.classification,
-      };
-    });
-
+    const items = toItemsPayload(built);
     const duplicatesPayload = toDuplicatesPayload(duplicates);
 
-    stdout.write(
-      JSON.stringify({
-        file: opts.file,
-        source_account: account.id,
-        summary: { total: built.length, autoTagged: built.length, lowConfidence: 0, duplicates: duplicates.length, parseErrors: parseErrorsCount },
-        items,
-        lowConfidence: [],
-        duplicates: duplicatesPayload,
-      }) + '\n',
-    );
+    stdout.write(formatJsonSuccess('ingest', {
+      file: opts.file,
+      sourceAccount: account.id,
+      summary: { total: built.length, autoTagged: built.length, lowConfidence: 0, duplicates: duplicates.length, parseErrors: parseErrorsCount },
+      items,
+      duplicates: duplicatesPayload,
+    }));
   } else {
     stdout.write(formatSummaryTable(built) + '\n');
   }
@@ -398,5 +407,5 @@ async function runNonInteractive(
   // (program.ts), which halts the process synchronously — any stdout write attempted after
   // that call would be silently dropped (story-4.4a finding; verified empirically, not just
   // in the mocked exitCode of these unit tests).
-  await commitBatch(built, account.id, { ...commitDeps, stderr, exitCode });
+  await commitBatch(built, account.id, opts.json, { ...commitDeps, stderr, exitCode });
 }

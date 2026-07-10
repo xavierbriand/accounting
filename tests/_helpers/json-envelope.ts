@@ -37,17 +37,24 @@ export function unwrapSuccess<T = Record<string, unknown>>(raw: string): T {
   return envelope.data as T;
 }
 
-export function unwrapError(raw: string): JsonErrorShape {
-  const envelope = parseEnvelope(raw);
-  if (envelope.ok) throw new Error(`Expected ok:false envelope, got ok:true: ${raw}`);
-  if (envelope.error === undefined) throw new Error(`ok:false envelope missing error field: ${raw}`);
-  return envelope.error;
-}
-
 export function lastStderrLine(stderr: string): string {
   const line = lastNonEmptyLine(stderr);
   if (line === undefined) throw new Error('stderr contains no non-empty lines');
   return line;
+}
+
+/**
+ * Unwraps the error envelope from stderr. Accepts either the full captured
+ * stderr text (prose progress/warning lines may precede the envelope — the
+ * contract's "final line" rule, see docs/cli-json-contract.md) or an
+ * already-isolated single JSON line; extracts the last non-empty line either way.
+ */
+export function unwrapError(rawStderr: string): JsonErrorShape {
+  const raw = lastStderrLine(rawStderr);
+  const envelope = parseEnvelope(raw);
+  if (envelope.ok) throw new Error(`Expected ok:false envelope, got ok:true: ${raw}`);
+  if (envelope.error === undefined) throw new Error(`ok:false envelope missing error field: ${raw}`);
+  return envelope.error;
 }
 
 /**

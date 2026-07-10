@@ -93,8 +93,10 @@ describe('runExplainCommand — JSON output shape', () => {
     );
 
     expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdoutCapture.getText()) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
+    const envelope = JSON.parse(stdoutCapture.getText()) as { command: string; ok: boolean; data: Record<string, unknown> };
+    expect(envelope.command).toBe('explain');
+    expect(envelope.ok).toBe(true);
+    expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
   });
 
   it('uses --as-of over the clock, and derives thisWindow/lastWindow one calendar month apart', async () => {
@@ -114,10 +116,10 @@ describe('runExplainCommand — JSON output shape', () => {
       },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as { asOf: string; thisWindow: { from: string; to: string }; lastWindow: { from: string; to: string } };
-    expect(parsed.asOf).toBe('2026-06-28');
-    expect(parsed.thisWindow).toEqual({ from: '2026-07-01', to: '2026-07-31' });
-    expect(parsed.lastWindow).toEqual({ from: '2026-06-01', to: '2026-06-30' });
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { asOf: string; thisWindow: { from: string; to: string }; lastWindow: { from: string; to: string } } };
+    expect(envelope.data.asOf).toBe('2026-06-28');
+    expect(envelope.data.thisWindow).toEqual({ from: '2026-07-01', to: '2026-07-31' });
+    expect(envelope.data.lastWindow).toEqual({ from: '2026-06-01', to: '2026-06-30' });
   });
 
   it('falls back to the clock when --as-of is omitted', async () => {
@@ -137,11 +139,11 @@ describe('runExplainCommand — JSON output shape', () => {
       },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as { asOf: string };
-    expect(parsed.asOf).toBe('2026-06-28');
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { asOf: string } };
+    expect(envelope.data.asOf).toBe('2026-06-28');
   });
 
-  it('returns exit 1 and writes stderr (nothing structural to stdout) when the contribution query fails', async () => {
+  it('returns exit 1, nothing structural to stdout, and a final-line QUERY_FAILURE envelope on stderr when the contribution query fails (story-4.4b newly-reachable path)', async () => {
     // fails if runExplainCommand tolerates a contributionQuery failure like a calc failure (exit 0 + degraded section) instead of the unrecoverable DB-level exit 1
     const { transferCalculator } = makeRealServices();
     const stdoutCapture = makeCaptureStream();
@@ -167,6 +169,13 @@ describe('runExplainCommand — JSON output shape', () => {
     expect(exitCode).toBe(1);
     expect(stderrCapture.getText()).toContain('currency mismatch');
     expect(stdoutCapture.getText()).toBe('');
+
+    const lines = stderrCapture.getText().trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('explain');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('QUERY_FAILURE');
+    expect(envelope.error.message).toContain('currency mismatch');
   });
 
   it('never calls the last-month calculation with the same asOf as this month (silent-zero-trap guard)', async () => {
@@ -230,8 +239,8 @@ describe('runExplainCommand — JSON output shape', () => {
     );
 
     expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdoutCapture.getText()) as { variance: { error?: string; suggestedAction?: string }; followThrough: { totalActual?: string } };
-    expect(parsed.variance.suggestedAction).toContain('Vacation');
-    expect(typeof parsed.followThrough.totalActual).toBe('string');
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { variance: { error?: string; suggestedAction?: string }; followThrough: { totalActual?: string } } };
+    expect(envelope.data.variance.suggestedAction).toContain('Vacation');
+    expect(typeof envelope.data.followThrough.totalActual).toBe('string');
   });
 });

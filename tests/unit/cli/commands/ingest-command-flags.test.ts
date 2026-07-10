@@ -283,3 +283,186 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
     expect((stderr as unknown as { captured: string }).captured).toContain('ambiguous filename');
   });
 });
+
+// story-4.4b: remaining --json-reachable failure sites (source-account resolution,
+// read, parse, idempotency check, build) each gain a final-stderr-line coded error
+// envelope, ahead of the existing prose line; exit codes unchanged.
+describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
+  it('source-account resolution failure + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: vi.fn() },
+      idempotencyService: { filterNew: vi.fn() },
+      transactionBuilder: () => ({ buildAll: vi.fn() }),
+      pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
+      readFile: () => Result.ok('csv-content'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: true }, deps);
+
+    expect(exitCodes).toContain(2);
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('INVALID_ARGUMENT');
+    expect(error.message).toContain('ambiguous filename');
+  });
+
+  it('read failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: vi.fn() },
+      idempotencyService: { filterNew: vi.fn() },
+      transactionBuilder: () => ({ buildAll: vi.fn() }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.fail('ENOENT: no such file or directory'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('READ_FAILURE');
+    expect(error.message).toContain('ENOENT');
+  });
+
+  it('CSV parse failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: () => Result.fail('malformed header row') },
+      idempotencyService: { filterNew: vi.fn() },
+      transactionBuilder: () => ({ buildAll: vi.fn() }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('READ_FAILURE');
+    expect(error.message).toContain('malformed header row');
+  });
+
+  it('idempotency check failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: () => Result.ok({ items: [], errors: [] }) },
+      idempotencyService: { filterNew: () => Result.fail('hash repository unreachable') },
+      transactionBuilder: () => ({ buildAll: vi.fn() }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('QUERY_FAILURE');
+    expect(error.message).toContain('hash repository unreachable');
+  });
+
+  it('build failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: () => Result.ok({ items: [], errors: [] }) },
+      idempotencyService: { filterNew: () => Result.ok({ fresh: [], duplicates: [] }) },
+      transactionBuilder: () => ({ buildAll: () => Result.fail('unknown account in batch') }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError((stderr as unknown as { captured: string }).captured);
+    expect(error.code).toBe('QUERY_FAILURE');
+    expect(error.message).toContain('unknown account in batch');
+  });
+
+  it('non-json mode stays prose-only for all of the above (no envelope line)', async () => {
+    const { stdout, stderr } = makeStreams();
+    const exitCodes: number[] = [];
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: { parse: vi.fn() },
+      idempotencyService: { filterNew: vi.fn() },
+      transactionBuilder: () => ({ buildAll: vi.fn() }),
+      pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
+      readFile: () => Result.ok('csv-content'),
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: makeNoOpTransactionRepo(),
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/ambig.csv', nonInteractive: false, json: false }, deps);
+
+    expect(exitCodes).toContain(2);
+    expect(() => JSON.parse((stderr as unknown as { captured: string }).captured.trim())).toThrow();
+  });
+});

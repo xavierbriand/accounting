@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeStdout } from '../../../_helpers/streams.js';
-import { unwrapSuccess } from '../../../_helpers/json-envelope.js';
+import { unwrapSuccess, unwrapError } from '../../../_helpers/json-envelope.js';
 import { runIngestCommand } from '../../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps, IngestCommandOptions } from '../../../../src/cli/commands/ingest-command.js';
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
@@ -563,11 +563,11 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
     });
   });
 
-  it('(h) --json commit failure: success-shaped JSON already on stdout, exit 4 + stderr carry the truth (story-4.4a)', async () => {
+  it('(h) --json commit failure: success-shaped JSON already on stdout, exit 4 + a WRITE_FAILURE envelope on the final stderr line (story-4.4a; story-4.4b flip adds the envelope pin)', async () => {
     // fails if: the emit-then-commit order changes (stdout JSON would vanish entirely —
     //   commitBatch's exitCode(0) is process.exit at the composition root, so nothing
     //   prints after it), or the failed commit stops being detectable by a scripted
-    //   consumer via exit 4 + "rolled back" on stderr
+    //   consumer via exit 4 + "rolled back" on stderr / a coded envelope
     const snapshotService: SnapshotService = {
       create: vi.fn().mockResolvedValue(Result.ok()),
       restore: vi.fn().mockResolvedValue(Result.ok()),
@@ -586,6 +586,9 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
     expect(exitCodes).toContain(4);
     expect(snapshotService.remove).not.toHaveBeenCalled();
     expect(stderr.captured).toContain('Commit failed (batch rolled back)');
+
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('WRITE_FAILURE');
   });
 });
 

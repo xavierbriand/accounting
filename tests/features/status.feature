@@ -4,6 +4,7 @@ Feature: accounting status CLI command (Story 3.5)
     Given a status config with splits Alex 0.6 Sam 0.4, buffer Vacation target 1200 balance 600 targetDate "2026-12-01", recurring Netflix monthly 12.99 EUR validFrom "2026-01-15"
     When I run the status command with --json --as-of 2026-04-29
     Then exit code is 0
+    And the JSON envelope's command is "status" and ok is true
     And stdout is valid JSON with keys asOf, window, buffers, transfer, forecast
     And asOf is "2026-04-29"
     And window.from is "2026-05-01" and window.to is "2026-05-31"
@@ -11,6 +12,8 @@ Feature: accounting status CLI command (Story 3.5)
     And transfer.totalRequired and transfer.perPartner.Alex and transfer.perPartner.Sam are present and non-empty
     And forecast contains one entry with date "2026-05-15" and name "Netflix"
     # fails if any required key is missing, the window is mis-computed, or the JSON shape drifts.
+    # story-4.4b: keys live under the envelope's `data` — the "stdout is valid JSON with
+    # keys..." step below unwraps `data` before checking.
 
   Scenario: default human output renders three labeled sections with Conversational-CFO prose
     Given a status config with splits Alex 0.6 Sam 0.4, buffer Vacation target 1200 balance 600 targetDate "2026-12-01", recurring Netflix monthly 12.99 EUR validFrom "2026-01-15"

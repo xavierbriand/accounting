@@ -1,5 +1,5 @@
 /**
- * Property tests for formatStatusJson (Story 3.5, Slice 4 RED).
+ * Property tests for formatStatusJson (Story 3.5, Slice 4 RED; enveloped in story-4.4b Slice 1).
  *
  * Property test sanity checks (Story 3.3 retro action B):
  * - Property #1: if a key is removed from the output object, the arrayContaining check fails.
@@ -8,6 +8,10 @@
  *   Object.keys check would see an empty object vs expected non-empty partners.
  * - Property #2: if either formatter used wrong cents or skipped the amount entirely,
  *   the parseInt comparison would produce different numbers and the assertion would fail.
+ *
+ * story-4.4b: formatStatusJson now returns the global envelope
+ * ({command: "status", ok: true, data: {...}}) — every assertion below unwraps `data`
+ * before inspecting the report shape.
  */
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
@@ -94,15 +98,50 @@ function makeSuccessfulReport(opts: {
   };
 }
 
+interface StatusJsonDoc {
+  asOf: string;
+  window: { from: string; to: string };
+  buffers: Array<{ name: string; balance: string; target: string; cap: null | string; status: string; targetDate: string }>;
+  transfer: {
+    totalRequired?: string;
+    perPartner?: Record<string, string>;
+    lineItems?: Array<{ perPartnerSplit: Record<string, string> }>;
+  };
+  forecast: Array<Record<string, unknown>>;
+}
+
+function parseEnvelope(json: string): { command: string; ok: boolean; data: StatusJsonDoc } {
+  return JSON.parse(json) as { command: string; ok: boolean; data: StatusJsonDoc };
+}
+
+// ─── Envelope shape ────────────────────────────────────────────────────────────
+
+describe('formatStatusJson — global envelope (story-4.4b)', () => {
+  it('wraps the report in {command: "status", ok: true, data} as a single compact line', () => {
+    const report = makeSuccessfulReport();
+    const json = formatStatusJson(report);
+
+    expect(json.endsWith('\n')).toBe(true);
+    expect(json.trim().split('\n')).toHaveLength(1);
+
+    const envelope = parseEnvelope(json);
+    expect(envelope.command).toBe('status');
+    expect(envelope.ok).toBe(true);
+    expect(Object.keys(envelope.data)).toEqual(
+      expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']),
+    );
+  });
+});
+
 // ─── Property #1: JSON output shape stability ─────────────────────────────────
 
 describe('Property #1: JSON output shape stability', () => {
-  it('JSON.parse output has all required top-level keys', () => {
+  it('JSON.parse output has all required top-level keys under data', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
-    const parsed = JSON.parse(json) as Record<string, unknown>;
+    const { data } = parseEnvelope(json);
 
-    expect(Object.keys(parsed)).toEqual(
+    expect(Object.keys(data)).toEqual(
       expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']),
     );
   });
@@ -110,14 +149,12 @@ describe('Property #1: JSON output shape stability', () => {
   it('buffers array is present and has correct fields', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
-    const parsed = JSON.parse(json) as {
-      buffers: Array<{ name: string; balance: string; target: string; cap: null | string; status: string; targetDate: string }>;
-    };
+    const { data } = parseEnvelope(json);
 
-    expect(parsed.buffers).toHaveLength(1);
-    expect(parsed.buffers[0].name).toBe('Vacation');
-    expect(parsed.buffers[0].cap).toBeNull();
-    expect(parsed.buffers[0].balance).toMatch(/^EUR/);
+    expect(data.buffers).toHaveLength(1);
+    expect(data.buffers[0].name).toBe('Vacation');
+    expect(data.buffers[0].cap).toBeNull();
+    expect(data.buffers[0].balance).toMatch(/^EUR/);
   });
 
   it('cap field serializes as Money.toString() when defined (R8 mock-diversity, non-default cap branch)', () => {
@@ -134,48 +171,40 @@ describe('Property #1: JSON output shape stability', () => {
       }],
     };
     const json = formatStatusJson(withCap);
-    const parsed = JSON.parse(json) as { buffers: Array<{ cap: string | null; status: string }> };
-    expect(parsed.buffers[0].cap).toBe('EUR 1000.00');
-    expect(parsed.buffers[0].status).toBe('on-target');
+    const { data } = parseEnvelope(json);
+    expect(data.buffers[0].cap).toBe('EUR 1000.00');
+    expect(data.buffers[0].status).toBe('on-target');
   });
 
   it('transfer.perPartner is a plain object with non-empty values (not {} from Map)', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
-    const parsed = JSON.parse(json) as {
-      transfer: { perPartner: Record<string, string> };
-    };
+    const { data } = parseEnvelope(json);
 
-    expect(Object.keys(parsed.transfer.perPartner)).toContain('Alex');
-    expect(Object.keys(parsed.transfer.perPartner)).toContain('Sam');
-    expect(parsed.transfer.perPartner['Alex']).toMatch(/^EUR \d/);
-    expect(parsed.transfer.perPartner['Sam']).toMatch(/^EUR \d/);
+    expect(Object.keys(data.transfer.perPartner!)).toContain('Alex');
+    expect(Object.keys(data.transfer.perPartner!)).toContain('Sam');
+    expect(data.transfer.perPartner!['Alex']).toMatch(/^EUR \d/);
+    expect(data.transfer.perPartner!['Sam']).toMatch(/^EUR \d/);
   });
 
   it('lineItem.perPartnerSplit is a plain object (not {} from Map)', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
-    const parsed = JSON.parse(json) as {
-      transfer: {
-        lineItems: Array<{ perPartnerSplit: Record<string, string> }>;
-      };
-    };
+    const { data } = parseEnvelope(json);
 
-    expect(parsed.transfer.lineItems).toHaveLength(1);
-    expect(Object.keys(parsed.transfer.lineItems[0].perPartnerSplit)).toContain('Alex');
-    expect(Object.keys(parsed.transfer.lineItems[0].perPartnerSplit)).toContain('Sam');
+    expect(data.transfer.lineItems).toHaveLength(1);
+    expect(Object.keys(data.transfer.lineItems![0].perPartnerSplit)).toContain('Alex');
+    expect(Object.keys(data.transfer.lineItems![0].perPartnerSplit)).toContain('Sam');
   });
 
   it('forecast entries use "date" field, not "expectedDate"', () => {
     const report = makeSuccessfulReport();
     const json = formatStatusJson(report);
-    const parsed = JSON.parse(json) as {
-      forecast: Array<Record<string, unknown>>;
-    };
+    const { data } = parseEnvelope(json);
 
-    expect(parsed.forecast).toHaveLength(1);
-    expect('date' in parsed.forecast[0]).toBe(true);
-    expect('expectedDate' in parsed.forecast[0]).toBe(false);
+    expect(data.forecast).toHaveLength(1);
+    expect('date' in data.forecast[0]).toBe(true);
+    expect('expectedDate' in data.forecast[0]).toBe(false);
   });
 
   it('fast-check: always produces all top-level keys with non-empty buffers entry', () => {
@@ -216,14 +245,14 @@ describe('Property #1: JSON output shape stability', () => {
           };
 
           const json = formatStatusJson(report);
-          const parsed = JSON.parse(json) as Record<string, unknown>;
+          const { data } = parseEnvelope(json);
 
-          expect(Object.keys(parsed)).toEqual(
+          expect(Object.keys(data)).toEqual(
             expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']),
           );
 
           // Non-empty buffers entry exercises the serialization path
-          const buffersArr = parsed.buffers as Array<{ name: string }>;
+          const buffersArr = data.buffers;
           expect(buffersArr.length).toBeGreaterThan(0);
           buffersArr.forEach(b => expect(typeof b.name).toBe('string'));
         },
@@ -244,15 +273,13 @@ describe('Property #2: JSON ↔ human total agreement', () => {
         const report = makeSuccessfulReport({ totalCents });
 
         const jsonStr = formatStatusJson(report);
-        const parsed = JSON.parse(jsonStr) as {
-          transfer: { totalRequired: string };
-        };
+        const { data } = parseEnvelope(jsonStr);
 
         const humanStr = formatStatusHuman(report);
 
         // Per plan: parse cents via integer-string strip, NOT parseFloat × 100 (which has
         // floating-point round-trip risk for values like 1234.575 → 123457.49999... → 123457).
-        const jsonMoneyStr = parsed.transfer.totalRequired;
+        const jsonMoneyStr = data.transfer.totalRequired!;
         const jsonCents = parseInt(jsonMoneyStr.replace(/\D/g, ''), 10);
 
         const totalLine = humanStr.split('\n').find(line => line.includes('Total transfer for'));

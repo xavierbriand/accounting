@@ -224,67 +224,81 @@ Then('exit code is {int}', function (state: StatusWorld, code: number) {
   expect(state.statusResult!.exitCode).toBe(code);
 });
 
+// Shared across feature files (quickpickle global step registry) — generic
+// envelope-discriminator check, story-4.4b.
+Then(
+  'the JSON envelope\'s command is {string} and ok is true',
+  function (state: { statusResult?: { stdout: string }; lastResult?: { stdout: string } }, command: string) {
+    const stdout = state.statusResult?.stdout ?? state.lastResult!.stdout;
+    const envelope = JSON.parse(stdout.trim()) as { command: string; ok: boolean };
+    expect(envelope.command).toBe(command);
+    expect(envelope.ok).toBe(true);
+  },
+);
+
 Then(
   'stdout is valid JSON with keys asOf, window, buffers, transfer, forecast',
   function (state: StatusWorld) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
+    const envelope = JSON.parse(state.statusResult!.stdout) as { data: Record<string, unknown> };
+    expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
   },
 );
 
 Then('asOf is {string}', function (state: StatusWorld, expected: string) {
-  const parsed = JSON.parse(state.statusResult!.stdout) as { asOf: string };
-  expect(parsed.asOf).toBe(expected);
+  const envelope = JSON.parse(state.statusResult!.stdout) as { data: { asOf: string } };
+  expect(envelope.data.asOf).toBe(expected);
 });
 
 Then(
   'window.from is {string} and window.to is {string}',
   function (state: StatusWorld, expectedFrom: string, expectedTo: string) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as {
-      window: { from: string; to: string };
+    const envelope = JSON.parse(state.statusResult!.stdout) as {
+      data: { window: { from: string; to: string } };
     };
-    expect(parsed.window.from).toBe(expectedFrom);
-    expect(parsed.window.to).toBe(expectedTo);
+    expect(envelope.data.window.from).toBe(expectedFrom);
+    expect(envelope.data.window.to).toBe(expectedTo);
   },
 );
 
 Then(
   'buffers has one entry with name {string} and status {string}',
   function (state: StatusWorld, name: string, status: string) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as {
-      buffers: Array<{ name: string; status: string }>;
+    const envelope = JSON.parse(state.statusResult!.stdout) as {
+      data: { buffers: Array<{ name: string; status: string }> };
     };
-    expect(parsed.buffers).toHaveLength(1);
-    expect(parsed.buffers[0].name).toBe(name);
-    expect(parsed.buffers[0].status).toBe(status);
+    expect(envelope.data.buffers).toHaveLength(1);
+    expect(envelope.data.buffers[0].name).toBe(name);
+    expect(envelope.data.buffers[0].status).toBe(status);
   },
 );
 
 Then(
   'transfer.totalRequired and transfer.perPartner.Alex and transfer.perPartner.Sam are present and non-empty',
   function (state: StatusWorld) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as {
-      transfer: {
-        totalRequired?: string;
-        perPartner?: { Alex?: string; Sam?: string };
+    const envelope = JSON.parse(state.statusResult!.stdout) as {
+      data: {
+        transfer: {
+          totalRequired?: string;
+          perPartner?: { Alex?: string; Sam?: string };
+        };
       };
     };
-    expect(typeof parsed.transfer.totalRequired).toBe('string');
-    expect(parsed.transfer.totalRequired!.length).toBeGreaterThan(0);
-    expect(typeof parsed.transfer.perPartner?.Alex).toBe('string');
-    expect(typeof parsed.transfer.perPartner?.Sam).toBe('string');
+    expect(typeof envelope.data.transfer.totalRequired).toBe('string');
+    expect(envelope.data.transfer.totalRequired!.length).toBeGreaterThan(0);
+    expect(typeof envelope.data.transfer.perPartner?.Alex).toBe('string');
+    expect(typeof envelope.data.transfer.perPartner?.Sam).toBe('string');
   },
 );
 
 Then(
   'forecast contains one entry with date {string} and name {string}',
   function (state: StatusWorld, date: string, name: string) {
-    const parsed = JSON.parse(state.statusResult!.stdout) as {
-      forecast: Array<{ date: string; name: string }>;
+    const envelope = JSON.parse(state.statusResult!.stdout) as {
+      data: { forecast: Array<{ date: string; name: string }> };
     };
-    expect(parsed.forecast).toHaveLength(1);
-    expect(parsed.forecast[0].date).toBe(date);
-    expect(parsed.forecast[0].name).toBe(name);
+    expect(envelope.data.forecast).toHaveLength(1);
+    expect(envelope.data.forecast[0].date).toBe(date);
+    expect(envelope.data.forecast[0].name).toBe(name);
   },
 );
 

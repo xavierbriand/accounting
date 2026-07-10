@@ -106,8 +106,8 @@ function makeRealServices(opts: {
 
 // ─── Structural report tests ───────────────────────────────────────────────────
 
-describe('runStatusCommand — JSON output shape', () => {
-  it('returns exit code 0 and writes valid JSON with all required top-level keys', async () => {
+describe('runStatusCommand — JSON output shape (story-4.4b: enveloped)', () => {
+  it('returns exit code 0, wraps in {command: "status", ok: true, data}, and data has all required keys', async () => {
     const services = makeRealServices();
     const stdoutCapture = makeCaptureStream();
     const stderrCapture = makeCaptureStream();
@@ -123,9 +123,12 @@ describe('runStatusCommand — JSON output shape', () => {
     );
 
     expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdoutCapture.getText()) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
-    expect(Object.keys(parsed)).toHaveLength(5);
+    const envelope = JSON.parse(stdoutCapture.getText()) as { command: string; ok: boolean; data: Record<string, unknown> };
+    expect(envelope.command).toBe('status');
+    expect(envelope.ok).toBe(true);
+    expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
+    expect(Object.keys(envelope.data)).toHaveLength(5);
+    expect(stderrCapture.getText()).toBe('');
   });
 
   it('sets asOf from the --as-of option', async () => {
@@ -137,8 +140,8 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => 'wrong-date', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as { asOf: string };
-    expect(parsed.asOf).toBe('2026-04-29');
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { asOf: string } };
+    expect(envelope.data.asOf).toBe('2026-04-29');
   });
 
   it('computes default window from asOf: May when asOf is 2026-04-29', async () => {
@@ -150,9 +153,9 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as { window: { from: string; to: string } };
-    expect(parsed.window.from).toBe('2026-05-01');
-    expect(parsed.window.to).toBe('2026-05-31');
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { window: { from: string; to: string } } };
+    expect(envelope.data.window.from).toBe('2026-05-01');
+    expect(envelope.data.window.to).toBe('2026-05-31');
   });
 
   it('respects --from / --to overrides', async () => {
@@ -164,12 +167,13 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as { window: { from: string; to: string } };
-    expect(parsed.window.from).toBe('2026-07-01');
-    expect(parsed.window.to).toBe('2026-09-30');
+    const envelope = JSON.parse(stdoutCapture.getText()) as { data: { window: { from: string; to: string } } };
+    expect(envelope.data.window.from).toBe('2026-07-01');
+    expect(envelope.data.window.to).toBe('2026-09-30');
   });
 
-  it('returns exit code 2 for invalid --as-of format', async () => {
+  it('returns exit code 2 for invalid --as-of format, prose stays, and a final-line INVALID_ARGUMENT envelope is added under --json', async () => {
+    // story-4.4b newly-reachable path (R10): status/explain failure envelopes.
     const services = makeRealServices();
     const stderrCapture = makeCaptureStream();
 
@@ -181,6 +185,26 @@ describe('runStatusCommand — JSON output shape', () => {
     expect(exitCode).toBe(2);
     expect(stderrCapture.getText()).toContain('must be ISO 8601');
     expect(stderrCapture.getText()).toContain('got');
+
+    const lines = stderrCapture.getText().trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('status');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('INVALID_ARGUMENT');
+    expect(envelope.error.message).toContain('must be ISO 8601');
+  });
+
+  it('validation failure under non-json mode stays prose-only (no envelope line)', async () => {
+    const services = makeRealServices();
+    const stderrCapture = makeCaptureStream();
+
+    const exitCode = await runStatusCommand(
+      { asOf: 'not-a-date', json: false },
+      { ...services, clock: () => '2026-04-29', stdout: makeCaptureStream().stream, stderr: stderrCapture.stream },
+    );
+
+    expect(exitCode).toBe(2);
+    expect(() => JSON.parse(stderrCapture.getText().trim())).toThrow();
   });
 
   it('returns exit code 2 when from > to', async () => {
@@ -206,11 +230,11 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      buffers: Array<{ name: string; balance: string; target: string; cap: null | string; status: string; targetDate: string }>;
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { buffers: Array<{ name: string; balance: string; target: string; cap: null | string; status: string; targetDate: string }> };
     };
-    expect(parsed.buffers).toHaveLength(1);
-    const buf = parsed.buffers[0];
+    expect(envelope.data.buffers).toHaveLength(1);
+    const buf = envelope.data.buffers[0];
     expect(buf.name).toBe('Vacation');
     expect(buf.balance).toMatch(/^EUR \d+\.\d{2}$/);
     expect(buf.target).toMatch(/^EUR \d+\.\d{2}$/);
@@ -228,12 +252,12 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      transfer: { perPartner: Record<string, string> };
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { transfer: { perPartner: Record<string, string> } };
     };
-    expect(Object.keys(parsed.transfer.perPartner)).toEqual(expect.arrayContaining(['Alex', 'Sam']));
-    expect(parsed.transfer.perPartner['Alex']).toMatch(/^EUR/);
-    expect(parsed.transfer.perPartner['Sam']).toMatch(/^EUR/);
+    expect(Object.keys(envelope.data.transfer.perPartner)).toEqual(expect.arrayContaining(['Alex', 'Sam']));
+    expect(envelope.data.transfer.perPartner['Alex']).toMatch(/^EUR/);
+    expect(envelope.data.transfer.perPartner['Sam']).toMatch(/^EUR/);
   });
 
   it('uses date field (not expectedDate) for forecast entries in JSON', async () => {
@@ -245,11 +269,11 @@ describe('runStatusCommand — JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      forecast: Array<Record<string, unknown>>;
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { forecast: Array<Record<string, unknown>> };
     };
-    expect(parsed.forecast.length).toBeGreaterThan(0);
-    const first = parsed.forecast[0];
+    expect(envelope.data.forecast.length).toBeGreaterThan(0);
+    const first = envelope.data.forecast[0];
     expect('date' in first).toBe(true);
     expect('expectedDate' in first).toBe(false);
   });

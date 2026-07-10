@@ -53,16 +53,40 @@ Feature: Define autotag rules from a CSV before ingest (categorize command)
     And accounting.yaml is byte-identical to the original
     # fails if --non-interactive silently writes or exits 0 (guards CI mode invariant).
 
+  Scenario: --non-interactive + --json errors with a NEEDS_REVIEW envelope (story-4.4b newly-reachable path)
+    Given a fresh accounting.yaml with no autoTagRules entry in a temp dir
+    And a BPCE CSV with two rows for "RECURRING A" and two rows for "RECURRING B"
+    When I run categorize with --non-interactive and --json
+    Then the process exits with code 2
+    And stdout is empty
+    And the final categorize stderr line parses as a NEEDS_REVIEW envelope
+    And accounting.yaml is byte-identical to the original
+    # fails if the pending-groups guard stays prose-only instead of also emitting the
+    # coded envelope under --json (was: prose only).
+
   Scenario: --json summary shape with multiple rules and a user-skipped group
     Given a fresh accounting.yaml with no autoTagRules entry in a temp dir
     And a BPCE CSV with three distinct recurring merchants
     When I run categorize with --json and a script that remembers two rules and skips the third
     Then the process exits with code 0
+    And the JSON envelope's command is "categorize" and ok is true
     And stdout is valid JSON
     And the JSON summary.candidateGroups equals 3
     And the JSON summary.rulesAdded equals 2
     And the JSON summary.rulesSkippedByUser equals 1
     And the JSON rules array has 2 entries
+    And the JSON summary does not include a "rulesSkippedAsDuplicate" key
     # fails if the JSON shape regresses or collapses pluralisation (guards machine contract +
     # R8 mock-diversity invariant — non-default fixture exercises rulesSkippedByUser > 0
-    # and a multi-rule rules array).
+    # and a multi-rule rules array). story-4.4b finding 9: the hardcoded-always-0
+    # rulesSkippedAsDuplicate field is dropped.
+
+  Scenario: --json with zero candidate groups emits a success envelope on stdout (story-4.4b finding 4)
+    Given an accounting.yaml whose autoTagRules cover "uber" and "altima" in a temp dir
+    And a BPCE CSV with two rows for "UBER FRANCE" and two rows for "ALTIMA COURTAGE"
+    When I run categorize with --json and an empty scripted-prompts script
+    Then the process exits with code 0
+    And the JSON envelope's command is "categorize" and ok is true
+    And the JSON summary.candidateGroups equals 0
+    # fails if the zero-groups guard returns before writing stdout under --json (was:
+    # nothing written even with --json).

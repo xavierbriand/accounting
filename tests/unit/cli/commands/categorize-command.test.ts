@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
+import { unwrapSuccess, unwrapError } from '../../../_helpers/json-envelope.js';
 import { runCategorizeCommand } from '../../../../src/cli/commands/categorize-command.js';
 import type { CategorizeCommandOptions, CategorizeCommandDeps } from '../../../../src/cli/commands/categorize-command.js';
 import type { InteractivePrompter } from '../../../../src/cli/utils/interactive.js';
@@ -130,6 +131,57 @@ describe('runCategorizeCommand — --non-interactive bail', () => {
 
     expect(exitCodes).toContain(0);
   });
+
+  it('exits 2 with a NEEDS_REVIEW envelope on the final stderr line when groups exist, --non-interactive, --json (story-4.4b newly-reachable path)', async () => {
+    const { deps, stdout, stderr, exitCodes } = makeBaseDeps();
+
+    await runCategorizeCommand({ ...baseOpts, nonInteractive: true, json: true }, deps);
+
+    expect(exitCodes).toContain(2);
+    expect(stdout.captured).toBe('');
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('NEEDS_REVIEW');
+    expect(deps.configWriter.appendAutoTagRules).not.toHaveBeenCalled();
+  });
+});
+
+// ---- --json zero-groups success envelope (story-4.4b finding 4) ----
+
+describe('runCategorizeCommand — --json zero-groups success envelope (story-4.4b finding 4)', () => {
+  it('writes a success envelope to stdout when zero candidate groups exist under --json (was: nothing)', async () => {
+    // fails if categorize-command.ts's zero-groups guard returns before writing stdout
+    const configWithRules: AppConfig = {
+      ...baseConfig,
+      autoTagRules: [
+        { pattern: /merchant a/i, category: 'Cat1' },
+        { pattern: /merchant b/i, category: 'Cat2' },
+      ],
+    };
+    const { deps, stdout, exitCodes } = makeBaseDeps({ config: configWithRules });
+
+    await runCategorizeCommand({ ...baseOpts, json: true }, deps);
+
+    expect(exitCodes).toContain(0);
+    const data = unwrapSuccess<{ summary: { candidateGroups: number } }>(stdout.captured);
+    expect(data.summary.candidateGroups).toBe(0);
+  });
+
+  it('does not write to stdout under non-json mode (existing "0 rules added" stderr prose only)', async () => {
+    const configWithRules: AppConfig = {
+      ...baseConfig,
+      autoTagRules: [
+        { pattern: /merchant a/i, category: 'Cat1' },
+        { pattern: /merchant b/i, category: 'Cat2' },
+      ],
+    };
+    const { deps, stdout, stderr, exitCodes } = makeBaseDeps({ config: configWithRules });
+
+    await runCategorizeCommand({ ...baseOpts, json: false }, deps);
+
+    expect(exitCodes).toContain(0);
+    expect(stdout.captured).toBe('');
+    expect(stderr.captured).toContain('0 rules added');
+  });
 });
 
 // ---- --json shape ----
@@ -183,19 +235,20 @@ describe('runCategorizeCommand — --json summary shape (R8 mock diversity)', ()
     await runCategorizeCommand({ ...baseOpts, json: true }, deps);
 
     expect(exitCodes).toContain(0);
-    const json = JSON.parse(stdout.captured.trim()) as Record<string, unknown>;
-    const summary = json['summary'] as Record<string, unknown>;
+    const data = unwrapSuccess<Record<string, unknown>>(stdout.captured);
+    const summary = data['summary'] as Record<string, unknown>;
 
     expect(summary['candidateGroups']).toBe(3);
     expect(summary['rulesAdded']).toBe(2);
     expect(summary['rulesSkippedByUser']).toBe(1);
-    expect(summary['rulesSkippedAsDuplicate']).toBe(0);
+    // story-4.4b finding 9: the hardcoded-always-0 rulesSkippedAsDuplicate field is dropped.
+    expect('rulesSkippedAsDuplicate' in summary).toBe(false);
 
-    const rules = json['rules'] as Array<Record<string, string>>;
+    const rules = data['rules'] as Array<Record<string, string>>;
     expect(rules).toHaveLength(2);
     expect(rules[0]).toHaveProperty('category');
     expect(rules[0]).toHaveProperty('pattern');
-    expect(json['file']).toBe('/tmp/X_2026.csv');
+    expect(data['file']).toBe('/tmp/X_2026.csv');
   });
 });
 
@@ -270,6 +323,77 @@ describe('runCategorizeCommand — pickSourceAccount failure', () => {
   });
 });
 
+// story-4.4b: categorize shares ingest's read/parse/source-account resolution logic —
+// same failure discipline (a coded envelope on the final stderr line under --json).
+describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4b)', () => {
+  it('pickSourceAccount failure + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    const { deps, exitCodes, stderr } = makeBaseDeps({
+      pickSourceAccount: () => Result.fail('no account configured for this filename'),
+    });
+
+    await runCategorizeCommand({ ...baseOpts, json: true }, deps);
+
+    expect(exitCodes).toContain(2);
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('INVALID_ARGUMENT');
+    expect(error.message).toContain('no account configured for this filename');
+  });
+
+  it('readFile failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    const { deps, exitCodes, stderr } = makeBaseDeps({
+      readFile: () => Result.fail('ENOENT: no such file or directory'),
+    });
+
+    await runCategorizeCommand({ ...baseOpts, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('READ_FAILURE');
+  });
+
+  it('CSV parse failure + --json: final stderr line is a READ_FAILURE envelope', async () => {
+    const { deps, exitCodes, stderr } = makeBaseDeps({
+      csvParser: { parse: () => Result.fail('malformed header row') },
+    });
+
+    await runCategorizeCommand({ ...baseOpts, json: true }, deps);
+
+    expect(exitCodes).toContain(1);
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('READ_FAILURE');
+    expect(error.message).toContain('malformed header row');
+  });
+
+  it('configWriter failure + --json: final stderr line is a CONFIG_WRITE_FAILURE envelope', async () => {
+    const configWriter: ConfigWriter = {
+      appendAutoTagRules: vi.fn().mockResolvedValue(Result.fail({ kind: 'mtime-race' as const })),
+    };
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),
+      confirmBatch: vi.fn(),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'merchant' }),
+    };
+    const { deps, exitCodes, stderr } = makeBaseDeps({ configWriter, prompt: prompter });
+
+    await runCategorizeCommand({ ...baseOpts, json: true }, deps);
+
+    expect(exitCodes).toContain(5);
+    const error = unwrapError(stderr.captured);
+    expect(error.code).toBe('CONFIG_WRITE_FAILURE');
+  });
+
+  it('non-json mode stays prose-only (no envelope line)', async () => {
+    const { deps, exitCodes, stderr } = makeBaseDeps({
+      pickSourceAccount: () => Result.fail('no account configured for this filename'),
+    });
+
+    await runCategorizeCommand({ ...baseOpts, json: false }, deps);
+
+    expect(exitCodes).toContain(2);
+    expect(() => JSON.parse(stderr.captured.trim())).toThrow();
+  });
+});
+
 // ---- --limit truncation ----
 
 describe('runCategorizeCommand — --limit truncation', () => {
@@ -321,8 +445,8 @@ describe('runCategorizeCommand — --limit truncation', () => {
     // selectCategory called exactly twice — only 2 groups prompted (not 5)
     expect(prompter.selectCategory).toHaveBeenCalledTimes(2);
 
-    const json = JSON.parse(stdout.captured.trim()) as Record<string, unknown>;
-    const summary = json['summary'] as Record<string, unknown>;
+    const data = unwrapSuccess<Record<string, unknown>>(stdout.captured);
+    const summary = data['summary'] as Record<string, unknown>;
 
     // candidateGroups reflects the full scan result (5), not the limited set
     expect(summary['candidateGroups']).toBe(5);

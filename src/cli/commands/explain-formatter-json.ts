@@ -1,6 +1,7 @@
 import type { Money } from '@core/shared/money.js';
 import type { VarianceLine } from '@core/settlement/variance-line.js';
 import type { ExplainReport } from './explain-report.js';
+import { formatJsonSuccess } from '../utils/json-envelope.js';
 
 function perPartnerToObject(map: ReadonlyMap<string, Money>): Record<string, string> {
   const obj: Record<string, string> = {};
@@ -65,5 +66,5 @@ export function formatExplainJson(report: ExplainReport): string {
     followThrough: followThroughJson,
   };
 
-  return JSON.stringify(doc, null, 2) + '\n';
+  return formatJsonSuccess('explain', doc);
 }

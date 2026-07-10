@@ -58,6 +58,7 @@ async function loadAndParse(
   const accountResult = pickSourceAccount(opts.file, config.accounts);
   if (accountResult.isFailure) {
     writeln(stderr, accountResult.error);
+    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'INVALID_ARGUMENT', message: accountResult.error }));
     exitCode(2);
     return null;
   }
@@ -66,6 +67,7 @@ async function loadAndParse(
   const readResult = readFile(opts.file);
   if (readResult.isFailure) {
     writeln(stderr, readResult.error);
+    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'READ_FAILURE', message: readResult.error }));
     exitCode(1);
     return null;
   }
@@ -77,7 +79,9 @@ async function loadAndParse(
     sourceAccount: account.id,
   });
   if (parseResult.isFailure) {
-    writeln(stderr, `Parse error: ${parseResult.error}`);
+    const message = `Parse error: ${parseResult.error}`;
+    writeln(stderr, message);
+    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'READ_FAILURE', message }));
     exitCode(1);
     return null;
   }
@@ -103,7 +107,9 @@ export async function runIngestCommand(
   const { account, parseOutcome } = parsed;
   const idempotencyResult = idempotencyService.filterNew(parseOutcome.items);
   if (idempotencyResult.isFailure) {
-    writeln(stderr, `Idempotency check failed: ${idempotencyResult.error}`);
+    const message = `Idempotency check failed: ${idempotencyResult.error}`;
+    writeln(stderr, message);
+    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'QUERY_FAILURE', message }));
     exitCode(1);
     return;
   }
@@ -112,7 +118,9 @@ export async function runIngestCommand(
   const builder = transactionBuilder(config.accounts);
   const buildResult = builder.buildAll(fresh);
   if (buildResult.isFailure) {
-    writeln(stderr, `Build error: ${buildResult.error}`);
+    const message = `Build error: ${buildResult.error}`;
+    writeln(stderr, message);
+    if (opts.json) stderr.write(formatJsonError('ingest', { code: 'QUERY_FAILURE', message }));
     exitCode(1);
     return;
   }

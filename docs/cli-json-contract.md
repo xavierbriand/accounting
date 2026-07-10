@@ -7,6 +7,10 @@ shape. It targets **scripts and LLM agents** driving the CLI (docs/plans/story-4
 there is no other consumer as of this writing, so the shapes here are not yet
 version-locked (see "Versioning" below).
 
+**Keeping this document true (R31):** any PR that changes a `--json` output shape, an
+error code, or an exit-code mapping must update this document in the same PR
+(CLAUDE.md § 8).
+
 ## 1. The envelope
 
 Every `--json` command emits exactly one of two shapes, always as a single compact

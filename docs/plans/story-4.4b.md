@@ -179,6 +179,18 @@ Set aside:
   envelopes incl. the exit-3/4 commit-path interleaving (4.4a test (h) flips to assert
   the success-shaped stdout envelope *plus* the `WRITE_FAILURE` stderr envelope).
 - **Docs:** new `docs/cli-json-contract.md`; README Documentation pointer.
+
+*Phase-4 amendments (as-built corrections to the above):*
+
+- **Categorize failure-envelope sites under-enumerated** (the ingest bullet spelled its
+  sites out; the categorize bullet named only the two newly-reachable paths): as built,
+  categorize's shared failure sites — source-account resolution (`INVALID_ARGUMENT`),
+  file read + CSV parse (`READ_FAILURE`), config write (`CONFIG_WRITE_FAILURE`) — also
+  emit coded envelopes, per the Selected-solution's blanket failure-discipline clause.
+  Uniform across all five commands; confirmed no exit-code or persistence change.
+- **Flip inventory was a conservative superset:** `ingest-end-to-end-wiring.test.ts` and
+  `ingest-autotag-wiring.test.ts` needed no flip — they assert stderr prose only and
+  never parse stdout JSON.
 - **Test flips (inventory from the pre-planning mechanics map):** feature scenarios —
   ingest.feature (8 scenarios incl. the two 4.4a non-interactive ones), categorize.feature
   `--json summary shape`, correct.feature `--json output` + R4 subprocess journey,
@@ -324,6 +336,24 @@ open PRs — all findings are issue-coordination, none blocking.
 | 11 | #117 targets `ingest.steps.ts`, where the shared unwrap helper lands | ACKNOWLEDGE | Helper is additive; #117's extraction unaffected |
 | 12 | #211 lint-smell item in status-command.test.ts — disjoint lines | ACKNOWLEDGE | No action |
 | 13 | #86 (markdown-link-check) not yet a live gate for the new doc | ACKNOWLEDGE | No action |
+
+Phase 4 run 2026-07-10 (`code-reviewer` + `sibling-overlap` in parallel):
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 14 | R6: new failure-envelope unit tests across 6 files lack `fails if` notes naming the guarded production paths | FIX-NOW | Comment pass in the Phase-4 fix commit |
+| 15 | R29: 3 net-new `assertion-roulette` warnings (tests grew past 5 assertions: explain-command-json-output:146, status-command:110/:175) | FIX-NOW | Tests split; lint restored to the 97-warning origin/main baseline |
+| 16 | `JsonEnvelope<T>` exported but never imported (dead code, DoD item 4) | FIX-NOW | Consumed by the test unwrap helper (or un-exported) |
+| 17 | `unwrapError` fails with a generic SyntaxError if prose lands after the envelope | FIX-NOW | Explicit "final stderr line must be a JSON envelope" diagnostic |
+| 18 | Contract doc § 5 "display/round-trip" phrasing collides with the security checklist's no-`.toString()`-round-trips rule | FIX-NOW | Reworded: pass-through display values, never parsed back for arithmetic |
+| 19 | R2 categorize bullet under-enumerated the as-built failure-envelope sites | FIX-NOW (plan) | § R2 Phase-4 amendment above |
+| 20 | R2 flip inventory over-included 2 stderr-prose-only integration files | ACKNOWLEDGE | Conservative superset; noted in the amendment |
+| 21 | `commitBatch` now ~55 LOC (> ~50 guideline) | ACKNOWLEDGE | Fail-fast sequential branching; next-touch candidate |
+| 22 | Refactor commit subject uses `(Story 4.4b)` parenthetical vs the `story-4.4b` form | ACKNOWLEDGE | `buildStoryIdRegExp` matches it — dod-check counts correctly; cosmetic, historical commit |
+| 23 | Slice 4/5 boundary shift (NEEDS_REVIEW move + commitBatch envelopes landed in slice 4) | ACKNOWLEDGE | Disclosed in commit body; slice 5 correctly invoked R10; net coverage identical |
+| 24 | status keeps a local `writeValidationError` helper vs inline `writeJsonErrorIf` elsewhere | ACKNOWLEDGE | Helper also emits the prose line — not pure duplication |
+| 25 | `runCategorizeCommand` grew to ~164 LOC (pre-existing oversize) | ACKNOWLEDGE | #110 (`runPromptLoop` extraction) is the tracked fix |
+| 26 | Overlap leg: surface matches plan exactly; no behaviour change; #104/#109/#110/#117/#215/#180 rows hold as-built | ACKNOWLEDGE | DoD comments on #104 and #180 due at tagging |
 
 ## DoR checklist
 

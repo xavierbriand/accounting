@@ -18,6 +18,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { unwrapSuccess } from '../../_helpers/json-envelope.js';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
 import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
@@ -335,9 +336,9 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
 
     const firstCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
     expect(firstCount).toBe(5);
-    const firstParsed = JSON.parse(firstDeps.stdout.captured.trim()) as { summary: { total: number; lowConfidence: number } };
-    expect(firstParsed.summary.total).toBe(5);
-    expect(firstParsed.summary.lowConfidence).toBe(0);
+    const firstData = unwrapSuccess<{ summary: { total: number; lowConfidence: number } }>(firstDeps.stdout.captured);
+    expect(firstData.summary.total).toBe(5);
+    expect(firstData.summary.lowConfidence).toBe(0);
 
     const secondDeps = makeRealDeps(db, dbPath, csvPath, undefined, undefined, undefined, autoTagRules);
     await runIngestCommand({ file: csvPath, nonInteractive: true, json: true }, secondDeps.deps);
@@ -345,9 +346,9 @@ describe('runIngestCommand — end-to-end commit (real temp-file DB)', () => {
 
     const secondCount = (db.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
     expect(secondCount).toBe(5);
-    const secondParsed = JSON.parse(secondDeps.stdout.captured.trim()) as { summary: { total: number; duplicates: number } };
-    expect(secondParsed.summary.total).toBe(0);
-    expect(secondParsed.summary.duplicates).toBe(5);
+    const secondData = unwrapSuccess<{ summary: { total: number; duplicates: number } }>(secondDeps.stdout.captured);
+    expect(secondData.summary.total).toBe(0);
+    expect(secondData.summary.duplicates).toBe(5);
 
     db.close();
   });

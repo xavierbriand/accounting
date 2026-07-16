@@ -14,9 +14,12 @@ Feature: Correct a past transaction via the correct CLI command
     Given a persisted two-entry original transaction
     When I run correct with amount "45.30", category "Insurance", reason "wrong amount and category", and json output
     Then the correct command exits with code 0
-    And correct stdout is a single JSON document with changedFields "amount,category"
+    And the JSON envelope's command is "correct" and ok is true
+    And correct stdout is a single JSON document with changedFields "amount,account"
     # fails if: the JSON is missing a field, only reports one of the two changed fields,
     # or human prose leaks into stdout under --json.
+    # story-4.4b finding 8: JSON changedFields uses domain vocabulary ("account", not
+    # the display remap "category") — data is enveloped under `data`.
 
   Scenario: Reason required
     Given a persisted two-entry original transaction
@@ -42,6 +45,17 @@ Feature: Correct a past transaction via the correct CLI command
     And no transaction rows are written
     And no TransactionCorrected event is recorded
     # fails if: the command crashes uncaught or silently no-ops with exit 0.
+
+  Scenario: Transaction not found, --json emits a NOT_FOUND envelope on stderr (story-4.4b scenario 2)
+    Given a fresh migrated correct DB
+    When I run correct for a missing transaction with amount "10.00", reason "test", and json output
+    Then the correct command exits with code 2
+    And correct stdout is empty
+    And the final correct stderr line parses as a NOT_FOUND envelope naming the missing transaction id
+    And no transaction rows are written
+    And no TransactionCorrected event is recorded
+    # fails if: the needs-review/error payload is written to stdout instead of the final
+    # stderr line, or the error code is missing/wrong (correct-command.ts loadOriginal).
 
   Scenario: Reject correcting a reversal
     Given a persisted reversal-kind transaction

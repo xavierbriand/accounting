@@ -62,10 +62,10 @@ describe('formatExplainJson — variance shape', () => {
       },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as {
-      variance: { lines: Array<{ kind: string; category: string; description: string; presence: string; totalDelta: string; perPartnerDelta: Record<string, string> }> };
+    const envelope = JSON.parse(formatExplainJson(report)) as {
+      data: { variance: { lines: Array<{ kind: string; category: string; description: string; presence: string; totalDelta: string; perPartnerDelta: Record<string, string> }> } };
     };
-    const presences = doc.variance.lines.map(l => l.presence).sort();
+    const presences = envelope.data.variance.lines.map(l => l.presence).sort();
     expect(presences).toEqual(['both', 'last-only', 'this-only']);
   });
 
@@ -76,8 +76,8 @@ describe('formatExplainJson — variance shape', () => {
       variance: { ok: true, value: { lines: diverseLines, totalDelta: eur(-105000), perPartnerDelta: new Map() } },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as { variance: { totalDelta: string } };
-    expect(doc.variance.totalDelta).toBe('EUR -1050.00');
+    const envelope = JSON.parse(formatExplainJson(report)) as { data: { variance: { totalDelta: string } } };
+    expect(envelope.data.variance.totalDelta).toBe('EUR -1050.00');
   });
 
   it('serializes perPartnerDelta Maps as plain objects (not {})', () => {
@@ -90,8 +90,8 @@ describe('formatExplainJson — variance shape', () => {
       },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as { variance: { perPartnerDelta: Record<string, string> } };
-    expect(doc.variance.perPartnerDelta).toEqual({ Alex: 'EUR -630.00', Sam: 'EUR -420.00' });
+    const envelope = JSON.parse(formatExplainJson(report)) as { data: { variance: { perPartnerDelta: Record<string, string> } } };
+    expect(envelope.data.variance.perPartnerDelta).toEqual({ Alex: 'EUR -630.00', Sam: 'EUR -420.00' });
   });
 
   it('serializes a calc-failure variance as { error, suggestedAction }, not a lines array', () => {
@@ -101,9 +101,9 @@ describe('formatExplainJson — variance shape', () => {
       variance: { ok: false, error: 'buffer "Vacation" is below target', suggestedAction: 'Update Vacation\'s targetDate.' },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as { variance: { error?: string; lines?: unknown } };
-    expect(doc.variance.error).toContain('Vacation');
-    expect(doc.variance.lines).toBeUndefined();
+    const envelope = JSON.parse(formatExplainJson(report)) as { data: { variance: { error?: string; lines?: unknown } } };
+    expect(envelope.data.variance.error).toContain('Vacation');
+    expect(envelope.data.variance.lines).toBeUndefined();
   });
 });
 
@@ -126,11 +126,11 @@ describe('formatExplainJson — followThrough shape', () => {
         },
       },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as {
-      followThrough: { perPartner: Record<string, { suggested: string; actual: string; delta: string }>; totalDelta: string };
+    const envelope = JSON.parse(formatExplainJson(report)) as {
+      data: { followThrough: { perPartner: Record<string, { suggested: string; actual: string; delta: string }>; totalDelta: string } };
     };
-    expect(doc.followThrough.perPartner['Alex']).toEqual({ suggested: 'EUR 500.00', actual: 'EUR 480.00', delta: 'EUR 20.00' });
-    expect(doc.followThrough.totalDelta).toBe('EUR 60.00');
+    expect(envelope.data.followThrough.perPartner['Alex']).toEqual({ suggested: 'EUR 500.00', actual: 'EUR 480.00', delta: 'EUR 20.00' });
+    expect(envelope.data.followThrough.totalDelta).toBe('EUR 60.00');
   });
 
   it('serializes { notConfigured: true } distinctly from an empty ok follow-through', () => {
@@ -140,14 +140,14 @@ describe('formatExplainJson — followThrough shape', () => {
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as { followThrough: { notConfigured?: boolean; perPartner?: unknown } };
-    expect(doc.followThrough.notConfigured).toBe(true);
-    expect(doc.followThrough.perPartner).toBeUndefined();
+    const envelope = JSON.parse(formatExplainJson(report)) as { data: { followThrough: { notConfigured?: boolean; perPartner?: unknown } } };
+    expect(envelope.data.followThrough.notConfigured).toBe(true);
+    expect(envelope.data.followThrough.perPartner).toBeUndefined();
   });
 });
 
-describe('formatExplainJson — document shape', () => {
-  it('emits a single JSON object with a trailing newline and no extra prose', () => {
+describe('formatExplainJson — document shape (story-4.4b: enveloped)', () => {
+  it('emits a single {command: "explain", ok: true, data} JSON object with a trailing newline and no extra prose', () => {
     // fails if the formatter interleaves any human-readable text with the JSON document
     const report: ExplainReport = {
       ...baseWindows,
@@ -157,6 +157,10 @@ describe('formatExplainJson — document shape', () => {
     const out = formatExplainJson(report);
     expect(out.endsWith('\n')).toBe(true);
     expect(out.trim().startsWith('{')).toBe(true);
+
+    const envelope = JSON.parse(out) as { command: string; ok: boolean };
+    expect(envelope.command).toBe('explain');
+    expect(envelope.ok).toBe(true);
   });
 
   it('includes asOf, thisWindow, and lastWindow verbatim from the report', () => {
@@ -166,8 +170,8 @@ describe('formatExplainJson — document shape', () => {
       variance: { ok: true, value: { lines: [], totalDelta: eur(0), perPartnerDelta: new Map() } },
       followThrough: { ok: false, notConfigured: true },
     };
-    const doc = JSON.parse(formatExplainJson(report)) as { asOf: string; thisWindow: unknown; lastWindow: unknown };
-    expect(doc.asOf).toBe('2026-06-28');
-    expect(doc.thisWindow).toEqual({ from: '2026-07-01', to: '2026-07-31' });
+    const envelope = JSON.parse(formatExplainJson(report)) as { data: { asOf: string; thisWindow: unknown; lastWindow: unknown } };
+    expect(envelope.data.asOf).toBe('2026-06-28');
+    expect(envelope.data.thisWindow).toEqual({ from: '2026-07-01', to: '2026-07-31' });
   });
 });

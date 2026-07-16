@@ -8,6 +8,7 @@ import type { readBpceCsv as ReadBpceCsvFn } from '../../infra/fs/read-bpce-csv.
 import { scanForUnmatched } from '@core/ingest/categorize-scanner.js';
 import { isAlreadyClassified } from '@core/ingest/auto-classify.js';
 import { suggestPattern } from '@core/ingest/pattern-suggester.js';
+import { formatJsonSuccess, writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface CategorizeCommandOptions {
   readonly file: string;
@@ -49,7 +50,7 @@ function writeln(stream: Writable, msg: string): void {
 
 function runCategorizeSummary(p: SummaryParams): void {
   if (p.json) {
-    const jsonSummary = {
+    const data = {
       file: p.file,
       summary: {
         scannedRows: p.scannedRows,
@@ -58,11 +59,10 @@ function runCategorizeSummary(p: SummaryParams): void {
         promptedGroups: p.promptedGroups,
         rulesAdded: p.rulesAdded,
         rulesSkippedByUser: p.rulesSkippedByUser,
-        rulesSkippedAsDuplicate: 0,
       },
       rules: p.rememberedRules.map((r) => ({ category: r.category, pattern: r.pattern })),
     };
-    p.stdout.write(JSON.stringify(jsonSummary) + '\n');
+    p.stdout.write(formatJsonSuccess('categorize', data));
   } else {
     writeln(p.stderr, `${p.rulesAdded} rules added to accounting.yaml.`);
     if (p.rulesAdded > 0) {
@@ -80,6 +80,7 @@ export async function runCategorizeCommand(
   const accountResult = pickSourceAccount(opts.file, config.accounts);
   if (accountResult.isFailure) {
     writeln(stderr, accountResult.error);
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'INVALID_ARGUMENT', message: accountResult.error });
     exitCode(2);
     return;
   }
@@ -87,6 +88,7 @@ export async function runCategorizeCommand(
   const readResult = readFile(opts.file);
   if (readResult.isFailure) {
     writeln(stderr, readResult.error);
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'READ_FAILURE', message: readResult.error });
     exitCode(1);
     return;
   }
@@ -98,7 +100,9 @@ export async function runCategorizeCommand(
     sourceAccount: accountResult.value.id,
   });
   if (parseResult.isFailure) {
-    writeln(stderr, `Parse error: ${parseResult.error}`);
+    const message = `Parse error: ${parseResult.error}`;
+    writeln(stderr, message);
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'READ_FAILURE', message });
     exitCode(1);
     return;
   }
@@ -117,13 +121,29 @@ export async function runCategorizeCommand(
   const groups = scanForUnmatched(descriptions, config.autoTagRules, config.accounts, { minCount: opts.minCount });
 
   if (opts.nonInteractive && groups.length > 0) {
-    writeln(stderr, `${groups.length} group(s) need review; re-run without --non-interactive`);
+    const message = `${groups.length} group(s) need review; re-run without --non-interactive`;
+    writeln(stderr, message);
+    writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'NEEDS_REVIEW', message });
     exitCode(2);
     return;
   }
 
   if (groups.length === 0) {
     writeln(stderr, '0 rules added');
+    if (opts.json) {
+      stdout.write(formatJsonSuccess('categorize', {
+        file: opts.file,
+        summary: {
+          scannedRows,
+          alreadyMatched: alreadyMatchedCount,
+          candidateGroups: 0,
+          promptedGroups: 0,
+          rulesAdded: 0,
+          rulesSkippedByUser: 0,
+        },
+        rules: [],
+      }));
+    }
     exitCode(0);
     return;
   }
@@ -184,13 +204,16 @@ export async function runCategorizeCommand(
     const writeResult = await configWriter.appendAutoTagRules(rememberedRules);
     if (writeResult.isFailure) {
       const err = writeResult.error;
+      let message: string;
       if (err.kind === 'mtime-race') {
-        writeln(stderr, 'Your accounting.yaml changed externally; please re-run categorize.');
+        message = 'Your accounting.yaml changed externally; please re-run categorize.';
       } else if (err.kind === 'conflict') {
-        writeln(stderr, `Config conflict: pattern '${err.pattern}' already exists under category '${err.existingCategory}'.`);
+        message = `Config conflict: pattern '${err.pattern}' already exists under category '${err.existingCategory}'.`;
       } else {
-        writeln(stderr, `Config write failed: ${err.message}`);
+        message = `Config write failed: ${err.message}`;
       }
+      writeln(stderr, message);
+      writeJsonErrorIf(stderr, opts.json, 'categorize', { code: 'CONFIG_WRITE_FAILURE', message });
       exitCode(5);
       return;
     }

@@ -28,10 +28,15 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     And a BPCE CSV copied to that temp dir as "bpce-valid_real.csv"
     When I run ingest with "--non-interactive --json"
     Then the process exits with code 2
+    And stdout is empty
+    And the final stderr line parses as a NEEDS_REVIEW envelope
     And the JSON payload's "summary.autoTagged" equals 2
     And the JSON payload's "summary.lowConfidence" equals 3
+    And the transactions table has 0 rows
     # fails if: classifier mis-routes high-confidence as low-confidence (or vice
     # versa), or --non-interactive does not exit 2 on a non-zero low-confidence count.
+    # story-4.4b scenario 2: the needs-review payload moved off stdout to a NEEDS_REVIEW
+    # stderr envelope (error.details); "nothing is persisted" is the exit-2 guard.
 
   Scenario: --json output includes non-default duplicate and low-confidence sections (Story 2.4 mock-diversity)
     Given a fresh migrated DB and accounting.yaml at a temp dir
@@ -41,11 +46,13 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     Then the process exits with code 0
     And the JSON payload's "duplicates" array length equals 5
     And the JSON payload's "duplicates[0]" has "description" and "idempotencyHash" fields populated
-    And the JSON payload's "lowConfidence" array is empty
+    And the JSON payload does not include a "lowConfidence" key
     And the JSON payload contains no partner names verbatim
     # fails if: --json output hardcodes duplicates: [] or omits the array entirely.
     # Story 2.4 retro action A: mock-diversity check — assertions run against a
     # non-default fixture (5 duplicates, not 0).
+    # story-4.4b finding: the always-empty-on-success `lowConfidence` array is dropped
+    # from the enveloped success data entirely (was: present-but-empty).
 
   Scenario: dbPath in accounting.yaml is honoured (closes #65) (story-maint-11)
     Given a fresh tmp dir
@@ -99,6 +106,21 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # fails if: runNonInteractive (ingest-command.ts:310-388) returns without calling
     # commitBatch on the no-pending-decision path — the #181 production bug where
     # --non-interactive/--json silently dry-ran even with zero decisions to take.
+
+  Scenario: --json conventions — camelCase keys, Money.toString() amounts, ISO-offset timestamps (story-4.4b scenario 3)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a BPCE CSV copied to that temp dir as "bpce-in-batch-dups.csv"
+    When I run ingest with "--non-interactive --json"
+    Then the process exits with code 0
+    And the JSON envelope's command is "ingest" and ok is true
+    And stderr contains no JSON document
+    And the raw stdout document contains no "source_account" or "amount_cents" text
+    And each item's amount matches the Money-string shape
+    And each item's occurredAt keeps its ISO 8601 offset
+    And the JSON document is a single compact line
+    # fails if ingest-command.ts's snake_case sites survive, or a formatter reintroduces
+    # pretty-printing (guards R8 mock diversity: 4 rows, 2 distinct non-default amounts
+    # and categories, from the story-maint-17 fixture).
 
   Scenario: Non-interactive ingest blocks the commit when a decision is pending (story-4.4a)
     Given a fresh migrated DB and accounting.yaml at a temp dir

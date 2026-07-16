@@ -222,6 +222,14 @@ When(
   },
 );
 
+When(
+  'I run correct for a missing transaction with amount {string}, reason {string}, and json output',
+  async function (state: CorrectWorld, amount: string, reason: string) {
+    state.originalId = 'tx-does-not-exist';
+    await runCorrect(state, { amount, reason, json: true });
+  },
+);
+
 When('I run correct on the reversal with amount {string} and reason {string}', async function (state: CorrectWorld, amount: string, reason: string) {
   await runCorrect(state, { amount, reason });
 });
@@ -296,9 +304,25 @@ Then(
 Then('correct stdout is a single JSON document with changedFields {string}', function (state: CorrectWorld, fieldsCsv: string) {
   const lines = state.stdout!.captured.trim().split('\n');
   expect(lines).toHaveLength(1);
-  const parsed = JSON.parse(lines[0]) as { changedFields: string[] };
-  expect(parsed.changedFields).toEqual(fieldsCsv.split(','));
+  const envelope = JSON.parse(lines[0]) as { data: { changedFields: string[] } };
+  expect(envelope.data.changedFields).toEqual(fieldsCsv.split(','));
 });
+
+Then('correct stdout is empty', function (state: CorrectWorld) {
+  expect(state.stdout!.captured).toBe('');
+});
+
+Then(
+  'the final correct stderr line parses as a NOT_FOUND envelope naming the missing transaction id',
+  function (state: CorrectWorld) {
+    const lines = state.stderr!.captured.trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('NOT_FOUND');
+    expect(envelope.error.message).toContain(state.originalId!);
+  },
+);
 
 Then('no transaction rows are written beyond the original', function (state: CorrectWorld) {
   const count = (state.db!.prepare('SELECT COUNT(*) as n FROM transactions').get() as { n: number }).n;
@@ -349,16 +373,23 @@ Then('correct stdout reports changed fields {string}', function (state: CorrectW
 });
 
 Then('the subprocess JSON output matches the correct command\'s documented shape', function (state: CorrectWorld) {
-  const parsed = JSON.parse(state.lastResult!.stdout.trim()) as {
-    targetTransactionId: string;
-    producedTransactionIds: string[];
-    changedFields: string[];
-    reason: string;
+  const envelope = JSON.parse(state.lastResult!.stdout.trim()) as {
+    command: string;
+    ok: boolean;
+    data: {
+      targetTransactionId: string;
+      producedTransactionIds: string[];
+      changedFields: string[];
+      reason: string;
+    };
   };
-  expect(parsed.targetTransactionId).toBe(state.originalId);
-  expect(parsed.producedTransactionIds).toHaveLength(2);
-  expect(parsed.changedFields).toEqual(['category']);
-  expect(parsed.reason).toBe('miscategorized');
+  expect(envelope.command).toBe('correct');
+  expect(envelope.ok).toBe(true);
+  expect(envelope.data.targetTransactionId).toBe(state.originalId);
+  expect(envelope.data.producedTransactionIds).toHaveLength(2);
+  // story-4.4b finding 8: domain vocabulary ("account"), not the display remap ("category").
+  expect(envelope.data.changedFields).toEqual(['account']);
+  expect(envelope.data.reason).toBe('miscategorized');
 });
 
 Then(

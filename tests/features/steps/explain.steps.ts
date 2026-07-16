@@ -255,8 +255,8 @@ interface JsonVarianceLineRow {
 }
 
 Then('explain stdout is valid JSON with keys asOf, thisWindow, lastWindow, variance, followThrough', function (state: ExplainWorld) {
-  const parsed = JSON.parse(state.result!.stdout) as Record<string, unknown>;
-  expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
+  const envelope = JSON.parse(state.result!.stdout) as { data: Record<string, unknown> };
+  expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
 });
 
 Then('explain stdout contains only JSON \\(no prose\\)', function (state: ExplainWorld) {
@@ -268,39 +268,39 @@ Then('explain stdout contains only JSON \\(no prose\\)', function (state: Explai
 Then(
   'the JSON variance lines include presence classes {string}, {string}, and {string}',
   function (state: ExplainWorld, p1: string, p2: string, p3: string) {
-    const parsed = JSON.parse(state.result!.stdout) as { variance: { lines: JsonVarianceLineRow[] } };
-    const presences = new Set(parsed.variance.lines.map(l => l.presence));
+    const envelope = JSON.parse(state.result!.stdout) as { data: { variance: { lines: JsonVarianceLineRow[] } } };
+    const presences = new Set(envelope.data.variance.lines.map(l => l.presence));
     expect(presences).toEqual(new Set([p1, p2, p3]));
   },
 );
 
 Then('the JSON variance totalDelta is negative', function (state: ExplainWorld) {
-  const parsed = JSON.parse(state.result!.stdout) as { variance: { totalDelta: string } };
-  expect(parsed.variance.totalDelta).toMatch(/^EUR -/);
+  const envelope = JSON.parse(state.result!.stdout) as { data: { variance: { totalDelta: string } } };
+  expect(envelope.data.variance.totalDelta).toMatch(/^EUR -/);
 });
 
 Then('the JSON variance perPartnerDelta has keys {string} and {string}', function (state: ExplainWorld, p1: string, p2: string) {
-  const parsed = JSON.parse(state.result!.stdout) as { variance: { perPartnerDelta: Record<string, string> } };
-  expect(Object.keys(parsed.variance.perPartnerDelta)).toEqual(expect.arrayContaining([p1, p2]));
+  const envelope = JSON.parse(state.result!.stdout) as { data: { variance: { perPartnerDelta: Record<string, string> } } };
+  expect(Object.keys(envelope.data.variance.perPartnerDelta)).toEqual(expect.arrayContaining([p1, p2]));
 });
 
 Then('the JSON followThrough perPartner has keys {string} and {string}', function (state: ExplainWorld, p1: string, p2: string) {
-  const parsed = JSON.parse(state.result!.stdout) as { followThrough: { perPartner: Record<string, unknown> } };
-  expect(Object.keys(parsed.followThrough.perPartner)).toEqual(expect.arrayContaining([p1, p2]));
+  const envelope = JSON.parse(state.result!.stdout) as { data: { followThrough: { perPartner: Record<string, unknown> } } };
+  expect(Object.keys(envelope.data.followThrough.perPartner)).toEqual(expect.arrayContaining([p1, p2]));
 });
 
 Then('every variance line in the JSON has presence {string}', function (state: ExplainWorld, presence: string) {
-  const parsed = JSON.parse(state.result!.stdout) as { variance: { lines: JsonVarianceLineRow[] } };
-  const presences = new Set(parsed.variance.lines.map(l => l.presence));
+  const envelope = JSON.parse(state.result!.stdout) as { data: { variance: { lines: JsonVarianceLineRow[] } } };
+  const presences = new Set(envelope.data.variance.lines.map(l => l.presence));
   expect(presences).toEqual(new Set([presence]));
 });
 
 Then(
   'the JSON followThrough perPartner actual is 0.00 EUR for {string} and {string}',
   function (state: ExplainWorld, p1: string, p2: string) {
-    const parsed = JSON.parse(state.result!.stdout) as { followThrough: { perPartner: Record<string, { actual: string }> } };
-    expect(parsed.followThrough.perPartner[p1].actual).toBe('EUR 0.00');
-    expect(parsed.followThrough.perPartner[p2].actual).toBe('EUR 0.00');
+    const envelope = JSON.parse(state.result!.stdout) as { data: { followThrough: { perPartner: Record<string, { actual: string }> } } };
+    expect(envelope.data.followThrough.perPartner[p1].actual).toBe('EUR 0.00');
+    expect(envelope.data.followThrough.perPartner[p2].actual).toBe('EUR 0.00');
   },
 );
 
@@ -378,9 +378,15 @@ Then('the explain subprocess exits with code {int}', function (state: ExplainWor
 
 Then('the explain subprocess JSON output matches the documented shape', function (state: ExplainWorld) {
   const { stdout } = state.subprocessResult!;
-  const parsed = JSON.parse(stdout) as { asOf: string; thisWindow: unknown; lastWindow: unknown; variance: unknown; followThrough: { perPartner?: Record<string, unknown> } };
-  expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
-  expect(parsed.asOf).toBe('2026-06-28');
+  const envelope = JSON.parse(stdout) as {
+    command: string;
+    ok: boolean;
+    data: { asOf: string; thisWindow: unknown; lastWindow: unknown; variance: unknown; followThrough: { perPartner?: Record<string, unknown> } };
+  };
+  expect(envelope.command).toBe('explain');
+  expect(envelope.ok).toBe(true);
+  expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'thisWindow', 'lastWindow', 'variance', 'followThrough']));
+  expect(envelope.data.asOf).toBe('2026-06-28');
 });
 
 Then('explain creates no snapshot and writes no rows \\(read-only guarantee\\)', function (state: ExplainWorld) {

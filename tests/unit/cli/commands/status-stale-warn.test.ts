@@ -71,7 +71,7 @@ function makeStaleServices(): {
 
 // ─── JSON output for calc-failure ─────────────────────────────────────────────
 
-describe('stale-targetDate: JSON output shape', () => {
+describe('stale-targetDate: JSON output shape (story-4.4b: enveloped)', () => {
   it('JSON transfer has error and suggestedAction fields (not totalRequired)', async () => {
     const services = makeStaleServices();
     const stdoutCapture = makeCaptureStream();
@@ -82,15 +82,19 @@ describe('stale-targetDate: JSON output shape', () => {
     );
 
     expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      transfer: Record<string, unknown>;
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      command: string;
+      ok: boolean;
+      data: { transfer: Record<string, unknown> };
     };
 
-    expect(parsed.transfer).toHaveProperty('error');
-    expect(parsed.transfer).toHaveProperty('suggestedAction');
-    expect(parsed.transfer).not.toHaveProperty('totalRequired');
-    expect(parsed.transfer).not.toHaveProperty('perPartner');
-    expect(parsed.transfer).not.toHaveProperty('lineItems');
+    expect(envelope.command).toBe('status');
+    expect(envelope.ok).toBe(true);
+    expect(envelope.data.transfer).toHaveProperty('error');
+    expect(envelope.data.transfer).toHaveProperty('suggestedAction');
+    expect(envelope.data.transfer).not.toHaveProperty('totalRequired');
+    expect(envelope.data.transfer).not.toHaveProperty('perPartner');
+    expect(envelope.data.transfer).not.toHaveProperty('lineItems');
   });
 
   it('suggestedAction names the offending bucket ("Car")', async () => {
@@ -102,11 +106,11 @@ describe('stale-targetDate: JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      transfer: { suggestedAction: string };
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { transfer: { suggestedAction: string } };
     };
 
-    expect(parsed.transfer.suggestedAction).toContain('Car');
+    expect(envelope.data.transfer.suggestedAction).toContain('Car');
   });
 
   it('suggestedAction references the YAML field "targetDate"', async () => {
@@ -118,11 +122,11 @@ describe('stale-targetDate: JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      transfer: { suggestedAction: string };
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { transfer: { suggestedAction: string } };
     };
 
-    expect(parsed.transfer.suggestedAction).toContain('targetDate');
+    expect(envelope.data.transfer.suggestedAction).toContain('targetDate');
   });
 
   it('JSON buffers are still present and show "Car" with status "below"', async () => {
@@ -134,13 +138,13 @@ describe('stale-targetDate: JSON output shape', () => {
       { ...services, clock: () => '2026-04-29', stdout: stdoutCapture.stream, stderr: makeCaptureStream().stream },
     );
 
-    const parsed = JSON.parse(stdoutCapture.getText()) as {
-      buffers: Array<{ name: string; status: string }>;
+    const envelope = JSON.parse(stdoutCapture.getText()) as {
+      data: { buffers: Array<{ name: string; status: string }> };
     };
 
-    expect(parsed.buffers).toHaveLength(1);
-    expect(parsed.buffers[0].name).toBe('Car');
-    expect(parsed.buffers[0].status).toBe('below');
+    expect(envelope.data.buffers).toHaveLength(1);
+    expect(envelope.data.buffers[0].name).toBe('Car');
+    expect(envelope.data.buffers[0].status).toBe('below');
   });
 });
 

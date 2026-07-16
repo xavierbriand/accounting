@@ -10,6 +10,7 @@ import { expenseAccount } from '@core/ingest/account-names.js';
 import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { parseCorrectOptions, type CorrectCommandOptions, type ParsedCorrectOptions } from './correct-command-options.js';
 import { formatCorrectJson, toDisplayFieldName } from './correct-formatter-json.js';
+import { writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface CorrectCommandDeps {
   readonly transactionRepository: Pick<TransactionRepository, 'findById' | 'saveCorrection'>;
@@ -34,18 +35,23 @@ function spliceDate(originalOccurredAt: string, newDatePart: string): string {
 
 function loadOriginal(
   transactionId: string,
+  json: boolean,
   deps: Pick<CorrectCommandDeps, 'transactionRepository' | 'stderr' | 'exitCode'>,
 ): Transaction | null {
   const { transactionRepository, stderr, exitCode } = deps;
 
   const result = transactionRepository.findById(transactionId);
   if (result.isFailure) {
-    writeln(stderr, `error: could not load transaction "${transactionId}": ${sanitizeSqlError(result.error)}`);
+    const message = `could not load transaction "${transactionId}": ${sanitizeSqlError(result.error)}`;
+    writeln(stderr, `error: ${message}`);
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'QUERY_FAILURE', message });
     exitCode(1);
     return null;
   }
   if (result.value === null) {
-    writeln(stderr, `error: no transaction found with id "${transactionId}"`);
+    const message = `no transaction found with id "${transactionId}"`;
+    writeln(stderr, `error: ${message}`);
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'NOT_FOUND', message });
     exitCode(2);
     return null;
   }
@@ -78,7 +84,9 @@ async function persistAndRecord(
 
   const writeResult = transactionRepository.saveCorrection(reversal, correcting);
   if (writeResult.isFailure) {
-    writeln(stderr, `Correction failed: ${sanitizeSqlError(writeResult.error)}`);
+    const message = `Correction failed: ${sanitizeSqlError(writeResult.error)}`;
+    writeln(stderr, message);
+    writeJsonErrorIf(stderr, json, 'correct', { code: 'WRITE_FAILURE', message });
     exitCode(4);
     return;
   }
@@ -115,13 +123,15 @@ export async function runCorrectCommand(
 
   const parsedResult = parseCorrectOptions(options);
   if (parsedResult.isFailure) {
-    writeln(stderr, `error: ${parsedResult.error}`);
+    const message = parsedResult.error;
+    writeln(stderr, `error: ${message}`);
+    writeJsonErrorIf(stderr, options.json, 'correct', { code: 'INVALID_ARGUMENT', message });
     exitCode(2);
     return;
   }
   const parsed = parsedResult.value;
 
-  const original = loadOriginal(parsed.transactionId, deps);
+  const original = loadOriginal(parsed.transactionId, parsed.json, deps);
   if (original === null) return;
 
   const changes = buildChanges(parsed, original);
@@ -129,7 +139,9 @@ export async function runCorrectCommand(
 
   const correctionResult = CorrectionService.correct(original, changes, ids, parsed.reason);
   if (correctionResult.isFailure) {
-    writeln(stderr, `error: ${correctionResult.error}`);
+    const message = correctionResult.error;
+    writeln(stderr, `error: ${message}`);
+    writeJsonErrorIf(stderr, parsed.json, 'correct', { code: 'INVALID_ARGUMENT', message });
     exitCode(2);
     return;
   }

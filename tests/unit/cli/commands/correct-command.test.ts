@@ -138,7 +138,7 @@ describe('runCorrectCommand — happy path, human output (scenario 1)', () => {
 // simultaneously-changed fields (R8 mock-diversity), or human-readable prose
 // leaks into stdout alongside the JSON document.
 describe('runCorrectCommand — --json output, multiple changed fields (scenario 2)', () => {
-  it('emits a single JSON document naming both changed fields, no human prose mixed in', async () => {
+  it('emits a single {command: "correct", ok: true, data} envelope naming both changed fields in domain vocabulary, no human prose mixed in (story-4.4b finding 8)', async () => {
     const { deps, stdout, exitCodes } = makeDeps();
 
     await runCorrectCommand(
@@ -149,16 +149,24 @@ describe('runCorrectCommand — --json output, multiple changed fields (scenario
     expect(exitCodes).toEqual([0]);
     const lines = stdout.captured.trim().split('\n');
     expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0]) as {
-      targetTransactionId: string;
-      producedTransactionIds: string[];
-      changedFields: string[];
-      reason: string;
+    const envelope = JSON.parse(lines[0]) as {
+      command: string;
+      ok: boolean;
+      data: {
+        targetTransactionId: string;
+        producedTransactionIds: string[];
+        changedFields: string[];
+        reason: string;
+      };
     };
-    expect(parsed.targetTransactionId).toBe('tx-original');
-    expect(parsed.producedTransactionIds).toHaveLength(2);
-    expect(parsed.changedFields).toEqual(['amount', 'category']);
-    expect(parsed.reason).toBe('wrong amount on receipt');
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(true);
+    expect(envelope.data.targetTransactionId).toBe('tx-original');
+    expect(envelope.data.producedTransactionIds).toHaveLength(2);
+    // story-4.4b finding 8: JSON changedFields uses domain vocabulary ("account"),
+    // not the display remap ("category") — the human branch keeps "category".
+    expect(envelope.data.changedFields).toEqual(['amount', 'account']);
+    expect(envelope.data.reason).toBe('wrong amount on receipt');
 
     // No human-readable prose leaks into stdout under --json.
     expect(stdout.captured).not.toContain('Correction recorded');
@@ -260,6 +268,110 @@ describe('runCorrectCommand — error paths → exit codes (scenarios 4, 5, 6, 6
     expect(stderr.captured).not.toContain(collidingHash);
     expect(stderr.captured).toContain('<redacted>');
     expect(recordMock).not.toHaveBeenCalled();
+  });
+});
+
+// story-4.4b: every reachable exitCode(nonzero) path gains a final-stderr-line
+// coded error envelope under --json; prose stays, non-json mode is untouched.
+describe('runCorrectCommand — error paths emit a coded envelope under --json (story-4.4b)', () => {
+  it('(scenario 2 example) transaction not found + --json: final stderr line is a NOT_FOUND envelope naming the id', async () => {
+    // fails if: correct-command.ts:51-57's writeJsonErrorIf(..., 'NOT_FOUND', ...)
+    //   (line 54) is missing or drops the transaction id from the message
+    const { deps, stderr, exitCodes } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(null)),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ transactionId: 'tx-bogus', amount: '10.00', json: true }), deps);
+
+    expect(exitCodes).toEqual([2]);
+    const lines = stderr.captured.trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('NOT_FOUND');
+    expect(envelope.error.message).toContain('tx-bogus');
+  });
+
+  it('findById read failure + --json: final stderr line is a QUERY_FAILURE envelope', async () => {
+    // fails if: correct-command.ts:43-50's writeJsonErrorIf(..., 'QUERY_FAILURE', ...)
+    //   (line 47) is missing
+    const { deps, stderr, exitCodes } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.fail('SqliteError: database disk image is malformed')),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ amount: '10.00', json: true }), deps);
+
+    expect(exitCodes).toEqual([1]);
+    const lines = stderr.captured.trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string } };
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('QUERY_FAILURE');
+  });
+
+  it('no fields to correct + --json: final stderr line is an INVALID_ARGUMENT envelope', async () => {
+    // fails if: correct-command.ts:140-147's writeJsonErrorIf(..., 'INVALID_ARGUMENT', ...)
+    //   (line 144, the CorrectionService.correct business-rule branch — distinct from the
+    //   zod-parse INVALID_ARGUMENT at line 128) is missing
+    const { deps, stderr, exitCodes } = makeDeps();
+
+    await runCorrectCommand(baseOptions({ json: true }), deps);
+
+    expect(exitCodes).toEqual([2]);
+    const lines = stderr.captured.trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('INVALID_ARGUMENT');
+    expect(envelope.error.message.toLowerCase()).toContain('at least one field');
+  });
+
+  it('saveCorrection write failure + --json: final stderr line is a WRITE_FAILURE envelope, no raw hash leaked', async () => {
+    // fails if: correct-command.ts:85-92's writeJsonErrorIf(..., 'WRITE_FAILURE', ...)
+    //   (line 89) is missing, or the raw sanitizeSqlError-redacted hash leaks into
+    //   error.message
+    const collidingHash = 'a'.repeat(64);
+    const { deps, stderr, exitCodes } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(makeOriginal())),
+        saveCorrection: vi.fn().mockReturnValue(
+          Result.fail(`SqliteError: UNIQUE constraint failed: transactions.idempotency_hash = ${collidingHash}`),
+        ),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ amount: '45.30', json: true }), deps);
+
+    expect(exitCodes).toEqual([4]);
+    const lines = stderr.captured.trim().split('\n');
+    const envelope = JSON.parse(lines[lines.length - 1]) as { command: string; ok: boolean; error: { code: string; message: string } };
+    expect(envelope.command).toBe('correct');
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error.code).toBe('WRITE_FAILURE');
+    expect(envelope.error.message).not.toContain(collidingHash);
+  });
+
+  it('validation failure under non-json mode stays prose-only (no envelope line)', async () => {
+    // fails if: the `json` gate is dropped from any writeJsonErrorIf call site
+    //   (correct-command.ts:47,54,89,128,144), leaking an envelope line onto stderr when
+    //   --json was never requested — exercised here via the NOT_FOUND path (line 54)
+    const { deps, stderr, exitCodes } = makeDeps({
+      transactionRepository: {
+        findById: vi.fn().mockReturnValue(Result.ok(null)),
+        saveCorrection: vi.fn(),
+      },
+    });
+
+    await runCorrectCommand(baseOptions({ transactionId: 'tx-bogus', amount: '10.00', json: false }), deps);
+
+    expect(exitCodes).toEqual([2]);
+    expect(() => JSON.parse(stderr.captured.trim())).toThrow();
   });
 });
 

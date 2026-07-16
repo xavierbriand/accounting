@@ -18,7 +18,7 @@ Feature: accounting explain CLI command (Story 4.3b)
     And explain stdout contains the follow-through line for "Alex" and "Sam"
     # fails if orchestration miswires the two calculator runs or the prose contradicts the table's numbers.
 
-  Scenario: --json full shape is R8-diverse (all presences, negative delta, multi-partner, split boundary)
+  Scenario: --json full shape is R8-diverse (all presences, negative delta, multi-partner, split boundary, envelope)
     Given split window Alex 60% and Sam 40% valid from "2024-01-01"
     And split window Alex 50% and Sam 50% valid from "2026-07-01"
     And a recurring rule "Rent" in category "Rent" for 1000.00 EUR monthly valid from "2024-01-01"
@@ -33,6 +33,7 @@ Feature: accounting explain CLI command (Story 4.3b)
     And a credit of 380.00 EUR on "income:contribution:sam" occurred at "2026-06-16T10:00:00+00:00"
     When I run explain with --as-of "2026-06-28" and --json
     Then the explain command exits with code 0
+    And the JSON envelope's command is "explain" and ok is true
     And explain stdout is valid JSON with keys asOf, thisWindow, lastWindow, variance, followThrough
     And explain stdout contains only JSON (no prose)
     And the JSON variance lines include presence classes "both", "this-only", and "last-only"

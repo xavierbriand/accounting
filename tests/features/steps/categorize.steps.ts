@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
+import { unwrapSuccess, unwrapError } from '../../_helpers/json-envelope.js';
 
 interface CategorizeWorld {
   tmpDir?: string;
@@ -170,6 +171,20 @@ When('I run categorize with --non-interactive', function (state: CategorizeWorld
   );
 });
 
+When('I run categorize with --non-interactive and --json', function (state: CategorizeWorld) {
+  state.lastResult = spawnCli(
+    ['categorize', '--file', state.csvPath!, '--non-interactive', '--json'],
+    { cwd: state.tmpDir },
+  );
+});
+
+When('I run categorize with --json and an empty scripted-prompts script', function (state: CategorizeWorld) {
+  state.lastResult = spawnCli(
+    ['categorize', '--file', state.csvPath!, '--json', '--scripted-prompts', '[]'],
+    { cwd: state.tmpDir, env: { NODE_ENV: 'test' } },
+  );
+});
+
 When('I run categorize with --json and a script that remembers two rules and skips the third', function (state: CategorizeWorld) {
   // MERCHANT ALPHA (3 occurrences) → first; MERCHANT BETA (2) → second; MERCHANT GAMMA (2) → third
   // Tie-break between BETA and GAMMA is insertion order (Map preserves order)
@@ -228,25 +243,39 @@ Then('stdout is valid JSON', function (state: CategorizeWorld) {
 });
 
 Then('the JSON summary.candidateGroups equals {int}', function (state: CategorizeWorld, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
-  const summary = json['summary'] as Record<string, unknown>;
+  const data = unwrapSuccess<Record<string, unknown>>(state.lastResult!.stdout);
+  const summary = data['summary'] as Record<string, unknown>;
   expect(summary['candidateGroups']).toBe(expected);
 });
 
 Then('the JSON summary.rulesAdded equals {int}', function (state: CategorizeWorld, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
-  const summary = json['summary'] as Record<string, unknown>;
+  const data = unwrapSuccess<Record<string, unknown>>(state.lastResult!.stdout);
+  const summary = data['summary'] as Record<string, unknown>;
   expect(summary['rulesAdded']).toBe(expected);
 });
 
 Then('the JSON summary.rulesSkippedByUser equals {int}', function (state: CategorizeWorld, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
-  const summary = json['summary'] as Record<string, unknown>;
+  const data = unwrapSuccess<Record<string, unknown>>(state.lastResult!.stdout);
+  const summary = data['summary'] as Record<string, unknown>;
   expect(summary['rulesSkippedByUser']).toBe(expected);
 });
 
 Then('the JSON rules array has {int} entries', function (state: CategorizeWorld, expected: number) {
-  const json = JSON.parse(state.lastResult!.stdout.trim()) as Record<string, unknown>;
-  const rules = json['rules'] as unknown[];
+  const data = unwrapSuccess<Record<string, unknown>>(state.lastResult!.stdout);
+  const rules = data['rules'] as unknown[];
   expect(rules).toHaveLength(expected);
+});
+
+Then('the JSON summary does not include a {string} key', function (state: CategorizeWorld, key: string) {
+  const data = unwrapSuccess<Record<string, unknown>>(state.lastResult!.stdout);
+  const summary = data['summary'] as Record<string, unknown>;
+  expect(key in summary).toBe(false);
+});
+
+// "stdout is empty" is registered once, in ingest.steps.ts (shared quickpickle
+// global step registry) — its `state.lastResult!.stdout` shape matches here too.
+
+Then('the final categorize stderr line parses as a NEEDS_REVIEW envelope', function (state: CategorizeWorld) {
+  const error = unwrapError(state.lastResult!.stderr);
+  expect(error.code).toBe('NEEDS_REVIEW');
 });

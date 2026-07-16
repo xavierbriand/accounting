@@ -69,10 +69,10 @@ describe('accounting status — R4 composition-root subprocess test', () => {
     // Run status
     const result = spawnCli(['status', '--json', '--as-of', '2026-04-29'], { cwd: tmpDir });
 
-    // Parse and validate JSON shape
-    let parsed: Record<string, unknown>;
+    // Parse and validate the envelope + JSON shape (story-4.4b: {command, ok, data})
+    let envelope: { command: string; ok: boolean; data: Record<string, unknown> };
     try {
-      parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+      envelope = JSON.parse(result.stdout) as { command: string; ok: boolean; data: Record<string, unknown> };
     } catch (e) {
       throw new Error(
         `stdout was not valid JSON: ${e instanceof Error ? e.message : String(e)}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
@@ -81,9 +81,11 @@ describe('accounting status — R4 composition-root subprocess test', () => {
     }
 
     expect(result.status).toBe(0);
-    expect(Object.keys(parsed)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
+    expect(envelope.command).toBe('status');
+    expect(envelope.ok).toBe(true);
+    expect(Object.keys(envelope.data)).toEqual(expect.arrayContaining(['asOf', 'window', 'buffers', 'transfer', 'forecast']));
 
-    const doc = parsed as {
+    const doc = envelope.data as {
       asOf: string;
       window: { from: string; to: string };
       buffers: unknown[];

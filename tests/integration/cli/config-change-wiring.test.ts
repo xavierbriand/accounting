@@ -10,7 +10,9 @@
  *   spans six commands — the acceptance scenario alone only demonstrates one of them).
  *
  * fails if (R4): `migrate` does not save a baseline on first run, or `ingest`/`correct`/
- *   `explain`/`export` do not call the observation helper after assertMigrated (each
+ *   `explain`/`export`/`dissolve` do not call the observation helper after assertMigrated
+ *   (`dissolve` is the seventh observed command — story-4.5c; its observation is also what
+ *   makes a config-edit-since-export trip the staleness gate) (each
  *   would then never record a pending config change before eventually running their own
  *   command logic — a bug here would only surface as a "config change silently missed"
  *   defect, not a command-level failure, since the underlying command paths tolerate a

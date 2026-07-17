@@ -6,6 +6,7 @@ import type { StoreReset } from '@core/ports/store-reset.js';
 import type { DissolutionPerformed } from '@core/events/domain-event.js';
 import { Result } from '@core/shared/result.js';
 import type { VerifiedBundle } from '../../infra/export/bundle-verifier.js';
+import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import type { InteractivePrompter } from '../utils/interactive.js';
 import { formatJsonSuccess, writeJsonErrorIf, type JsonErrorCode } from '../utils/json-envelope.js';
 
@@ -110,7 +111,7 @@ export async function runDissolveCommand(
 
   const countsResult = dataExporter.counts();
   if (countsResult.isFailure) {
-    fail(deps, options.json, 'QUERY_FAILURE', `could not read the current ledger counts: ${countsResult.error}`, 1);
+    fail(deps, options.json, 'QUERY_FAILURE', `could not read the current ledger counts: ${sanitizeSqlError(countsResult.error)}`, 1);
     return;
   }
   const liveCounts = countsResult.value;

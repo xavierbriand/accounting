@@ -19,7 +19,7 @@ On conflict between this file and a `docs/` file, `docs/` wins. The retrospectiv
 
 Current position: see [docs/status.md](docs/status.md). Refreshed by the retro of any story that ships an epic milestone or changes the "Next" line; routine merges drop a fragment under [`docs/status.d/`](docs/status.d/).
 
-**Stack:** Node.js 20, TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
+**Stack:** Node.js 24 LTS (floor: `>=22.12.0`, declared in `package.json` `engines`), TypeScript (strict), SQLite via `better-sqlite3` (WAL), `dinero.js`, `commander`, `zod`, `vitest` + `fast-check`.
 
 ## 2. Architecture
 

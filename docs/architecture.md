@@ -27,7 +27,7 @@
 
 ### Technical dependencies
 
-- **Runtime:** Node.js 20+
+- **Runtime:** Node.js >=22.12.0 (CI on Node 24 LTS; declared in `package.json` `engines`)
 - **Database:** SQLite (local file, `better-sqlite3`)
 - **CLI:** `commander`
 - **Math:** `dinero.js`

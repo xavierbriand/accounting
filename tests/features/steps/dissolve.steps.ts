@@ -24,13 +24,9 @@ interface DissolveWorld {
 }
 
 const tmpDirs: string[] = [];
-const dbs: Database.Database[] = [];
 let fixtureCounter = 0;
 
 afterEach(() => {
-  for (const db of dbs.splice(0)) {
-    if (db.open) db.close();
-  }
   for (const dir of tmpDirs.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
@@ -39,17 +35,27 @@ afterEach(() => {
 function makeTmpDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-dissolve-bdd-'));
   tmpDirs.push(dir);
-  return dir;
+  // Canonicalize immediately: macOS's TMPDIR sits under a symlink (/var ->
+  // /private/var). A subprocess's own process.cwd()/path.resolve() returns
+  // the canonical form, so comparing exact absolute paths against this
+  // parent-process value (not yet resolved) would spuriously mismatch —
+  // resolve once, here, so every downstream path built from it already
+  // agrees with what the spawned dissolve command computes.
+  return fs.realpathSync(dir);
 }
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;
 }
 
+// Each fixture helper opens, writes, and closes its own connection immediately
+// (unlike export.steps.ts's shared-teardown pattern) — a lingering open
+// connection on the fixture DB would hold a WAL reader/writer lock, preventing
+// the checkpoint truncation a genuinely "cleanly closed" project would have by
+// the time dissolve runs (Scenario 1's Given intends a real clean-close state).
 function insertTransaction(dbPath: string, description: string): void {
   fixtureCounter += 1;
   const db = new Database(dbPath);
-  dbs.push(db);
   const repo = new SqliteTransactionRepository(db);
   const transaction = Transaction.create({
     id: `tx-fixture-${fixtureCounter}`,
@@ -61,18 +67,19 @@ function insertTransaction(dbPath: string, description: string): void {
     ],
   }).value;
   const saveResult = repo.save(transaction, `fixture-hash-${transaction.id}`);
+  db.close();
   if (saveResult.isFailure) throw new Error(`fixture save failed: ${saveResult.error}`);
 }
 
 function recordIngestedEvent(dbPath: string, transactionId: string): void {
   const db = new Database(dbPath);
-  dbs.push(db);
   const recorder = new SqliteDomainEventRecorder(db);
   const recordResult = recorder.record({
     type: 'TransactionIngested',
     transactionIds: [transactionId],
     sourceAccount: 'main-account',
   });
+  db.close();
   if (recordResult.isFailure) throw new Error(`fixture event record failed: ${recordResult.error}`);
 }
 

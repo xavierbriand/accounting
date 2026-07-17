@@ -1,7 +1,7 @@
 import fs from 'fs';
 import type Database from 'better-sqlite3';
 import { Command, CommanderError } from 'commander';
-import { getDb } from '../infra/db/sqlite-client.js';
+import { getDb, closeDb } from '../infra/db/sqlite-client.js';
 import { FileConfigService } from '../infra/config/config-service.js';
 import { YamlConfigWriter } from '../infra/config/yaml-config-writer.js';
 import { NodeCsvParser } from '../infra/csv/node-csv-parser.js';
@@ -25,9 +25,13 @@ import { runStatusCommand } from './commands/status-command.js';
 import { runCorrectCommand } from './commands/correct-command.js';
 import { runExplainCommand } from './commands/explain-command.js';
 import { runExportCommand } from './commands/export-command.js';
+import { runDissolveCommand } from './commands/dissolve-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
+import { verifyBundle } from '../infra/export/bundle-verifier.js';
+import { writeDissolutionReceipt } from '../infra/fs/dissolution-receipt.js';
+import { FsStoreReset, planWipeTargets } from '../infra/db/fs-store-reset.js';
 import { SplitRulesService } from '../core/splits/split-rules-service.js';
 import { BufferStateService } from '../core/buffers/buffer-state-service.js';
 import { RecurringForecastService } from '../core/recurring/recurring-forecast-service.js';
@@ -386,6 +390,56 @@ program
   });
 
 program
+  .command('dissolve')
+  .description('Verify an export bundle (the export-proof) and permanently wipe the ledger stores — preserves accounting.yaml and leaves a dissolution receipt')
+  .requiredOption('--bundle <dir>', 'Path to a previously exported bundle directory (the export-proof)')
+  .option('--confirm', 'Skip the typed-phrase confirmation prompt (for scripts/CI)', false)
+  .option('--json', 'Output JSON instead of human-readable text', false)
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { bundle: string; confirm: boolean; json: boolean; dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { config, resolvedDbPath, configService } = result.value;
+    const db = getDb(resolvedDbPath);
+
+    const migrationCheck = assertMigrated(db, resolvedDbPath);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+    // Dissolve is a normal ledger-opening command (Phase-2 reversal of the
+    // draft's skip): an observed config change since the export correctly
+    // trips the staleness gate below — the bundle's accounting.yaml copy is
+    // outdated, so the archive is incomplete.
+    observeConfigChangeFor(db, config, process.stderr);
+
+    const dataExporter = new FsDataExporter(db, configService.getResolvedConfigPath());
+    const storeReset = new FsStoreReset(resolvedDbPath);
+
+    await runDissolveCommand(
+      { bundle: options.bundle, confirm: options.confirm, json: options.json },
+      {
+        dataExporter,
+        storeReset,
+        verifyBundle,
+        writeReceipt: writeDissolutionReceipt,
+        planWipeTargets,
+        prompt: inquirerPrompter,
+        closeDb,
+        dbPath: resolvedDbPath,
+        configPath: configService.getResolvedConfigPath(),
+        cwd: process.cwd(),
+        stdout: process.stdout,
+        stderr: process.stderr,
+        exitCode: (code) => process.exit(code),
+      },
+    );
+  });
+
+program
   .command('categorize')
   .description('Scan a CSV for unmatched descriptions and warm accounting.yaml autotag rules (no DB writes)')
   .requiredOption('-f, --file <path>', 'Path to the bank CSV file')
@@ -459,7 +513,7 @@ program
 // throw a CommanderError instead of calling process.exit directly, so we can
 // translate the known bad-usage codes into the same --json failure envelope
 // every other INVALID_ARGUMENT site produces.
-const JSON_CAPABLE_COMMANDS = new Set(['ingest', 'correct', 'status', 'explain', 'categorize', 'export']);
+const JSON_CAPABLE_COMMANDS = new Set(['ingest', 'correct', 'status', 'explain', 'categorize', 'export', 'dissolve']);
 
 const COMMANDER_PASSTHROUGH_CODES = new Set([
   'commander.help',

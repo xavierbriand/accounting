@@ -498,6 +498,23 @@ describe('inquirerPrompter.confirmDissolution — typed DISSOLVE gate', () => {
     expect(result).toBe(false);
   });
 
+  // fails if: the trim() in the gate drifts — surrounding whitespace is forgiven
+  // (terminal paste artifacts), but case and content never are.
+  it.each<[string, boolean]>([
+    ['  DISSOLVE  ', true],
+    ['DISSOLVE ', true],
+    ['dissolve', false],
+    ['DISSOLVE!', false],
+  ])('trim-edge: %j → %s', async (typed, expected) => {
+    const { input } = await import('@inquirer/prompts');
+    const mockInput = vi.mocked(input);
+    mockInput.mockResolvedValueOnce(typed);
+
+    const result = await inquirerPrompter.confirmDissolution('Erases: the ledger.');
+
+    expect(result).toBe(expected);
+  });
+
   it('returns false for a lowercase "dissolve" (case-sensitive gate)', async () => {
     const { input } = await import('@inquirer/prompts');
     const mockInput = vi.mocked(input);

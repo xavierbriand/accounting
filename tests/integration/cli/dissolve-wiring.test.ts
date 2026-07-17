@@ -105,4 +105,32 @@ describe('dissolve wiring — R4 composition-root subprocess test', () => {
       error: { code: 'INVALID_ARGUMENT' },
     });
   });
+
+  // fails if: the observeConfigChangeFor wiring is removed from dissolve — a config edit
+  // since the export would then no longer bump the live event count, and a stale bundle
+  // (whose accounting.yaml copy is outdated) would wrongly authorize the wipe
+  // (model-note invariant-6 amendment, config-change clause; the coupling is deliberate
+  // and this test is what makes it visible).
+  it('a config edit after the export makes dissolve refuse as stale (observation coupling)', () => {
+    const tmpDir = makeTmpDir();
+    writeYaml(tmpDir);
+    expect(spawnCli(['migrate'], { cwd: tmpDir }).status).toBe(0);
+    expect(spawnCli(['export', '--out', 'exports'], { cwd: tmpDir }).status).toBe(0);
+    const bundleName = fs.readdirSync(path.join(tmpDir, 'exports'))[0] ?? '';
+    expect(bundleName).not.toBe('');
+    fs.appendFileSync(
+      path.join(tmpDir, 'accounting.yaml'),
+      'autoTagRules:\n  - category: Transport\n    patterns:\n      - "uber"\n',
+      'utf8',
+    );
+
+    const result = spawnCli(
+      ['dissolve', '--bundle', path.join('exports', bundleName), '--confirm', '--json'],
+      { cwd: tmpDir },
+    );
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('export-proof');
+    expect(fs.existsSync(path.join(tmpDir, 'test.db'))).toBe(true);
+  });
 });

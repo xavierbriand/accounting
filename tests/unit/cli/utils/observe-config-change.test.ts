@@ -129,6 +129,22 @@ describe('observeConfigChange — best-effort failure handling', () => {
     expect(getText()).toContain('disk error');
   });
 
+  it('detect() failure (corrupted stored state) warns to stderr and does not call record/save', () => {
+    const record = vi.fn<DomainEventRecorder['record']>(() => Result.ok());
+    const save = vi.fn<ConfigStateStore['save']>(() => Result.ok());
+    const configStateStore: ConfigStateStore = {
+      getLast: () => Result.ok({ canonical: 'not-json{{', digest: 'stale-digest' }),
+      save,
+    };
+    const { stream, getText } = makeCaptureStream();
+
+    observeConfigChange({ config: baseConfig(), configStateStore, domainEventRecorder: { record }, hashFn: identityHashFn, stderr: stream });
+
+    expect(record).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(getText()).toContain('not valid JSON');
+  });
+
   it('record() failure warns to stderr and does not save (preserves at-least-once semantics)', () => {
     const previous = baseConfig({ timezone: 'Europe/Paris' });
     const current = baseConfig({ timezone: 'Europe/Berlin' });

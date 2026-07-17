@@ -75,6 +75,50 @@ describe('canonicalConfigForm — Money serialization', () => {
   });
 });
 
+describe('canonicalConfigForm — optional fields (coverage completion)', () => {
+  it('serializes a buffer cap (Money) via Money.toString() when present', () => {
+    const config = baseConfig({
+      buffers: [{ ...makeBuffer('Car', 500), cap: money(600) }],
+    });
+    expect(canonicalConfigForm(config)).toContain('"cap":"EUR 600.00"');
+  });
+
+  it('serializes a card account with cardSuffix, and a bank account without it', () => {
+    const config = baseConfig({
+      accounts: [
+        { id: 'main-account', type: 'bank', filenamePrefix: 'main_' },
+        { id: 'card-account', type: 'card', filenamePrefix: 'carte_', cardSuffix: '1234' },
+      ],
+    });
+    const form = canonicalConfigForm(config);
+    expect(form).toContain('"cardSuffix":"1234"');
+  });
+
+  it('serializes recurring validTo and amendments when present', () => {
+    const config = baseConfig({
+      recurring: [
+        {
+          name: 'Netflix',
+          category: 'Subscriptions',
+          cadence: 'monthly',
+          amount: money(12.99),
+          validFrom: '2026-01-01',
+          validTo: '2026-12-31',
+          amendments: [{ validFrom: '2026-06-01', amount: money(14.99) }],
+        },
+      ],
+    });
+    const form = canonicalConfigForm(config);
+    expect(form).toContain('"validTo":"2026-12-31"');
+    expect(form).toContain('"amount":"EUR 14.99"');
+  });
+
+  it('serializes a configured settlement block', () => {
+    const config = baseConfig({ settlement: { accounts: [{ account: 'joint-account', partner: 'Alice' }] } });
+    expect(canonicalConfigForm(config)).toContain('"settlement":{"accounts":[{"account":"joint-account","partner":"Alice"}]}');
+  });
+});
+
 describe('canonicalConfigForm — array reorder stability (property)', () => {
   it('buffers array order does not affect the canonical form', () => {
     fc.assert(

@@ -50,6 +50,16 @@ function storedStateFor(config: AppConfig, hashFn: HashFn = identityHashFn): Sto
   return { canonical, digest: hashFn(canonical) };
 }
 
+describe('ConfigChangeDetector — corrupted stored state (coverage completion)', () => {
+  it('returns Result.fail (not a throw) when the stored canonical form is not valid JSON', () => {
+    const detector = new ConfigChangeDetector(identityHashFn);
+    // A digest that deliberately does not match, forcing the parse-and-diff path.
+    const result = detector.detect({ canonical: 'not-json{{', digest: 'stale-digest' }, baseConfig());
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('not valid JSON');
+  });
+});
+
 describe('ConfigChangeDetector — bootstrap', () => {
   it('returns null when previous is null (first run — caller saves the baseline)', () => {
     const detector = new ConfigChangeDetector(identityHashFn);

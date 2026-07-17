@@ -134,4 +134,99 @@ describe('diffConfigs — exactness', () => {
       { section: 'settlement', entries: [{ key: 'joint.partner', kind: 'changed', previous: 'Alice', current: 'Bob' }] },
     ]);
   });
+
+  it('settlement flipping from present to absent produces one "removed" entry', () => {
+    const previous = baseCanonical({ settlement: { accounts: [{ account: 'joint', partner: 'Alice' }] } });
+    const current = baseCanonical({ settlement: null });
+    const sections = diffConfigs(previous, current);
+    expect(sections).toEqual([
+      { section: 'settlement', entries: [{ key: 'settlement', kind: 'removed', previous: JSON.stringify(previous.settlement) }] },
+    ]);
+  });
+});
+
+describe('diffConfigs — coverage completion (accounts/splits/recurring/autoTagRules)', () => {
+  it('an account field edit (filenamePrefix) produces one "<id>.filenamePrefix" entry', () => {
+    const previous = baseCanonical({ accounts: [{ id: 'main-account', type: 'bank', filenamePrefix: 'main_' }] });
+    const current = baseCanonical({ accounts: [{ id: 'main-account', type: 'bank', filenamePrefix: 'main2_' }] });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'accounts', entries: [{ key: 'main-account.filenamePrefix', kind: 'changed', previous: 'main_', current: 'main2_' }] },
+    ]);
+  });
+
+  it('adding a card account with cardSuffix produces one "added" entry', () => {
+    const previous = baseCanonical({ accounts: [] });
+    const added = { id: 'card-account', type: 'card', filenamePrefix: 'carte_', cardSuffix: '1234' };
+    const current = baseCanonical({ accounts: [added] });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'accounts', entries: [{ key: 'card-account', kind: 'added', current: JSON.stringify(added) }] },
+    ]);
+  });
+
+  it('a split window rules edit produces one "<validFrom>.rules" entry', () => {
+    const previous = baseCanonical({
+      splits: [{ validFrom: '2024-01-01', rules: [{ partner: 'Alice', ratio: 0.5 }, { partner: 'Bob', ratio: 0.5 }] }],
+    });
+    const current = baseCanonical({
+      splits: [{ validFrom: '2024-01-01', rules: [{ partner: 'Alice', ratio: 0.6 }, { partner: 'Bob', ratio: 0.4 }] }],
+    });
+    const sections = diffConfigs(previous, current);
+    expect(sections).toEqual([
+      {
+        section: 'splits',
+        entries: [{
+          key: '2024-01-01.rules',
+          kind: 'changed',
+          previous: JSON.stringify(previous.splits[0].rules),
+          current: JSON.stringify(current.splits[0].rules),
+        }],
+      },
+    ]);
+  });
+
+  it('a recurring rule field edit (amount) produces one "<name>.amount" entry', () => {
+    const previous = baseCanonical({
+      recurring: [{ name: 'Netflix', category: 'Subscriptions', cadence: 'monthly', amount: 'EUR 12.99', validFrom: '2026-01-01', amendments: [] }],
+    });
+    const current = baseCanonical({
+      recurring: [{ name: 'Netflix', category: 'Subscriptions', cadence: 'monthly', amount: 'EUR 14.99', validFrom: '2026-01-01', amendments: [] }],
+    });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'recurring', entries: [{ key: 'Netflix.amount', kind: 'changed', previous: 'EUR 12.99', current: 'EUR 14.99' }] },
+    ]);
+  });
+
+  it('removing a recurring rule with a validTo/amendments produces one "removed" entry', () => {
+    const removed = {
+      name: 'Netflix',
+      category: 'Subscriptions',
+      cadence: 'monthly',
+      amount: 'EUR 12.99',
+      validFrom: '2026-01-01',
+      validTo: '2026-12-31',
+      amendments: [{ validFrom: '2026-06-01', amount: 'EUR 14.99' }],
+    };
+    const previous = baseCanonical({ recurring: [removed] });
+    const current = baseCanonical({ recurring: [] });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'recurring', entries: [{ key: 'Netflix', kind: 'removed', previous: JSON.stringify(removed) }] },
+    ]);
+  });
+
+  it('an autoTagRule category edit produces one "<pattern>.category" entry', () => {
+    const previous = baseCanonical({ autoTagRules: [{ pattern: 'uber', category: 'Transport' }] });
+    const current = baseCanonical({ autoTagRules: [{ pattern: 'uber', category: 'RideShare' }] });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'autoTagRules', entries: [{ key: 'uber.category', kind: 'changed', previous: 'Transport', current: 'RideShare' }] },
+    ]);
+  });
+
+  it('adding an autoTagRule produces one "added" entry', () => {
+    const added = { pattern: 'uber', category: 'Transport' };
+    const previous = baseCanonical({ autoTagRules: [] });
+    const current = baseCanonical({ autoTagRules: [added] });
+    expect(diffConfigs(previous, current)).toEqual([
+      { section: 'autoTagRules', entries: [{ key: 'uber', kind: 'added', current: JSON.stringify(added) }] },
+    ]);
+  });
 });

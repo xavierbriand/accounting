@@ -35,11 +35,13 @@ afterEach(() => {
 });
 
 describe('migration 006 — corrects_id + kind columns', () => {
-  it('(a) user_version advances to 6 and the transactions table gains corrects_id + kind', () => {
+  it('(a) user_version advances to at least 6 and the transactions table gains corrects_id + kind', () => {
     const db = makeFreshDb();
     runMigrations(db);
 
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    // >= (not ===) 6: forward-compatible with later migrations (005's own pattern) —
+    // this test only asserts migration 006's own effects, not the DB's final version.
+    expect(db.pragma('user_version', { simple: true }) as number).toBeGreaterThanOrEqual(6);
 
     const columns = db.prepare('PRAGMA table_info(transactions)').all() as Array<{
       name: string;
@@ -56,13 +58,13 @@ describe('migration 006 — corrects_id + kind columns', () => {
     expect(byName.get('kind')?.dflt_value).toBe("'original'");
   });
 
-  it('(b) running migrations a second time at v6 is a no-op (idempotent)', () => {
+  it('(b) running migrations a second time is a no-op (idempotent)', () => {
     const db = makeFreshDb();
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    const version = db.pragma('user_version', { simple: true });
 
     runMigrations(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    expect(db.pragma('user_version', { simple: true })).toBe(version);
   });
 
   it('(c) kind defaults to \'original\' for a plain insert that omits it', () => {

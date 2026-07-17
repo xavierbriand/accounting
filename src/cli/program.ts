@@ -1,4 +1,5 @@
 import fs from 'fs';
+import type Database from 'better-sqlite3';
 import { Command, CommanderError } from 'commander';
 import { getDb } from '../infra/db/sqlite-client.js';
 import { FileConfigService } from '../infra/config/config-service.js';
@@ -9,6 +10,8 @@ import { TransactionBuilder } from '../core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../infra/db/repositories/sqlite-hash-repository.js';
 import { SqliteTransactionRepository } from '../infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../infra/db/repositories/sqlite-domain-event-recorder.js';
+import { SqliteConfigStateStore } from '../infra/db/repositories/sqlite-config-state-store.js';
+import { observeConfigChange } from './utils/observe-config-change.js';
 import { NodeSqliteSnapshotService } from '../infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../infra/crypto/node-uuid-gen.js';
@@ -71,6 +74,21 @@ function resolveDbPathForCommand(
   return Result.ok({ config, resolvedDbPath: validation.value, configService });
 }
 
+// Ambient audit observation (FR23, story-4.5a): one shared call per ledger-opening command,
+// right after assertMigrated (or, for `migrate`, after a successful migration). Best-effort —
+// never blocks the command it's wired into (see observeConfigChange's own doc comment).
+// `categorize` is deliberately excluded: it never opens the DB (story-D no-DB invariant,
+// enforced by tests/integration/cli/categorize-end-to-end-wiring.test.ts).
+function observeConfigChangeFor(db: Database.Database, config: AppConfig, stderr: NodeJS.WritableStream): void {
+  observeConfigChange({
+    config,
+    configStateStore: new SqliteConfigStateStore(db),
+    domainEventRecorder: new SqliteDomainEventRecorder(db),
+    hashFn: nodeHashFn,
+    stderr,
+  });
+}
+
 const program = new Command();
 
 program
@@ -94,8 +112,9 @@ program
       process.stderr.write(`error: ${result.error.message}\n`);
       process.exit(result.error.code);
     }
-    const { resolvedDbPath } = result.value;
+    const { config, resolvedDbPath } = result.value;
     runMigrate(resolvedDbPath);
+    observeConfigChangeFor(getDb(resolvedDbPath), config, process.stderr);
   });
 
 program
@@ -120,6 +139,7 @@ program
       process.stderr.write(`error: ${migrationCheck.error}\n`);
       process.exit(2);
     }
+    observeConfigChangeFor(db, config, process.stderr);
 
     const configPath = configService.getResolvedConfigPath();
 
@@ -200,7 +220,7 @@ program
       process.stderr.write(`error: ${result.error.message}\n`);
       process.exit(result.error.code);
     }
-    const { resolvedDbPath } = result.value;
+    const { config, resolvedDbPath } = result.value;
     const db = getDb(resolvedDbPath);
 
     const migrationCheck = assertMigrated(db, resolvedDbPath);
@@ -208,6 +228,7 @@ program
       process.stderr.write(`error: ${migrationCheck.error}\n`);
       process.exit(2);
     }
+    observeConfigChangeFor(db, config, process.stderr);
 
     const transactionRepository = new SqliteTransactionRepository(db);
     const domainEventRecorder = new SqliteDomainEventRecorder(db);
@@ -255,6 +276,7 @@ program
       process.stderr.write(`error: ${migrationCheck.error}\n`);
       process.exit(2);
     }
+    observeConfigChangeFor(db, config, process.stderr);
 
     const ledger = new SqliteBufferLedgerQuery(db);
     const splitsService = new SplitRulesService(config.splits);
@@ -297,6 +319,7 @@ program
       process.stderr.write(`error: ${migrationCheck.error}\n`);
       process.exit(2);
     }
+    observeConfigChangeFor(db, config, process.stderr);
 
     const ledger = new SqliteBufferLedgerQuery(db);
     const splitsService = new SplitRulesService(config.splits);

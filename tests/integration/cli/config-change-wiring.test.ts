@@ -6,15 +6,17 @@
  *
  * Gherkin coverage: tests/features/config-change.feature exercises the `status` command
  *   specifically; this test proves the SAME wiring reaches `migrate`, `ingest`, `correct`,
- *   and `explain` too (the plan's "one helper, one call per command" surface spans five
- *   commands — the acceptance scenario alone only demonstrates one of them).
+ *   `explain`, and `export` too (the plan's "one helper, one call per command" surface
+ *   spans six commands — the acceptance scenario alone only demonstrates one of them).
  *
  * fails if (R4): `migrate` does not save a baseline on first run, or `ingest`/`correct`/
- *   `explain` do not call the observation helper after assertMigrated (each would then
- *   never record a pending config change before eventually running their own command
- *   logic — a bug here would only surface as a "config change silently missed" defect,
- *   not a command-level failure, since the underlying command paths tolerate a missing/
- *   dangling argument long enough to reach the wiring point first).
+ *   `explain`/`export` do not call the observation helper after assertMigrated (each
+ *   would then never record a pending config change before eventually running their own
+ *   command logic — a bug here would only surface as a "config change silently missed"
+ *   defect, not a command-level failure, since the underlying command paths tolerate a
+ *   missing/dangling argument long enough to reach the wiring point first; `export`'s own
+ *   --out validation runs after the wiring point, so even a doomed --out still proves it
+ *   fired — story-4.5b).
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
@@ -121,6 +123,21 @@ describe('observe-config-change wiring — R4 composition-root subprocess test',
     // Same reasoning as the correct-command case above: the wiring point precedes the
     // CSV read, so a nonexistent file path still proves the wiring fired.
     spawnCli(['ingest', '--file', path.join(tmpDir, 'does-not-exist.csv')], { cwd: tmpDir });
+
+    expect(configChangedEventCount(dbPath)).toBe(1);
+  });
+
+  it('export detects and records a change (story-4.5b — the sixth ledger-opening command)', () => {
+    const tmpDir = makeTmpDir();
+    const dbPath = path.join(tmpDir, 'test.db');
+    writeYaml(tmpDir, 'Europe/Paris');
+    expect(spawnCli(['migrate'], { cwd: tmpDir }).status).toBe(0);
+
+    writeYaml(tmpDir, 'Europe/Berlin');
+    // The wiring point (right after assertMigrated) precedes export's own --out
+    // resolution/validation, so a normal export run still proves the wiring fired.
+    const result = spawnCli(['export'], { cwd: tmpDir });
+    expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 
     expect(configChangedEventCount(dbPath)).toBe(1);
   });

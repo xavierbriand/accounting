@@ -91,6 +91,27 @@ describe('parseSuggestionLog — dialect coverage', () => {
     expect(rows[0].story).toBe('h6');
   });
 
+  // fails if the Tag→Resolution→Disposition fallback misreads the
+  // `| # | Finding | Class | Resolution |` dialect (docs/plans/story-h4.md
+  // through story-h7.md's real Phase-4 tables) — there, "Class" carries the
+  // tag and "Resolution" is free text (the *opposite* role Resolution plays
+  // in the Phase/Suggestion/Resolution/Link dialect), a third real-world
+  // shape discovered via the real-tree integration run.
+  it('parses the Finding/Class/Resolution dialect, reading Class (not Resolution) as the tag', () => {
+    const markdown = `# Story h4 — Fixture
+
+## Suggestion log
+
+| # | Finding | Class | Resolution |
+| --- | --- | --- | --- |
+| F5 | Unknown flag silently accepted | fix-now | Rejected with usage text. |
+| F3 | DoR checklist gap | acknowledge | By phase design. |
+`;
+    const rows = parseSuggestionLog(markdown);
+    expect(rows.map((r) => r.tag)).toEqual(['adopted', 'acknowledged']);
+    expect(rows[0].finding).toContain('Unknown flag');
+  });
+
   // fails if a plan with no "## Suggestion log" heading at all (e.g.
   // docs/plans/story-2.2.md pre-dates the convention) throws instead of
   // returning an empty, honestly-zero row list.

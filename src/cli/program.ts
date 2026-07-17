@@ -31,7 +31,7 @@ import { SafeTransferCalculator } from '../core/transfer/safe-transfer-calculato
 import { SqliteBufferLedgerQuery } from '../infra/db/repositories/sqlite-buffer-ledger-query.js';
 import { SqliteContributionQuery } from '../infra/db/repositories/sqlite-contribution-query.js';
 import { nodeClock } from './utils/node-clock.js';
-import { formatJsonError } from './utils/json-envelope.js';
+import { writeJsonErrorIf } from './utils/json-envelope.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
 
@@ -422,19 +422,17 @@ try {
   }
   if (COMMANDER_PARSE_ERROR_CODES.has(err.code)) {
     const commandName = process.argv[2];
-    if (
-      commandName !== undefined &&
-      JSON_CAPABLE_COMMANDS.has(commandName) &&
-      process.argv.includes('--json')
-    ) {
-      process.stderr.write(
-        formatJsonError(commandName, {
-          code: 'INVALID_ARGUMENT',
-          message: err.message.replace(/^error: /, ''),
-        }),
-      );
+    if (commandName !== undefined && JSON_CAPABLE_COMMANDS.has(commandName)) {
+      writeJsonErrorIf(process.stderr, process.argv.includes('--json'), commandName, {
+        code: 'INVALID_ARGUMENT',
+        message: err.message.replace(/^error: /, ''),
+      });
+      process.exit(2);
     }
-    process.exit(2);
+    // Not one of the 5 --json-capable commands (e.g. migrate, which has no
+    // --json mode and no INVALID_ARGUMENT call site — contract § 8): preserve
+    // Commander's own exit code, unaffected by this story.
+    process.exit(err.exitCode);
   }
   // commander.unknownCommand (and anything else unclassified): deliberately out
   // of scope — no known command name to report. Preserve Commander's own exit

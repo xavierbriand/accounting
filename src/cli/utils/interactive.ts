@@ -26,6 +26,8 @@ export interface InteractivePrompter {
     suggestedPattern: string | null,
     category: string,
   ): Promise<RememberRuleResult>;
+
+  confirmDissolution(summary: string): Promise<boolean>;
 }
 
 export const inquirerPrompter: InteractivePrompter = {
@@ -127,5 +129,17 @@ export const inquirerPrompter: InteractivePrompter = {
         throw err;
       }
     }
+  },
+
+  // Exact case-sensitive match on the typed phrase — a destructive-action gate,
+  // not a fuzzy confirm. Anything other than "DISSOLVE" (including ESC/ctrl-c,
+  // which input() surfaces as a resolved empty-ish value or a rejection) is a
+  // decline; dissolve-command treats a rejection here as "prompt unavailable"
+  // (NEEDS_REVIEW), distinct from a completed prompt that simply answered no.
+  async confirmDissolution(summary) {
+    const answer = await input({
+      message: `${summary}\nType DISSOLVE to confirm (anything else cancels):`,
+    });
+    return answer.trim() === 'DISSOLVE';
   },
 };

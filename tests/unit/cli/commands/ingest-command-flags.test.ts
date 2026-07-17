@@ -92,7 +92,7 @@ describe('--non-interactive mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeHighOutcome('EDF', 'Utilities')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
+    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() };
     const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
@@ -126,7 +126,7 @@ describe('--non-interactive mode', () => {
     const outcomes = [makeHighOutcome('CARREFOUR', 'Groceries'), makeLowOutcome('UBER TRIP', 'Transport')];
     const { stdout, stderr } = makeStreams();
     const exitCodes: number[] = [];
-    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule };
+    const prompter = { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() };
     const transactionRepository = makeNoOpTransactionRepo();
 
     const deps: IngestCommandDeps = {
@@ -173,7 +173,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
       pickSourceAccount: () => Result.ok(makeAccount('acct-42', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -226,7 +226,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
       pickSourceAccount: () => Result.ok(makeAccount('acct-77', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -266,7 +266,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -301,7 +301,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -333,7 +333,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.fail('ENOENT: no such file or directory'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -365,7 +365,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -397,7 +397,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -430,7 +430,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: () => Result.fail('unknown account in batch') }),
       pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),
@@ -464,7 +464,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('ambiguous filename — multiple account prefixes match'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => exitCodes.push(code),

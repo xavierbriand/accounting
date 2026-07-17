@@ -126,6 +126,7 @@ Given('the CSV has been committed interactively', async function (state: IngestW
         selectCategory: () => Promise.resolve({ action: 'keep' }),
         confirmBatch: () => Promise.resolve(true),
         confirmRememberRule: () => Promise.resolve({ action: 'skip' as const }),
+        confirmDissolution: () => Promise.resolve(true),
       },
       stdout: sink,
       stderr: sink,

@@ -109,6 +109,7 @@ function makeRealDeps(
       selectCategory: () => Promise.resolve({ action: 'keep' }),
       confirmBatch: () => Promise.resolve(true),
       confirmRememberRule: () => Promise.resolve({ action: 'skip' }),
+      confirmDissolution: () => Promise.resolve(true),
     },
     stdout: stdout as Writable,
     stderr: stderr as Writable,

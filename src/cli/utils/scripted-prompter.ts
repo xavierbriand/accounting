@@ -26,6 +26,7 @@ export type Script =
   | { type: 'confirmBatch'; confirm: boolean }
   | { type: 'confirmRememberRule'; action: 'skip' }
   | { type: 'confirmRememberRule'; action: 'remember'; pattern: string }
+  | { type: 'confirmDissolution'; confirm: boolean }
   | { type: '__forceMtimeRace__' };
 
 export class ScriptedPrompter implements InteractivePrompter {
@@ -69,6 +70,11 @@ export class ScriptedPrompter implements InteractivePrompter {
     const entry = this.nextOf('confirmRememberRule');
     if (entry.action === 'remember') return { action: 'remember', pattern: entry.pattern };
     return { action: 'skip' };
+  }
+
+  async confirmDissolution(): Promise<boolean> {
+    const entry = this.nextOf('confirmDissolution');
+    return entry.confirm;
   }
 }
 

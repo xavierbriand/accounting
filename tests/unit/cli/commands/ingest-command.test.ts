@@ -104,6 +104,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       selectCategory: vi.fn().mockResolvedValue({ action: 'keep' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const deps: IngestCommandDeps = {
@@ -161,6 +162,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const deps: IngestCommandDeps = {
@@ -203,6 +205,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       selectCategory: vi.fn(),
       confirmBatch: vi.fn().mockResolvedValue(false),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const deps: IngestCommandDeps = {
@@ -240,6 +243,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       selectCategory: vi.fn().mockResolvedValue({ action: 'abort' }),
       confirmBatch: vi.fn(),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const deps: IngestCommandDeps = {
@@ -279,7 +283,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionBuilder: () => ({ buildAll: vi.fn() }),
       pickSourceAccount: () => Result.fail('no account configured for this filename'),
       readFile: () => Result.ok('csv-content'),
-      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule },
+      prompt: { selectCategory: vi.fn(), confirmBatch: vi.fn(), confirmRememberRule: noOpConfirmRememberRule, confirmDissolution: vi.fn() },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
       exitCode: (code) => capturedExitCode.push(code),
@@ -320,6 +324,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
         return Promise.resolve(true);
       }),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const deps: IngestCommandDeps = {
@@ -398,6 +403,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
         selectCategory: vi.fn(),
         confirmBatch: vi.fn().mockResolvedValue(true),
         confirmRememberRule: noOpConfirmRememberRule,
+        confirmDissolution: vi.fn(),
       },
       stdout: stdout as Writable,
       stderr: stderr as Writable,
@@ -616,6 +622,7 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       selectCategory: selectCategoryMock,
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: noOpConfirmRememberRule,
+      confirmDissolution: vi.fn(),
     };
 
     const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: 2 }));
@@ -734,6 +741,7 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'courtage' }),
+      confirmDissolution: vi.fn(),
     };
 
     const { deps, saveBatchMock, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);
@@ -759,6 +767,7 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'courtage' }),
+      confirmDissolution: vi.fn(),
     };
 
     const { deps, saveBatchMock, exitCodes, stderr } = makeDepsWithWriter(configWriter, prompter, outcomes);
@@ -782,6 +791,7 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'AutoInsurance' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'skip' }),
+      confirmDissolution: vi.fn(),
     };
 
     const { deps, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);
@@ -811,6 +821,7 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
       confirmRememberRule: vi.fn()
         .mockResolvedValueOnce({ action: 'remember', pattern: 'courtage' })
         .mockResolvedValueOnce({ action: 'remember', pattern: 'courtage' }),
+      confirmDissolution: vi.fn(),
     };
 
     const { deps, exitCodes } = makeDepsWithWriter(configWriter, prompter, outcomes);

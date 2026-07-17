@@ -133,6 +133,77 @@ describe('FsDataExporter.writeBundle() — content writers', () => {
     }
   });
 
+  // Correction rows are saved via saveCorrection(), which leaves idempotency_hash SQL NULL
+  // (and sets corrects_id) — the one production path that exercises the NULL→'' CSV mapping.
+  it('represents NULL idempotency_hash/corrects_id (correction rows) as empty CSV fields', async () => {
+    const { db, dbPath } = setUpDb();
+    seedTransaction(db, 'tx-1', 'Groceries, original');
+    const repo = new SqliteTransactionRepository(db);
+    const reversal = Transaction.create({
+      id: 'tx-rev',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Reversal of tx-1',
+      kind: 'reversal',
+      correctsId: 'tx-1',
+      entries: [
+        { account: 'Assets:Bank:main-account', side: 'debit', amount: makeEur(2500) },
+        { account: 'Expense:Groceries', side: 'credit', amount: makeEur(2500) },
+      ],
+    }).value;
+    const correcting = Transaction.create({
+      id: 'tx-corr',
+      occurredAt: '2026-04-21T14:30:00+02:00',
+      description: 'Corrected groceries',
+      kind: 'correcting',
+      correctsId: 'tx-1',
+      entries: [
+        { account: 'Expense:Groceries', side: 'debit', amount: makeEur(2400) },
+        { account: 'Assets:Bank:main-account', side: 'credit', amount: makeEur(2400) },
+      ],
+    }).value;
+    const saved = repo.saveCorrection(reversal, correcting);
+    if (saved.isFailure) throw new Error(`fixture saveCorrection failed: ${saved.error}`);
+
+    const exporter = new FsDataExporter(db, writeYaml(path.dirname(dbPath)));
+    const outDir = makeTmpDir();
+    const result = await exporter.writeBundle(outDir, 'null-hash-bundle');
+    expect(result.isSuccess).toBe(true);
+
+    const csvRows = csvParse(
+      fs.readFileSync(path.join(outDir, 'null-hash-bundle', 'transactions.csv'), 'utf8'),
+      { columns: true },
+    ) as Array<Record<string, string>>;
+
+    expect(csvRows).toHaveLength(3);
+    const byId = new Map(csvRows.map((r) => [r['id'], r]));
+    expect(byId.get('tx-rev')?.['idempotency_hash']).toBe('');
+    expect(byId.get('tx-corr')?.['idempotency_hash']).toBe('');
+    expect(byId.get('tx-rev')?.['corrects_id']).toBe('tx-1');
+    expect(byId.get('tx-1')?.['corrects_id']).toBe('');
+    expect(byId.get('tx-1')?.['idempotency_hash']).toBe('fixture-hash-tx-1');
+  });
+
+  // Guards the config_state exclusion (contract § Export bundle format): the bundle holds
+  // exactly the five documented files — a sixth appearing means something leaked.
+  it('the bundle contains exactly the five documented files, and nothing else', async () => {
+    const { db, dbPath } = setUpDb();
+    seedTransaction(db, 'tx-1', 'Plain row');
+
+    const exporter = new FsDataExporter(db, writeYaml(path.dirname(dbPath)));
+    const outDir = makeTmpDir();
+    const result = await exporter.writeBundle(outDir, 'exact-files-bundle');
+    expect(result.isSuccess).toBe(true);
+
+    const entries = fs.readdirSync(path.join(outDir, 'exact-files-bundle')).sort();
+    expect(entries).toEqual([
+      'accounting.yaml',
+      'domain-events.json',
+      'manifest.json',
+      'transaction-entries.csv',
+      'transactions.csv',
+    ]);
+  });
+
   it('writes transaction-entries.csv row-for-row equal to the DB', async () => {
     const { db, dbPath } = setUpDb();
     seedTransaction(db, 'tx-1', 'Groceries');
@@ -205,5 +276,28 @@ describe('FsDataExporter.writeBundle() — content writers', () => {
 
     expect(result.isSuccess).toBe(true);
     expect(result.value.location).toBe(path.join(outDir, 'test-bundle'));
+  });
+
+  // Plan § Gherkin acceptance scenarios: "Empty-ledger export — bundle with
+  // header-only CSVs, zero counts — covered at unit/integration tier" (§ 6.6 sizing).
+  it('writes header-only CSVs, an empty events array, and zero manifest counts for a freshly migrated, empty DB', async () => {
+    const { db, dbPath } = setUpDb();
+    const exporter = new FsDataExporter(db, writeYaml(path.dirname(dbPath)));
+    const outDir = makeTmpDir();
+    const result = await exporter.writeBundle(outDir, 'empty-bundle');
+    expect(result.isSuccess, `writeBundle failed: ${result.isFailure ? result.error : ''}`).toBe(true);
+
+    const bundleDir = path.join(outDir, 'empty-bundle');
+    const txRows = csvParse(fs.readFileSync(path.join(bundleDir, 'transactions.csv'), 'utf8'), { columns: true }) as unknown[];
+    const entryRows = csvParse(fs.readFileSync(path.join(bundleDir, 'transaction-entries.csv'), 'utf8'), { columns: true }) as unknown[];
+    const events = JSON.parse(fs.readFileSync(path.join(bundleDir, 'domain-events.json'), 'utf8')) as unknown[];
+    const manifest = JSON.parse(fs.readFileSync(path.join(bundleDir, 'manifest.json'), 'utf8')) as { counts: { transactions: number; events: number } };
+
+    const txHeader = fs.readFileSync(path.join(bundleDir, 'transactions.csv'), 'utf8').trim();
+    expect(txHeader).toBe('id,occurred_at,description,created_at,idempotency_hash,corrects_id,kind');
+    expect(txRows).toHaveLength(0);
+    expect(entryRows).toHaveLength(0);
+    expect(events).toEqual([]);
+    expect(manifest.counts).toEqual({ transactions: 0, events: 0 });
   });
 });

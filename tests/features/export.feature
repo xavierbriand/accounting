@@ -31,4 +31,6 @@ Feature: Export bundle (FR21, story-4.5b)
     And the final stderr line parses as a WRITE_FAILURE envelope
     And no bundle directory and no partial remnant exist under the out directory
     # fails if a half-written directory survives (a plausible-but-incomplete "bundle") or the
-    # envelope is missing. Mechanism: subprocess.
+    # envelope is missing. Mechanism: subprocess. Tiering note: this fixture fails at --out
+    # resolution (before writeBundle); the mid-write crash variant of "half-written survives"
+    # is pinned at integration tier (fs-data-exporter-atomicity.test.ts, forced write failure).

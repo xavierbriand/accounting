@@ -74,6 +74,20 @@ describe('ScriptedPrompter', () => {
     expect(await prompter.confirmRememberRule()).toEqual({ action: 'skip' });
     expect(await prompter.confirmBatch()).toBe(true);
   });
+
+  it('returns the canned answer for confirmDissolution (story-4.5c)', async () => {
+    const script: Script[] = [{ type: 'confirmDissolution', confirm: true }];
+    const prompter = new ScriptedPrompter(script);
+    const result = await prompter.confirmDissolution();
+    expect(result).toBe(true);
+  });
+
+  it('returns false when the script cans a declined confirmDissolution', async () => {
+    const script: Script[] = [{ type: 'confirmDissolution', confirm: false }];
+    const prompter = new ScriptedPrompter(script);
+    const result = await prompter.confirmDissolution();
+    expect(result).toBe(false);
+  });
 });
 
 describe('scriptHasForceMtimeRace', () => {

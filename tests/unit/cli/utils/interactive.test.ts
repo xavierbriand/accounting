@@ -463,3 +463,59 @@ describe('inquirerPrompter.selectCategory — define-new branch', () => {
     expect(result).toEqual({ action: 'keep' });
   });
 });
+
+// ---- confirmDissolution: typed-phrase gate (story-4.5c) ----
+// fails if: typing exactly "DISSOLVE" does not return true, anything else does not
+//           return false (a fuzzy match would weaken a destructive-action gate), or
+//           the summary text passed in is not surfaced in the prompt message.
+
+describe('inquirerPrompter.confirmDissolution — typed DISSOLVE gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fails if confirmDissolution is not exported from interactive.ts', () => {
+    expect(typeof inquirerPrompter.confirmDissolution).toBe('function');
+  });
+
+  it('returns true when the user types exactly "DISSOLVE"', async () => {
+    const { input } = await import('@inquirer/prompts');
+    const mockInput = vi.mocked(input);
+    mockInput.mockResolvedValueOnce('DISSOLVE');
+
+    const result = await inquirerPrompter.confirmDissolution('Erases: the ledger. Preserves: accounting.yaml.');
+
+    expect(result).toBe(true);
+  });
+
+  it('returns false for anything other than "DISSOLVE" (typed refusal)', async () => {
+    const { input } = await import('@inquirer/prompts');
+    const mockInput = vi.mocked(input);
+    mockInput.mockResolvedValueOnce('no thanks');
+
+    const result = await inquirerPrompter.confirmDissolution('Erases: the ledger.');
+
+    expect(result).toBe(false);
+  });
+
+  it('returns false for a lowercase "dissolve" (case-sensitive gate)', async () => {
+    const { input } = await import('@inquirer/prompts');
+    const mockInput = vi.mocked(input);
+    mockInput.mockResolvedValueOnce('dissolve');
+
+    const result = await inquirerPrompter.confirmDissolution('Erases: the ledger.');
+
+    expect(result).toBe(false);
+  });
+
+  it('surfaces the caller-provided summary in the prompt message', async () => {
+    const { input } = await import('@inquirer/prompts');
+    const mockInput = vi.mocked(input);
+    mockInput.mockResolvedValueOnce('DISSOLVE');
+
+    await inquirerPrompter.confirmDissolution('Erases: the ledger. Preserves: accounting.yaml.');
+
+    const callArg = mockInput.mock.calls[0][0] as unknown as { message: string };
+    expect(callArg.message).toContain('Erases: the ledger. Preserves: accounting.yaml.');
+  });
+});

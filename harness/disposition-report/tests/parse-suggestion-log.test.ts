@@ -135,3 +135,81 @@ describe('normalizeTag — honesty buckets', () => {
     expect(rows[1].finding).toContain('truncated row');
   });
 });
+
+describe('parseSuggestionLog — phase attribution + R-rule extraction (attribute.ts wiring)', () => {
+  // fails if parseSuggestionLog doesn't wire attribute.ts's heuristics in —
+  // rows before a Phase-4 marker are p2, rows after are p4, and R-rule
+  // mentions in the finding text are captured (sampled from the
+  // story-4.1.md-style `### Phase 4 (...) dispositions` subheading dialect).
+  it('splits a single Suggestion log section into p2/p4 rows at a "### Phase 4" subheading', () => {
+    const markdown = `# Story x — Phase split fixture
+
+## Suggestion log
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 1 | P3 naming-drift per R25 | **ADOPT** | Renamed. |
+
+### Phase 4 (code-reviewer + ddd-modeler Mode B) dispositions
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| P4-1 | stderr error not sanitized | **FIX-NOW** | Wrapped in sanitizeSqlError. |
+
+## DoR checklist
+`;
+    const rows = parseSuggestionLog(markdown);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].phase).toBe('p2');
+    expect(rows[0].rules).toEqual(['R25']);
+    expect(rows[1].phase).toBe('p4');
+    expect(rows[1].tag).toBe('adopted');
+  });
+
+  // fails if a separate top-level `## Phase-4 review & dispositions` section
+  // (story-4.3a.md's real dialect — a sibling section, not a subheading
+  // inside Suggestion log) isn't picked up as a continuation at all.
+  it('treats an immediately-following "## Phase-4 review & dispositions" section as a continuation', () => {
+    const markdown = `# Story x — Sibling-section fixture
+
+## Suggestion log
+
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 | phase-2 finding | adopted | done |
+
+## Phase-4 review & dispositions (2026-07-08)
+
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 | phase-4 finding | acknowledged | confirmed |
+
+## DoR checklist
+`;
+    const rows = parseSuggestionLog(markdown);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].phase).toBe('p2');
+    expect(rows[1].phase).toBe('p4');
+  });
+
+  // fails if the P4-retro id override isn't honored when the row sits in the
+  // *same* table as ordinary P1/P2/P3 rows with no heading split at all
+  // (story-maint-05.md/story-maint-06.md's real shape).
+  it('attributes a P4-retro row id to p4 even with no marker in the section', () => {
+    const markdown = `# Story x — P4-retro fixture
+
+## Suggestion log
+
+| Phase | Suggestion | Resolution | Link / Reason |
+| --- | --- | --- | --- |
+| P1 | phase-2 finding | adopted | done |
+| P4-retro | CI gate green | verified | confirmed |
+
+## DoR checklist
+`;
+    const rows = parseSuggestionLog(markdown);
+    expect(rows[0].phase).toBe('p2');
+    expect(rows[1].phase).toBe('p4');
+    expect(rows[1].tag).toBe('unparsed');
+  });
+});

@@ -10,6 +10,8 @@
  *     hide R4-test-side bugs like the one fixed in slice 10).
  *   - scriptHasForceMtimeRace returns the wrong boolean (program.ts uses it to
  *     decide whether to pass BigInt(0) as expectedMtimeNs).
+ *   - confirmDissolution does not honour its scripted boolean entry (story-4.5c —
+ *     a scripted dissolve run would then hang on or bypass the typed-phrase gate).
  */
 import { describe, it, expect } from 'vitest';
 import { ScriptedPrompter, scriptHasForceMtimeRace, type Script } from '../../../../src/cli/utils/scripted-prompter.js';
@@ -73,6 +75,20 @@ describe('ScriptedPrompter', () => {
     expect(await prompter.selectCategory()).toEqual({ action: 'change', category: 'AutoInsurance' });
     expect(await prompter.confirmRememberRule()).toEqual({ action: 'skip' });
     expect(await prompter.confirmBatch()).toBe(true);
+  });
+
+  it('returns the canned answer for confirmDissolution (story-4.5c)', async () => {
+    const script: Script[] = [{ type: 'confirmDissolution', confirm: true }];
+    const prompter = new ScriptedPrompter(script);
+    const result = await prompter.confirmDissolution();
+    expect(result).toBe(true);
+  });
+
+  it('returns false when the script cans a declined confirmDissolution', async () => {
+    const script: Script[] = [{ type: 'confirmDissolution', confirm: false }];
+    const prompter = new ScriptedPrompter(script);
+    const result = await prompter.confirmDissolution();
+    expect(result).toBe(false);
   });
 });
 

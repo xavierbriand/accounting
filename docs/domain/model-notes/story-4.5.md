@@ -99,6 +99,11 @@ class, boundary-stamped UTC `recorded_at`, no actor.
 - **Ports:** `DataExporter` (write bundle, return manifest hash + counts), `StoreReset` (execute
   the wipe). Core contributes only the event VOs and proof-matching logic; no `DissolutionService`
   aggregate — the acts are boundary orchestration in the 4.1 B1 tradition.
+  > *Clarification (story-4.5c Phase 4, 2026-07-17).* As shipped, "proof-matching logic" lives
+  > where its inputs live: byte hashing and manifest verification are Infra
+  > (`bundle-verifier.ts` on the shared manifest module), and the staleness comparison is
+  > boundary orchestration; Core contributes the event VOs and the two port shapes. Noted at
+  > Mode B review as more faithful to the B1 tradition than this sentence's literal wording.
 - "Secure" reset means deliberate, verified, receipt-leaving deletion — **not** forensic multi-pass
   shredding (out of scope per the discovery answers).
 
@@ -119,6 +124,12 @@ Each becomes a property / unit / integration test (Phase-4 checked):
 6. **Wipe gated on proof:** `StoreReset` is never invoked without an export-proof matching an
    existing bundle's manifest hash; mismatch/absence → `Result.fail`, stores untouched (unit with
    reset spy).
+   > *Amendment (story-4.5c planning, 2026-07-17 — strict staleness).* The proof authorizes
+   > wiping exactly the data it describes: if the live stores' counts differ from the bundle's
+   > manifest counts (append-only stores — count equality is tail equality), the wipe refuses;
+   > the remedy is a fresh export. No `--allow-stale` escape — an archive missing any live data,
+   > including a config change since the export, must never authorize destroying it. *(Opus
+   > planning call under this invariant's spirit; flagged with the 4.5c plan for user review.)*
 7. **Receipt-before-wipe:** `DissolutionPerformed` is durably written to the receipt before
    `StoreReset` executes (ordering unit).
 8. **Self-including trail:** `DataExported` is recorded before the bundle is written, so the

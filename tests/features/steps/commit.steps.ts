@@ -87,6 +87,7 @@ async function runIngestInProcess(
         selectCategory: () => Promise.resolve({ action: 'keep' }),
         confirmBatch: () => Promise.resolve(true),
         confirmRememberRule: () => Promise.resolve({ action: 'skip' as const }),
+        confirmDissolution: () => Promise.resolve(true),
       },
       stdout: stdoutSink,
       stderr: stderrCapture,

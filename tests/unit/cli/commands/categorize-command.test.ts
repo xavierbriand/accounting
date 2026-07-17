@@ -84,6 +84,7 @@ function makeBaseDeps(overrides: Partial<CategorizeCommandDeps> = {}): {
       selectCategory: vi.fn().mockResolvedValue({ action: 'keep' }),
       confirmBatch: vi.fn().mockResolvedValue(true),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'skip' as const }),
+      confirmDissolution: vi.fn(),
     },
     stdout: stdout as Writable,
     stderr: stderr as Writable,
@@ -215,6 +216,7 @@ describe('runCategorizeCommand — --json summary shape (R8 mock diversity)', ()
       confirmRememberRule: vi.fn()
         .mockResolvedValueOnce({ action: 'remember', pattern: 'alpha' })
         .mockResolvedValueOnce({ action: 'remember', pattern: 'beta' }),
+      confirmDissolution: vi.fn(),
     };
 
     const deps: CategorizeCommandDeps = {
@@ -274,6 +276,7 @@ describe('runCategorizeCommand — abort path', () => {
       confirmBatch: vi.fn(),
       confirmRememberRule: vi.fn()
         .mockResolvedValueOnce({ action: 'remember', pattern: 'merchant' }),
+      confirmDissolution: vi.fn(),
     };
 
     const configWriter = makeNoOpConfigWriter();
@@ -303,6 +306,7 @@ describe('runCategorizeCommand — writer skip when empty', () => {
         selectCategory: vi.fn().mockResolvedValue({ action: 'keep' }),
         confirmBatch: vi.fn(),
         confirmRememberRule: vi.fn(),
+        confirmDissolution: vi.fn(),
       },
     });
 
@@ -388,6 +392,7 @@ describe('runCategorizeCommand — --json-reachable failure envelopes (story-4.4
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),
       confirmBatch: vi.fn(),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'merchant' }),
+      confirmDissolution: vi.fn(),
     };
     const { deps, exitCodes, stderr } = makeBaseDeps({ configWriter, prompt: prompter });
 
@@ -439,6 +444,7 @@ describe('runCategorizeCommand — --limit truncation', () => {
       confirmRememberRule: vi.fn()
         .mockResolvedValueOnce({ action: 'remember', pattern: 'group one' })
         .mockResolvedValueOnce({ action: 'remember', pattern: 'group two' }),
+      confirmDissolution: vi.fn(),
     };
 
     const configWriter = makeNoOpConfigWriter();
@@ -491,6 +497,7 @@ describe('runCategorizeCommand — configWriter failure', () => {
       selectCategory: vi.fn().mockResolvedValue({ action: 'change', category: 'Groceries' }),
       confirmBatch: vi.fn(),
       confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'merchant' }),
+      confirmDissolution: vi.fn(),
     };
 
     const { deps, exitCodes, stderr } = makeBaseDeps({ configWriter, prompt: prompter });

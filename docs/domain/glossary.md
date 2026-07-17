@@ -248,7 +248,7 @@ Example names (Alex, Sam) are fixtures, never real people.
 
 **Example.** Moving to another tool: export the bundle, confirm the new tool reads it, and days later run the wipe with the export's proof; a receipt notes what happened and where the history lives.
 
-**Technical notes.** Graceful Dissolution (FR21). Act 1: export (standalone — `DataExported`). Act 2: wipe, gated on a matching export-proof (`DissolutionPerformed`, persisted in the dissolution receipt, not the wiped DB). Wipes the SQLite DB + snapshots; preserves `accounting.yaml` and the receipt. Boundary-orchestrated via the `DataExporter`/`StoreReset` ports. See [model-notes/story-4.5.md](model-notes/story-4.5.md).
+**Technical notes.** Graceful Dissolution (FR21). Act 1: export (standalone — `DataExported`). Act 2: wipe, gated on a matching export-proof (`DissolutionPerformed`, persisted in the dissolution receipt, not the wiped DB). A proof is matching only while it is **current**: on the append-only stores, any live count diverging from the bundle's manifest means data — or a rule — changed since the export, and the wipe refuses the **stale export-proof**; the remedy is a fresh export (invariant-6 amendment, story-4.5c). Wipes the SQLite DB + snapshots; preserves `accounting.yaml` and the receipt. Boundary-orchestrated via the `DataExporter`/`StoreReset` ports. See [model-notes/story-4.5.md](model-notes/story-4.5.md).
 
 ## Dissolution receipt
 

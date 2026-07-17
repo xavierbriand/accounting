@@ -10,7 +10,9 @@
  *   spans six commands — the acceptance scenario alone only demonstrates one of them).
  *
  * fails if (R4): `migrate` does not save a baseline on first run, or `ingest`/`correct`/
- *   `explain`/`export` do not call the observation helper after assertMigrated (each
+ *   `explain`/`export`/`dissolve` do not call the observation helper after assertMigrated
+ *   (`dissolve` is the seventh observed command — story-4.5c; its observation is also what
+ *   makes a config-edit-since-export trip the staleness gate) (each
  *   would then never record a pending config change before eventually running their own
  *   command logic — a bug here would only surface as a "config change silently missed"
  *   defect, not a command-level failure, since the underlying command paths tolerate a
@@ -138,6 +140,27 @@ describe('observe-config-change wiring — R4 composition-root subprocess test',
     // resolution/validation, so a normal export run still proves the wiring fired.
     const result = spawnCli(['export'], { cwd: tmpDir });
     expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+
+    expect(configChangedEventCount(dbPath)).toBe(1);
+  });
+
+  it('dissolve detects and records a change (story-4.5c — the seventh observed command)', () => {
+    const tmpDir = makeTmpDir();
+    const dbPath = path.join(tmpDir, 'test.db');
+    writeYaml(tmpDir, 'Europe/Paris');
+    expect(spawnCli(['migrate'], { cwd: tmpDir }).status).toBe(0);
+
+    writeYaml(tmpDir, 'Europe/Berlin');
+    // The wiring point (right after assertMigrated) precedes dissolve's own
+    // --bundle resolution — a bogus bundle dir still proves the wiring fired
+    // (same reasoning as correct/ingest's bogus-argument cases above). This is
+    // also the Phase-2 reversal itself: dissolve runs observeConfigChangeFor
+    // like every sibling, so a config change since the export correctly trips
+    // the staleness gate on a real run (the bundle's accounting.yaml copy is
+    // now outdated) — this test only proves the observation fires, not the
+    // staleness consequence (covered by dissolve-command's own unit tests).
+    const result = spawnCli(['dissolve', '--bundle', 'does-not-exist', '--confirm'], { cwd: tmpDir });
+    expect(result.status).toBe(2);
 
     expect(configChangedEventCount(dbPath)).toBe(1);
   });

@@ -34,3 +34,17 @@ export interface DataExported {
 }
 
 export type DomainEvent = TransactionIngested | TransactionCorrected | ConfigChanged | DataExported;
+
+// Receipt-only event (model note § Events, story-4.5c invariant 7): recorded into
+// the dissolution receipt (src/infra/fs/dissolution-receipt.ts), never into the
+// append-only trail — the DB it would be recorded to is the very one being
+// destroyed. Deliberately NOT a member of the DomainEvent union above: leaving it
+// out makes a would-be `domainEventRecorder.record(dissolutionPerformedEvent)` call
+// a type error, enforcing the model note's "persisted in the receipt, not the
+// doomed DB" sentence at the type level rather than by convention alone.
+export interface DissolutionPerformed {
+  readonly type: 'DissolutionPerformed';
+  readonly archiveLocation: string;
+  readonly manifestHash: string;
+  readonly wipedStores: readonly string[];
+}

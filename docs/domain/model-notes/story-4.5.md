@@ -119,6 +119,12 @@ Each becomes a property / unit / integration test (Phase-4 checked):
 6. **Wipe gated on proof:** `StoreReset` is never invoked without an export-proof matching an
    existing bundle's manifest hash; mismatch/absence → `Result.fail`, stores untouched (unit with
    reset spy).
+   > *Amendment (story-4.5c planning, 2026-07-17 — strict staleness).* The proof authorizes
+   > wiping exactly the data it describes: if the live stores' counts differ from the bundle's
+   > manifest counts (append-only stores — count equality is tail equality), the wipe refuses;
+   > the remedy is a fresh export. No `--allow-stale` escape — an archive missing any live data,
+   > including a config change since the export, must never authorize destroying it. *(Opus
+   > planning call under this invariant's spirit; flagged with the 4.5c plan for user review.)*
 7. **Receipt-before-wipe:** `DissolutionPerformed` is durably written to the receipt before
    `StoreReset` executes (ordering unit).
 8. **Self-including trail:** `DataExported` is recorded before the bundle is written, so the

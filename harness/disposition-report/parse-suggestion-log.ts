@@ -1,3 +1,5 @@
+import { attributePhase, extractRules } from './attribute.js';
+
 export type NormalizedTag = 'adopted' | 'deferred' | 'rejected' | 'acknowledged' | 'unparsed';
 
 export type SuggestionLogRow = {
@@ -115,17 +117,23 @@ export function normalizeTag(raw: string): NormalizedTag {
   return best ? best.tag : 'unparsed';
 }
 
-function buildRow(story: string, header: HeaderRoles, cells: string[]): SuggestionLogRow {
+function buildRow(
+  story: string,
+  header: HeaderRoles,
+  cells: string[],
+  rowOffset: number,
+  sectionText: string,
+): SuggestionLogRow {
   const finding =
     header.findingIdx >= 0 && header.findingIdx < cells.length
       ? cells[header.findingIdx]
       : cells.join(' ');
   const tagText = header.tagIdx >= 0 && header.tagIdx < cells.length ? cells[header.tagIdx] : '';
   const tag = tagText.trim().length > 0 ? normalizeTag(tagText) : 'unparsed';
-  // phase/rules are populated by attribute.ts's heuristics (slice 2); this
-  // parser is tag/dialect-focused and defaults both honestly rather than
-  // guessing.
-  return { story, phase: 'p2', tag, rules: [], finding };
+  const id = cells.length > 0 ? cells[0] : '';
+  const phase = attributePhase({ id, rowOffset, sectionText });
+  const rules = extractRules(finding);
+  return { story, phase, tag, rules, finding };
 }
 
 export function parseSuggestionLog(markdown: string): SuggestionLogRow[] {
@@ -138,19 +146,24 @@ export function parseSuggestionLog(markdown: string): SuggestionLogRow[] {
   const lines = region.split('\n');
   const rows: SuggestionLogRow[] = [];
 
+  let offset = 0;
   let i = 0;
   while (i < lines.length) {
     if (!isTableRow(lines[i])) {
+      offset += lines[i].length + 1;
       i += 1;
       continue;
     }
     const header = classifyHeader(splitRow(lines[i]));
+    offset += lines[i].length + 1;
     i += 1;
     if (i < lines.length && isSeparatorRow(lines[i])) {
+      offset += lines[i].length + 1;
       i += 1;
     }
     while (i < lines.length && isTableRow(lines[i])) {
-      rows.push(buildRow(story, header, splitRow(lines[i])));
+      rows.push(buildRow(story, header, splitRow(lines[i]), offset, region));
+      offset += lines[i].length + 1;
       i += 1;
     }
   }

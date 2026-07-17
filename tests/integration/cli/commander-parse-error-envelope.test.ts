@@ -101,6 +101,20 @@ describe('Commander parse-time errors — --json envelope (story-maint-26)', () 
     });
   });
 
+  it('migrate --nope (a command outside JSON_CAPABLE_COMMANDS) keeps Commander\'s original exit code, no envelope', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['migrate', '--nope'], { cwd: tmpDir });
+
+    // fails if: the exit-2 branch isn't scoped to JSON_CAPABLE_COMMANDS — migrate has
+    // no --json mode (docs/cli-json-contract.md § 8) and never had an INVALID_ARGUMENT
+    // call site, so it must keep Commander's own exit code (1) for a malformed
+    // invocation, not the 5-known-commands' exit 2.
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("unknown option '--nope'");
+    expect(result.stderr).not.toContain('"ok":false');
+  });
+
   it('ingest with -f omitted and no --json exits 2 (not Commander\'s old default of 1) with prose only, no JSON line', () => {
     const tmpDir = makeTmpDir();
 

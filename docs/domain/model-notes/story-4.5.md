@@ -55,8 +55,9 @@ class, boundary-stamped UTC `recorded_at`, no actor.
 **Config-change half (ambient sentinel).**
 
 - `ConfigChangeDetector` — **domain service**, pure:
-  `detect(previous: StoredConfigState, current: AppConfig): Result<ConfigChanged | null>`.
-  Returns `null` when canonical digests match.
+  `detect(previous: StoredConfigState | null, current: AppConfig): Result<ConfigChanged | null>`.
+  Returns `null` when canonical digests match, and on `null` `previous` (bootstrap — the caller
+  saves the baseline silently).
 - `ConfigDiff` — **value object**: `ChangedSection { section, entries: ChangedEntry[] }`,
   `ChangedEntry { key, kind: 'added' | 'removed' | 'changed', previous?, current? }` — values
   **verbatim** (no redaction machinery; safety comes from the Configuration invariant above).

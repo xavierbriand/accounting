@@ -155,7 +155,8 @@ amendment).
   (adjacent: [#107](https://github.com/xavierbriand/accounting/issues/107)).
   (**R4: composition-root subprocess test required**).
 - **No `--json` output-shape, error-code, or exit-code mapping changes** → R31 n/a (tripwire
-  reuses the existing config-parse exit-2 path).
+  reuses the existing config-parse failure path — empirically exit 1, see
+  [#231](https://github.com/xavierbriand/accounting/issues/231) and the Scenario-3 correction).
 - Docs: `docs/epics.md` § Story 3.5 AC amendment + § Story 4.5 split/eventing update; glossary +
   model note (already staged on this branch).
 
@@ -182,11 +183,15 @@ change, or the new state isn't saved. **Mechanism: subprocess** (real binary, re
 **Given** `accounting.yaml` containing an IBAN-shaped string in any field
 **When** the user runs `accounting status` (representative — the parse gate is shared by every
 command via `FileConfigService.load`, before any DB is opened)
-**Then** it exits with POSIX code 2 and a path-cited message on stderr, and no event and no DB
+**Then** it exits with a non-zero code and a path-cited message on stderr, and no event and no DB
 write occur.
 *fails if* the tripwire refinement is missing from the config schema or doesn't cite the path.
 **Mechanism: subprocess.** *(Sentinel fixture values must be clearly synthetic — no real bank
 data in fixtures, QA § Privacy.)*
+*(Phase-3 correction: the shipped assertion is exit **1** — empirically every config-load failure
+has always exited 1, contrary to this plan's original exit-2 assumption; the mapping drift
+between epics 3.5's AC and the implementation is tracked as
+[#231](https://github.com/xavierbriand/accounting/issues/231) and deliberately not changed here.)*
 
 *(Bootstrap — first run saves a baseline silently, no event — is covered at unit/integration tier
 (detector + store), not as a fourth acceptance scenario; sizing per § 6.6.)*
@@ -262,6 +267,16 @@ Duplicated findings across P-levels are consolidated (P-tags combined).
 | 16 | P3: story-D's claimed ESLint enforcement of the categorize no-DB invariant doesn't exist (only the subprocess test) | DEFER | [#228](https://github.com/xavierbriand/accounting/issues/228) |
 | 17 | P2/P3: compliance notes (Money ops, append-only untouched, R8 n/a, layer purity, naming, slice envelope) | ACKNOWLEDGE | No action needed |
 | 18 | Sibling: [#224](https://github.com/xavierbriand/accounting/pull/224) (story-maint-26) also edits `program.ts` + composition-root tests; [#227](https://github.com/xavierbriand/accounting/pull/227) executes #223 | ACKNOWLEDGE | Textually disjoint; whichever lands second rebases (R18); no scope change |
+
+**Phase-4 review (2026-07-17):** `code-reviewer` (21 findings, **0 P1**) + `ddd-modeler` Mode B
+(**0 hard violations**, 3 observations) in parallel. Fix-now (one refactor slice): invariant-2
+diff-exactness `fast-check` property (the sole DoD §7.3 gap, flagged by both legs);
+`toCanonicalAppConfig` export replacing the detector's JSON round-trip; `zod` added to the Core
+purity import guard; weak 2-value `fc.constantFrom` property restated as `it.each`;
+`observe-config-change` JSDoc trimmed to the why. Deferred: none new. Acknowledged: nullable
+detector signature (plan-conformant; model note tidied), `ConfigDiff` as collective name,
+PII-verbatim posture (Phase-2 adopted). Exit-code deviation ratified →
+[#231](https://github.com/xavierbriand/accounting/issues/231).
 
 ## DoR checklist
 

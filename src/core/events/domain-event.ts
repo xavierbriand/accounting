@@ -1,3 +1,5 @@
+import type { ChangedSection } from '@core/config/config-diff.js';
+
 export interface TransactionIngested {
   readonly type: 'TransactionIngested';
   readonly transactionIds: readonly string[];
@@ -12,4 +14,12 @@ export interface TransactionCorrected {
   readonly reason: string;
 }
 
-export type DomainEvent = TransactionIngested | TransactionCorrected;
+export interface ConfigChanged {
+  readonly type: 'ConfigChanged';
+  readonly origin: 'external' | 'applied';
+  readonly changedSections: readonly ChangedSection[];
+  readonly previousDigest: string;
+  readonly currentDigest: string;
+}
+
+export type DomainEvent = TransactionIngested | TransactionCorrected | ConfigChanged;

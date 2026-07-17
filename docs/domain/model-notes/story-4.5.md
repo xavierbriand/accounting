@@ -99,6 +99,11 @@ class, boundary-stamped UTC `recorded_at`, no actor.
 - **Ports:** `DataExporter` (write bundle, return manifest hash + counts), `StoreReset` (execute
   the wipe). Core contributes only the event VOs and proof-matching logic; no `DissolutionService`
   aggregate — the acts are boundary orchestration in the 4.1 B1 tradition.
+  > *Clarification (story-4.5c Phase 4, 2026-07-17).* As shipped, "proof-matching logic" lives
+  > where its inputs live: byte hashing and manifest verification are Infra
+  > (`bundle-verifier.ts` on the shared manifest module), and the staleness comparison is
+  > boundary orchestration; Core contributes the event VOs and the two port shapes. Noted at
+  > Mode B review as more faithful to the B1 tradition than this sentence's literal wording.
 - "Secure" reset means deliberate, verified, receipt-leaving deletion — **not** forensic multi-pass
   shredding (out of scope per the discovery answers).
 

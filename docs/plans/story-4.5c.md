@@ -104,9 +104,11 @@ promise of model-note clarification (a) holds with no new exception):
    this export-proof was minted — run `accounting export` again", exit 2, nothing touched.
 5. **Confirmation:** with `--confirm`, proceed. Without it, the typed **DISSOLVE** phrase is
    prompted after a summary of what will be erased/preserved (new `confirmDissolution` on
-   `InteractivePrompter`; `ScriptedPrompter` extended). If the prompt is unavailable (non-TTY /
-   `--json` without `--confirm`), refuse with the `NEEDS_REVIEW` envelope, exit 2 (4.4a
-   mode-separation precedent). A typed refusal aborts cleanly, exit 0, nothing touched.
+   `InteractivePrompter`; `ScriptedPrompter` extended). `--json` without `--confirm` refuses
+   with the `NEEDS_REVIEW` envelope, exit 2 (4.4a mode-separation precedent); a prompt that
+   throws (non-TTY) exits 2 prose-only per the contract's interactive-failure convention
+   *(Phase-4 wording correction — the draft loosely grouped both under the envelope)*. A typed
+   refusal aborts cleanly, exit 0, nothing touched.
 6. **Receipt before wipe (invariant 7):** write `dissolution-receipt.json` next to
    `accounting.yaml` — `{ schemaVersion, recordedAt (UTC boundary stamp), event:
    DissolutionPerformed { archiveLocation (bundle name), manifestHash, wipedStores }, archivePath
@@ -293,6 +295,19 @@ Phase-2 review 2026-07-17: `plan-reviewer` (21 findings) + `sibling-overlap` (0 
 | 17 | P3: use-case-pattern tension (architecture.md vs B1 boundary orchestration) | ACKNOWLEDGE | Pre-existing since 4.1; reconciliation belongs to the post-Epic-4 docs refresh ([#166](https://github.com/xavierbriand/accounting/issues/166)) |
 | 18 | P3 (soft): Result-combinator chaining in the gating pipeline | REJECT | House style at the CLI boundary — explicit `isFailure` branching (fourth story running; reviewer notes the idiom itself) |
 | 19 | P1/P2 compliance confirmations + sibling scan (0 overlaps; #232/#231 pre-reconciled) | ACKNOWLEDGE | No action |
+
+**Phase-4 review (2026-07-17):** `code-reviewer` (8 findings — 1 P1, 1 P2, 6 P3 mostly soft,
+**0 blockers**) + `ddd-modeler` Mode B (**0 hard violations**, 2 observations + 1 confirmation +
+1 glossary gap) in parallel. Fix-now (refactor slot + one R10 slice, envelope at 10):
+`sanitizeSqlError` on dissolve's counts() failure (export parity); the **staleness-coupling
+subprocess test** (Mode B's catch — config edit after export → refusal, DB intact; removing the
+observation wiring now has a failing test); typed-phrase trim-edge cases; two fails-if docstring
+extensions. Doc-fixes (retro commit): plan step-5 NEEDS_REVIEW wording; model-note § Model
+proof-matching clarification (shipped shape more faithful to B1 than the literal sentence);
+**glossary "stale export-proof" delta proposed** (user sign-off at the gate). Acknowledged:
+`runDissolveCommand` 104 LOC / `verifyBundle` 64 LOC (naturally-coarse gate pipelines),
+async-without-await port conformance, receipt full-path vs event basename split (intentional,
+confirmed). Ratified Phase-3 deviations stand as reported in PR §8.
 
 ## DoR checklist
 

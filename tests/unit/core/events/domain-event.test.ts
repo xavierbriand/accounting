@@ -9,6 +9,8 @@
  *   changedFields/reason (a clock, an actor, or a PII field would leak into Core), or
  *   DataExported regrows manifestHash (circular with invariant 8 — model note § Events) or its
  *   archiveLocation accepts a path separator (absolute paths must never enter the trail), or
+ *   DissolutionPerformed is assignable to the DomainEvent union (story-4.5c — it must be
+ *   receipt-only, a type error away from record()), or
  *   src/core/events/, src/core/config/, or any src/core/ports/ file imports Node APIs /
  *   better-sqlite3 / zod / a clock (Core purity — architecture.md § Domain events).
  */
@@ -16,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged, DataExported } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged, DataExported, DissolutionPerformed } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -157,6 +159,36 @@ describe('DataExported — value object shape', () => {
       exported: { transactions: 4, events: 6 },
     };
     expect(event.type).toBe('DataExported');
+  });
+});
+
+describe('DissolutionPerformed — value object shape (story-4.5c, receipt-only)', () => {
+  it('carries type, archiveLocation, manifestHash, and wipedStores', () => {
+    const event: DissolutionPerformed = {
+      type: 'DissolutionPerformed',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      manifestHash: 'a'.repeat(64),
+      wipedStores: ['test.db', 'test.db.bak'],
+    };
+
+    expect(Object.keys(event).sort()).toEqual(
+      ['archiveLocation', 'manifestHash', 'type', 'wipedStores'].sort(),
+    );
+  });
+
+  it('is NOT assignable to the DomainEvent union (receipt-only — model note § Events)', () => {
+    const event: DissolutionPerformed = {
+      type: 'DissolutionPerformed',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      manifestHash: 'a'.repeat(64),
+      wipedStores: [],
+    };
+
+    // @ts-expect-error — DissolutionPerformed must not be assignable to DomainEvent: it is
+    // recorded only into the dissolution receipt, never into the append-only trail (a
+    // would-be domainEventRecorder.record(event) call must be a compile error).
+    const asDomainEvent: DomainEvent = event;
+    expect(asDomainEvent).toBeDefined();
   });
 });
 

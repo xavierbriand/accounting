@@ -100,4 +100,42 @@ describe('Commander parse-time errors — --json envelope (story-maint-26)', () 
       error: { code: 'INVALID_ARGUMENT' },
     });
   });
+
+  it('ingest with -f omitted and no --json exits 2 (not Commander\'s old default of 1) with prose only, no JSON line', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['ingest'], { cwd: tmpDir });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("required option '-f, --file <path>' not specified");
+    expect(result.stderr).not.toContain('"ok":false');
+  });
+
+  it('--help exits 0 and prints usage, unaffected by exitOverride', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['--help'], { cwd: tmpDir });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Usage:');
+  });
+
+  it('--version exits 0 and prints the version, unaffected by exitOverride', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['--version'], { cwd: tmpDir });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('1.0.0');
+  });
+
+  it('an unrecognized subcommand under --json passes through unaffected — no envelope (deliberately out of scope)', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['bogus-command', '--json'], { cwd: tmpDir });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('unknown command');
+    expect(result.stderr).not.toContain('"ok":false');
+  });
 });

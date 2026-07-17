@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { Result } from '@core/shared/result.js';
 import type { DataExporter, ExportCounts, WrittenBundle } from '@core/ports/data-exporter.js';
 import { toCsvLine } from './rfc4180.js';
+import { sanitizeFsError } from '../fs/sanitize-fs-error.js';
 
 interface TransactionRow {
   id: string;
@@ -54,21 +55,27 @@ export class FsDataExporter implements DataExporter {
 
   async writeBundle(destinationDir: string, bundleName: string): Promise<Result<WrittenBundle>> {
     const finalDir = path.join(destinationDir, bundleName);
+    if (fs.existsSync(finalDir)) {
+      return Result.fail(`export target already exists: ${bundleName} (an export is never overwritten — choose a different --out or retry after a second has passed)`);
+    }
+
+    const partialDir = `${finalDir}.partial`;
     try {
-      fs.mkdirSync(finalDir, { recursive: true });
+      fs.mkdirSync(partialDir, { recursive: true });
+      if (process.platform !== 'win32') fs.chmodSync(partialDir, 0o700);
 
       const transactionsCsv = this.buildTransactionsCsv();
       const entriesCsv = this.buildTransactionEntriesCsv();
       const eventsJson = this.buildDomainEventsJson();
       const configYaml = fs.readFileSync(this.resolvedConfigPath, 'utf8');
 
-      fs.writeFileSync(path.join(finalDir, 'transactions.csv'), transactionsCsv, 'utf8');
-      fs.writeFileSync(path.join(finalDir, 'transaction-entries.csv'), entriesCsv, 'utf8');
-      fs.writeFileSync(path.join(finalDir, 'domain-events.json'), eventsJson, 'utf8');
-      fs.writeFileSync(path.join(finalDir, 'accounting.yaml'), configYaml, 'utf8');
+      this.writeBundleFile(partialDir, 'transactions.csv', transactionsCsv);
+      this.writeBundleFile(partialDir, 'transaction-entries.csv', entriesCsv);
+      this.writeBundleFile(partialDir, 'domain-events.json', eventsJson);
+      this.writeBundleFile(partialDir, 'accounting.yaml', configYaml);
 
       const countsResult = this.counts();
-      if (countsResult.isFailure) return Result.fail(countsResult.error);
+      if (countsResult.isFailure) throw new Error(countsResult.error);
 
       const files = [
         { name: 'transactions.csv', sha256: sha256Of(transactionsCsv) },
@@ -84,12 +91,26 @@ export class FsDataExporter implements DataExporter {
         files,
       };
       const manifestJson = JSON.stringify(manifest);
-      fs.writeFileSync(path.join(finalDir, 'manifest.json'), manifestJson, 'utf8');
+      this.writeBundleFile(partialDir, 'manifest.json', manifestJson);
+
+      // Atomic-rename-from-staged-.partial (mirrors NodeSqliteSnapshotService):
+      // a crashed/failed export leaves only a `.partial` directory to sweep,
+      // never a plausible-but-incomplete bundle at the final name.
+      fs.renameSync(partialDir, finalDir);
 
       return Result.ok({ manifestHash: sha256Of(manifestJson), location: finalDir });
     } catch (err) {
-      return Result.fail(String(err));
+      if (fs.existsSync(partialDir)) {
+        try { fs.rmSync(partialDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+      }
+      return Result.fail(sanitizeFsError(err, '<export>'));
     }
+  }
+
+  private writeBundleFile(dir: string, name: string, content: string): void {
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, content, { encoding: 'utf8', mode: 0o600 });
+    if (process.platform !== 'win32') fs.chmodSync(filePath, 0o600);
   }
 
   private buildTransactionsCsv(): string {

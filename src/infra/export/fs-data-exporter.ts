@@ -37,6 +37,12 @@ function sha256Of(content: string): string {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
+const TRANSACTIONS_CSV = 'transactions.csv';
+const TRANSACTION_ENTRIES_CSV = 'transaction-entries.csv';
+const DOMAIN_EVENTS_JSON = 'domain-events.json';
+const ACCOUNTING_YAML = 'accounting.yaml';
+const MANIFEST_JSON = 'manifest.json';
+
 export class FsDataExporter implements DataExporter {
   constructor(
     private readonly db: Database.Database,
@@ -69,19 +75,19 @@ export class FsDataExporter implements DataExporter {
       const eventsJson = this.buildDomainEventsJson();
       const configYaml = fs.readFileSync(this.resolvedConfigPath, 'utf8');
 
-      this.writeBundleFile(partialDir, 'transactions.csv', transactionsCsv);
-      this.writeBundleFile(partialDir, 'transaction-entries.csv', entriesCsv);
-      this.writeBundleFile(partialDir, 'domain-events.json', eventsJson);
-      this.writeBundleFile(partialDir, 'accounting.yaml', configYaml);
+      this.writeBundleFile(partialDir, TRANSACTIONS_CSV, transactionsCsv);
+      this.writeBundleFile(partialDir, TRANSACTION_ENTRIES_CSV, entriesCsv);
+      this.writeBundleFile(partialDir, DOMAIN_EVENTS_JSON, eventsJson);
+      this.writeBundleFile(partialDir, ACCOUNTING_YAML, configYaml);
 
       const countsResult = this.counts();
       if (countsResult.isFailure) throw new Error(countsResult.error);
 
       const files = [
-        { name: 'transactions.csv', sha256: sha256Of(transactionsCsv) },
-        { name: 'transaction-entries.csv', sha256: sha256Of(entriesCsv) },
-        { name: 'domain-events.json', sha256: sha256Of(eventsJson) },
-        { name: 'accounting.yaml', sha256: sha256Of(configYaml) },
+        { name: TRANSACTIONS_CSV, sha256: sha256Of(transactionsCsv) },
+        { name: TRANSACTION_ENTRIES_CSV, sha256: sha256Of(entriesCsv) },
+        { name: DOMAIN_EVENTS_JSON, sha256: sha256Of(eventsJson) },
+        { name: ACCOUNTING_YAML, sha256: sha256Of(configYaml) },
       ];
 
       const manifest = {
@@ -91,7 +97,7 @@ export class FsDataExporter implements DataExporter {
         files,
       };
       const manifestJson = JSON.stringify(manifest);
-      this.writeBundleFile(partialDir, 'manifest.json', manifestJson);
+      this.writeBundleFile(partialDir, MANIFEST_JSON, manifestJson);
 
       // Atomic-rename-from-staged-.partial (mirrors NodeSqliteSnapshotService):
       // a crashed/failed export leaves only a `.partial` directory to sweep,

@@ -5,6 +5,7 @@ import type { DataExporter } from '@core/ports/data-exporter.js';
 import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 import { sanitizeFsError } from '../../infra/fs/sanitize-fs-error.js';
+import { sanitizeSqlError } from '../utils/sanitize-sql-error.js';
 import { formatJsonSuccess, writeJsonErrorIf } from '../utils/json-envelope.js';
 
 export interface ExportCommandOptions {
@@ -70,7 +71,7 @@ export async function runExportCommand(
 
   const countsResult = dataExporter.counts();
   if (countsResult.isFailure) {
-    const message = `could not count what will travel: ${countsResult.error}`;
+    const message = `could not count what will travel: ${sanitizeSqlError(countsResult.error)}`;
     writeln(stderr, `error: ${message}`);
     writeJsonErrorIf(stderr, options.json, 'export', { code: 'QUERY_FAILURE', message });
     exitCode(1);
@@ -92,7 +93,7 @@ export async function runExportCommand(
   // is worse than no bundle.
   const recordResult = domainEventRecorder.record({ type: 'DataExported', archiveLocation: bundleName, exported });
   if (recordResult.isFailure) {
-    writeFailure(stderr, options.json, `could not record the export audit event: ${recordResult.error}`);
+    writeFailure(stderr, options.json, `could not record the export audit event: ${sanitizeSqlError(recordResult.error)}`);
     exitCode(1);
     return;
   }

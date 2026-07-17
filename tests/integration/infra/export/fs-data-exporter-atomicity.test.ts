@@ -96,7 +96,9 @@ describe('FsDataExporter.writeBundle() — atomic rename', () => {
   it('sweeps the .partial directory and leaves no final bundle on a forced write failure', async () => {
     const { db, tmpDir } = setUpDb();
     // resolvedConfigPath points at a file that does not exist — readFileSync
-    // throws mid-write, after the content CSVs are already staged under .partial.
+    // throws after `.partial` is created but before any file is staged into it
+    // (content builders are in-memory; the config read precedes the first write),
+    // so the sweep must remove the empty `.partial` itself.
     const exporter = new FsDataExporter(db, path.join(tmpDir, 'does-not-exist.yaml'));
     const outDir = makeTmpDir();
     const result = await exporter.writeBundle(outDir, 'crash-bundle');

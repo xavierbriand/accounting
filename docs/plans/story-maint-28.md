@@ -157,9 +157,9 @@ Phase 2 review for this story is **Reduced lane** (devDependency-only bump, no C
 
 ## Merge checklist
 
-- [ ] `lint` / `build` / `test` / `test:harness` green on CI
+- [x] `lint` / `build` / `test` / `test:harness` green on CI
 - [ ] PR out of draft
-- [ ] Retrospective file committed at `docs/retrospectives/story-maint-28.md`
-- [ ] All suggestion-log items resolved (no blank `Resolution` cells)
-- [ ] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
+- [x] Retrospective file committed at `docs/retrospectives/story-maint-28.md`
+- [x] All suggestion-log items resolved (no blank `Resolution` cells)
+- [x] Phase-4 review (code-reviewer + sibling-overlap) findings classified fix-now / defer-issue / acknowledge
 - [ ] User approval

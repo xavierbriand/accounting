@@ -91,6 +91,26 @@ codes only gained a matching `error.code` under `--json`.
 check `error.code`, not just the exit code, to tell "bad input" from "nothing matched"
 from "a human decision is needed."
 
+### Commander-level parse errors (story-maint-26)
+
+A missing required option/argument, an unknown option, or excess arguments are
+caught by Commander's own parser **before any command's action handler runs** —
+these used to bypass this contract entirely (Commander's plain-text prose to
+stderr, exit 1, unconditionally, regardless of `--json`). They now also produce the
+`INVALID_ARGUMENT` failure envelope as stderr's final line, on the same terms as
+every other `INVALID_ARGUMENT` site: envelope written only when `--json` is present
+**and** the command name (`ingest`, `correct`, `status`, `explain`, or `categorize`)
+is recognized, exit **2 unconditionally — even without `--json`** (this is a
+user-visible behavior change from Commander's previous default of exit 1 for this
+error class, made for consistency with every other `INVALID_ARGUMENT` call site).
+Commander's own prose precedes the envelope on stderr, per § 2's "prose may precede
+the final line" rule.
+
+**Not covered:** `commander.unknownCommand` (a wholly unrecognized subcommand, e.g.
+`accounting frobnicate`) — there is no known command name to put in the envelope,
+mirroring the `migrate` exclusion in § 8. `--help` and `--version` are unaffected
+(still exit 0; these were never failures).
+
 ## 5. Conventions
 
 - **camelCase keys everywhere** in `data` and `error.details` — no `snake_case` (the

@@ -32,10 +32,10 @@ Feature: Correct a past transaction via the correct CLI command
     # explicitly-blank --reason ("" present but empty), not a fully-omitted
     # flag. Commander's own requiredOption('--reason', ...) enforcement (which
     # a genuinely-omitted --reason hits first, before parseCorrectOptions ever
-    # runs) is not exercised by any test in this suite — scenario 8's subprocess
-    # run always supplies --reason. This mirrors the repo's existing precedent:
-    # ingest/categorize's requiredOption('-f, --file', ...) is likewise untested
-    # via subprocess omission.
+    # runs) is now covered by a subprocess test — see
+    # tests/integration/cli/commander-parse-error-envelope.test.ts
+    # (story-maint-26) — mirroring the same coverage for ingest/categorize's
+    # requiredOption('-f, --file', ...).
 
   Scenario: Transaction not found
     Given a fresh migrated correct DB

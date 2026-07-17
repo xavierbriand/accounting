@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import { getDb } from '../infra/db/sqlite-client.js';
 import { FileConfigService } from '../infra/config/config-service.js';
 import { YamlConfigWriter } from '../infra/config/yaml-config-writer.js';
@@ -31,6 +31,7 @@ import { SafeTransferCalculator } from '../core/transfer/safe-transfer-calculato
 import { SqliteBufferLedgerQuery } from '../infra/db/repositories/sqlite-buffer-ledger-query.js';
 import { SqliteContributionQuery } from '../infra/db/repositories/sqlite-contribution-query.js';
 import { nodeClock } from './utils/node-clock.js';
+import { writeJsonErrorIf } from './utils/json-envelope.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
 
@@ -76,6 +77,12 @@ program
   .name('accounting')
   .description('Couples expense sharing CLI')
   .version('1.0.0');
+
+// story-maint-26: must run before any .command(...) registration below —
+// Commander's copyInheritedSettings() copies the parent's exitCallback onto a
+// subcommand at .command() call time, not at parse time, so exitOverride()
+// called after registration would silently not apply to any subcommand.
+program.exitOverride();
 
 program
   .command('migrate')
@@ -380,4 +387,55 @@ program
     );
   });
 
-program.parse(process.argv);
+// story-maint-26: Commander's own parse-time failures (missing required
+// option/argument, unknown option, excess arguments) are caught by Commander's
+// parser before any action handler runs, entirely bypassing json-envelope.ts.
+// exitOverride() (registered above, before any .command() call) makes Commander
+// throw a CommanderError instead of calling process.exit directly, so we can
+// translate the known bad-usage codes into the same --json failure envelope
+// every other INVALID_ARGUMENT site produces.
+const JSON_CAPABLE_COMMANDS = new Set(['ingest', 'correct', 'status', 'explain', 'categorize']);
+
+const COMMANDER_PASSTHROUGH_CODES = new Set([
+  'commander.help',
+  'commander.helpDisplayed',
+  'commander.version',
+]);
+
+const COMMANDER_PARSE_ERROR_CODES = new Set([
+  'commander.missingMandatoryOptionValue',
+  'commander.optionMissingArgument',
+  'commander.missingArgument',
+  'commander.excessArguments',
+  'commander.unknownOption',
+  'commander.invalidArgument',
+]);
+
+try {
+  program.parse(process.argv);
+} catch (err) {
+  if (!(err instanceof CommanderError)) {
+    throw err;
+  }
+  if (COMMANDER_PASSTHROUGH_CODES.has(err.code)) {
+    process.exit(err.exitCode);
+  }
+  if (COMMANDER_PARSE_ERROR_CODES.has(err.code)) {
+    const commandName = process.argv[2];
+    if (commandName !== undefined && JSON_CAPABLE_COMMANDS.has(commandName)) {
+      writeJsonErrorIf(process.stderr, process.argv.includes('--json'), commandName, {
+        code: 'INVALID_ARGUMENT',
+        message: err.message.replace(/^error: /, ''),
+      });
+      process.exit(2);
+    }
+    // Not one of the 5 --json-capable commands (e.g. migrate, which has no
+    // --json mode and no INVALID_ARGUMENT call site — contract § 8): preserve
+    // Commander's own exit code, unaffected by this story.
+    process.exit(err.exitCode);
+  }
+  // commander.unknownCommand (and anything else unclassified): deliberately out
+  // of scope — no known command name to report. Preserve Commander's own exit
+  // code, matching pre-exitOverride behavior.
+  process.exit(err.exitCode);
+}

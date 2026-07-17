@@ -55,4 +55,49 @@ describe('Commander parse-time errors — --json envelope (story-maint-26)', () 
       },
     });
   });
+
+  it('status --json --nope (unknown option, a command with no requiredOption) envelopes INVALID_ARGUMENT naming "status"', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['status', '--json', '--nope'], { cwd: tmpDir });
+
+    expect(result.status).toBe(2);
+    const lines = result.stderr.trim().split('\n');
+    const lastLine = lines[lines.length - 1] ?? '';
+    expect(JSON.parse(lastLine)).toMatchObject({
+      command: 'status',
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    });
+  });
+
+  it('correct --json with the transactionId positional omitted envelopes INVALID_ARGUMENT naming "correct"', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['correct', '--json', '--reason', 'why'], { cwd: tmpDir });
+
+    expect(result.status).toBe(2);
+    const lines = result.stderr.trim().split('\n');
+    const lastLine = lines[lines.length - 1] ?? '';
+    expect(JSON.parse(lastLine)).toMatchObject({
+      command: 'correct',
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    });
+  });
+
+  it('categorize --json with -f omitted envelopes INVALID_ARGUMENT naming "categorize"', () => {
+    const tmpDir = makeTmpDir();
+
+    const result = spawnCli(['categorize', '--json'], { cwd: tmpDir });
+
+    expect(result.status).toBe(2);
+    const lines = result.stderr.trim().split('\n');
+    const lastLine = lines[lines.length - 1] ?? '';
+    expect(JSON.parse(lastLine)).toMatchObject({
+      command: 'categorize',
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    });
+  });
 });

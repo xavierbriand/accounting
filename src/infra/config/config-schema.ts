@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import type { ZodError } from 'zod';
+import type { ZodError, RefinementCtx } from 'zod';
 import { Result } from '@core/shared/result.js';
 import { Money } from '@core/shared/money.js';
 import type { AppConfig, RecurringRule } from '@core/config/app-config.js';
 import type { AutoTagRule } from '@core/ingest/auto-tag-rules.js';
 import { validateNewCategoryName } from '@core/categories/category-name.js';
+import { looksLikeIban, looksLikeCardNumber } from './sensitive-string-checks.js';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATE_MSG = 'must be ISO 8601 date (YYYY-MM-DD)';
@@ -21,6 +22,31 @@ function findDuplicateIndices<T>(items: readonly T[], keyFn: (t: T) => string): 
     }
   }
   return dupes;
+}
+
+// Generic recursive walk over the raw parsed config object (story-4.5a, model-note
+// invariant 4): future fields are covered automatically — no per-field refinement to
+// remember to add. Runs as the RawConfigSchema's first superRefine, ahead of the
+// business-rule refinements below, so a sensitive value is always reported regardless
+// of which other checks the rest of the object happens to pass or fail.
+function walkForSensitiveStrings(value: unknown, path: (string | number)[], ctx: RefinementCtx): void {
+  if (typeof value === 'string') {
+    if (looksLikeIban(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: 'value looks like an IBAN and may not appear in accounting.yaml (PII)' });
+    } else if (looksLikeCardNumber(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: 'value looks like a card number and may not appear in accounting.yaml (PII)' });
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => walkForSensitiveStrings(item, [...path, i], ctx));
+    return;
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value)) {
+      walkForSensitiveStrings(nested, [...path, key], ctx);
+    }
+  }
 }
 
 const SplitRuleSchema = z.object({
@@ -299,6 +325,9 @@ const RawConfigSchema = z
     settlement: SettlementConfigRawSchema.optional(),
   })
   .strict()
+  .superRefine((data, ctx) => {
+    walkForSensitiveStrings(data, [], ctx);
+  })
   .superRefine((data, ctx) => {
     if (!data.settlement) return;
     // Roster is the partner set of splits[0].rules — splits' own superRefine already

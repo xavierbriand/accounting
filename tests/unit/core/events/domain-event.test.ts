@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested, TransactionCorrected } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -26,7 +26,9 @@ const FORBIDDEN_IMPORT_PATTERNS = [
   /from ['"](?:node:)?fs['"]/,
   /from ['"](?:node:)?path['"]/,
   /from ['"]commander['"]/,
+  /from ['"]zod['"]/,
   /require\(['"]better-sqlite3['"]\)/,
+  /require\(['"]zod['"]\)/,
   /new Date\(/,
   /Date\.now\(/,
 ];
@@ -89,6 +91,42 @@ describe('TransactionCorrected — value object shape', () => {
   });
 });
 
+describe('ConfigChanged — value object shape', () => {
+  it('carries type, origin, changedSections, previousDigest, and currentDigest', () => {
+    const event: ConfigChanged = {
+      type: 'ConfigChanged',
+      origin: 'external',
+      changedSections: [
+        { section: 'buffers', entries: [{ key: 'Vacation.target', kind: 'changed', previous: 'EUR 1500.00', current: 'EUR 1800.00' }] },
+      ],
+      previousDigest: 'a'.repeat(64),
+      currentDigest: 'b'.repeat(64),
+    };
+
+    expect(Object.keys(event).sort()).toEqual(
+      ['changedSections', 'currentDigest', 'origin', 'previousDigest', 'type'].sort(),
+    );
+  });
+
+  it('origin accepts both "external" and "applied" (this story emits only external)', () => {
+    const external: ConfigChanged['origin'] = 'external';
+    const applied: ConfigChanged['origin'] = 'applied';
+    expect(external).toBe('external');
+    expect(applied).toBe('applied');
+  });
+
+  it('is assignable to the DomainEvent union', () => {
+    const event: DomainEvent = {
+      type: 'ConfigChanged',
+      origin: 'external',
+      changedSections: [],
+      previousDigest: 'a'.repeat(64),
+      currentDigest: 'b'.repeat(64),
+    };
+    expect(event.type).toBe('ConfigChanged');
+  });
+});
+
 describe('DomainEventRecorder — port shape', () => {
   it('a conforming implementation returns Result<void>', () => {
     const recorder: DomainEventRecorder = {
@@ -108,6 +146,20 @@ describe('DomainEventRecorder — port shape', () => {
 describe('Core purity — src/core/events/ and the DomainEventRecorder port', () => {
   it('no file under src/core/events/ imports Node APIs, better-sqlite3, or a clock', () => {
     const files = sourceFilesUnder('core/events');
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const file of files) {
+      const contents = fs.readFileSync(file, 'utf8');
+      for (const pattern of FORBIDDEN_IMPORT_PATTERNS) {
+        expect(contents, `${file} matched forbidden pattern ${pattern}`).not.toMatch(pattern);
+      }
+    }
+  });
+
+  // story-4.5a: ConfigChanged pulls ChangedSection in from src/core/config/ — that
+  // directory needs the same purity guarantee as src/core/events/.
+  it('no file under src/core/config/ imports Node APIs, better-sqlite3, or a clock', () => {
+    const files = sourceFilesUnder('core/config');
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {

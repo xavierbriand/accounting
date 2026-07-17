@@ -10,3 +10,4 @@ import './audit-trail.steps.js';
 import './correct.steps.js';
 import './settlement-variance.steps.js';
 import './explain.steps.js';
+import './config-change.steps.js';

@@ -214,14 +214,46 @@ Example names (Alex, Sam) are fixtures, never real people.
 
 **Example.** Correcting the groceries amount records a "transaction corrected" event; next December's config apply records a "config changed" event. Read in order, they explain how today's numbers came to be.
 
-**Technical notes.** Plain immutable value objects in Core (`src/core/events/`), recorded through the `DomainEventRecorder` port ([architecture.md § Domain events](../architecture.md), #155); Infra persists them append-only. No base class, no dispatcher, no event sourcing. Names are past-tense (`TransactionCorrected`, `TransactionIngested`, `ConfigChanged`, `DissolutionPerformed`). The recording timestamp is a system event (UTC) stamped at the boundary; no actor is recorded (no auth system).
+**Technical notes.** Plain immutable value objects in Core (`src/core/events/`), recorded through the `DomainEventRecorder` port ([architecture.md § Domain events](../architecture.md), #155); Infra persists them append-only. No base class, no dispatcher, no event sourcing. Names are past-tense (`TransactionCorrected`, `TransactionIngested`, `ConfigChanged`, `DataExported`, `DissolutionPerformed`). The recording timestamp is a system event (UTC) stamped at the boundary; no actor is recorded (no auth system).
 
 ---
 
-## Reserved for Epic 4
+## Configuration (accounting.yaml)
 
-## Dissolution *(forthcoming)*
+**Everyday definition.** The household's own rule file — accounts, splits, buffers, recurring rules — written and owned by the couple.
 
-**Everyday definition.** Winding the household's data down — exporting it to portable formats and securely resetting the app — as a deliberate, recorded act.
+**Example.** `accounts: [{ id: joint-dkb, … }]` — the couple's labels, never bank secrets.
 
-**Technical notes.** Graceful Dissolution (FR21); emits a `DissolutionPerformed` domain event. To be modeled in Epic 4's Story 4.5.
+**Technical notes.** **PII-safe by construction:** no field is designed to hold bank identifiers or other sensitive values; a parse-time tripwire rejects IBAN- and card-number-shaped strings anywhere in the file with a path-cited error. This invariant is what lets config-change diffs and the export bundle quote values verbatim. User-typed free text is the couple's own and is not policed. See [model-notes/story-4.5.md](model-notes/story-4.5.md).
+
+## Config change
+
+**Everyday definition.** The recorded fact that the household's rules file differs from what the system last saw — with exactly what changed, old and new.
+
+**Example.** Raising the Car buffer target in a text editor; the next command notices and records "buffers: Car target €1,500 → €1,800".
+
+**Technical notes.** Ambient detection at the app boundary on every command run: `ConfigChangeDetector` (pure domain service) diffs the live config against the last-seen state (`config_state` via the `ConfigStateStore` port; digest via `HashFn` over a canonical form — distinct from the ingest **Canonicalization** term). Emits `ConfigChanged` with `origin: 'external' | 'applied'`; Epic-5 `plan --apply` fills `'applied'`. Cosmetic YAML edits (key order, whitespace, comments) never emit. The sanctioned exception to story-3.5's read-only `status` criterion.
+
+## Export bundle
+
+**Everyday definition.** The portable archive of everything the household owns — ledger, audit trail, and a copy of the rules — readable by other tools.
+
+**Example.** Before switching apps, the couple exports the bundle and opens the CSVs in a spreadsheet to check every year is there.
+
+**Technical notes.** Machine-readable CSV + JSON, produced by `DataExporter`; identified by its manifest hash — the export-proof that later authorizes a wipe. Its own trail includes the `DataExported` event that produced it.
+
+## Dissolution
+
+**Everyday definition.** Winding the household's data down — exporting everything to a portable bundle, then securely resetting the ledger — as two deliberate, recorded acts.
+
+**Example.** Moving to another tool: export the bundle, confirm the new tool reads it, and days later run the wipe with the export's proof; a receipt notes what happened and where the history lives.
+
+**Technical notes.** Graceful Dissolution (FR21). Act 1: export (standalone — `DataExported`). Act 2: wipe, gated on a matching export-proof (`DissolutionPerformed`, persisted in the dissolution receipt, not the wiped DB). Wipes the SQLite DB + snapshots; preserves `accounting.yaml` and the receipt. Boundary-orchestrated via the `DataExporter`/`StoreReset` ports. See [model-notes/story-4.5.md](model-notes/story-4.5.md).
+
+## Dissolution receipt
+
+**Everyday definition.** The small note left behind after a wipe, so an empty app can still say what happened and where the history went.
+
+**Example.** Opening the app after dissolution shows: wound down on 12 March, archive at `~/exports/household-2027`.
+
+**Technical notes.** A local file holding the `DissolutionPerformed` event plus the bundle's manifest hash and location; written durably *before* the stores are reset; survives the wipe alongside `accounting.yaml`.

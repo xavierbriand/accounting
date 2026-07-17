@@ -141,4 +141,25 @@ describe('observe-config-change wiring — R4 composition-root subprocess test',
 
     expect(configChangedEventCount(dbPath)).toBe(1);
   });
+
+  it('dissolve detects and records a change (story-4.5c — the seventh observed command)', () => {
+    const tmpDir = makeTmpDir();
+    const dbPath = path.join(tmpDir, 'test.db');
+    writeYaml(tmpDir, 'Europe/Paris');
+    expect(spawnCli(['migrate'], { cwd: tmpDir }).status).toBe(0);
+
+    writeYaml(tmpDir, 'Europe/Berlin');
+    // The wiring point (right after assertMigrated) precedes dissolve's own
+    // --bundle resolution — a bogus bundle dir still proves the wiring fired
+    // (same reasoning as correct/ingest's bogus-argument cases above). This is
+    // also the Phase-2 reversal itself: dissolve runs observeConfigChangeFor
+    // like every sibling, so a config change since the export correctly trips
+    // the staleness gate on a real run (the bundle's accounting.yaml copy is
+    // now outdated) — this test only proves the observation fires, not the
+    // staleness consequence (covered by dissolve-command's own unit tests).
+    const result = spawnCli(['dissolve', '--bundle', 'does-not-exist', '--confirm'], { cwd: tmpDir });
+    expect(result.status).toBe(2);
+
+    expect(configChangedEventCount(dbPath)).toBe(1);
+  });
 });

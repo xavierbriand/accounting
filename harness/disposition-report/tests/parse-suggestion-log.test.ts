@@ -73,6 +73,24 @@ describe('parseSuggestionLog — dialect coverage', () => {
     expect(rows[0].story).toBe('2.2');
   });
 
+  // fails if extractStoryId's heading regex requires whitespace after
+  // "Story" — docs/plans/story-h6.md and story-h7.md's real first lines use
+  // "Story-h6:" (hyphen, no space), a third heading variant discovered via
+  // the real-tree integration run (disposition-report.integration.test.ts)
+  // collapsing both files' rows under a shared "unknown" story bucket.
+  it('extracts the story id from a "Story-h6:" (hyphenated, no space) heading', () => {
+    const markdown = `# Story-h6: Deterministic DoD checks
+
+## Suggestion log
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 1 | some finding | ADOPT | done |
+`;
+    const rows = parseSuggestionLog(markdown);
+    expect(rows[0].story).toBe('h6');
+  });
+
   // fails if a plan with no "## Suggestion log" heading at all (e.g.
   // docs/plans/story-2.2.md pre-dates the convention) throws instead of
   // returning an empty, honestly-zero row list.

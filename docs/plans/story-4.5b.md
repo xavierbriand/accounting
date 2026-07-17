@@ -152,8 +152,10 @@ backup value under a destructive verb).
 - **New** `src/infra/export/rfc4180.ts` — the CSV field escaper (pure).
 - **New (extracted)** `src/infra/fs/sanitize-fs-error.ts` — generalized from
   `YamlConfigWriter`'s private helper (token parameterized); both call sites use it.
-- **New** `src/cli/utils/node-timestamp-clock.ts` — seconds-resolution stamp
-  (`() => string`, e.g. `2026-07-17T14-30-05`) for bundle names; injected like `nodeClock`.
+- **New** `src/cli/utils/node-timestamp-clock.ts` — seconds-resolution stamp for bundle names;
+  injected like `nodeClock`. *(Phase-4 R2 correction: shipped as
+  `nodeTimestampClock(timezone: string): string` with `program.ts` threading
+  `config.timezone` — the timezone parameter wasn't enumerated here pre-implementation.)*
 - **New** `src/cli/commands/export-command.ts` — orchestration per Selected solution; explicit
   `isFailure` branching, envelope on stderr (house style).
 - `src/cli/program.ts` — `export` command wiring incl. the 4.5a `observeConfigChangeFor` call
@@ -230,6 +232,12 @@ Target 6–10 slices (R13/R28).
    commit (R31 same-PR).
 7. `refactor(4.5b)` — Phase-4 slot (R11 empty-with-justification if none).
 
+*(Landed-slice annotation, Phase 4: 10 slices — slice 2 split into sanitizer + escaper pairs
+(reversed order); `node-timestamp-clock` minted its own pair (it was surface-listed but not
+slice-listed); an R10 coverage-completion slice landed per the Gherkin section's unit-tier
+carve-out; the refactor slot carried real content plus folded Phase-4 fixes. Within R13's 6–10;
+retro Change item: derive the slice table from the R2 surface.)*
+
 Docs commits: canonical prep `chore(docs): story-4.5b plan + P1/P2/P3 review` (this file, model
 -note amendment, epics split update) and `chore(retro)` at Phase 5 — envelope-exempt (R30).
 
@@ -284,6 +292,20 @@ verdict). Compliance confirmations consolidated into row 17.
 | 16 | P3 (soft): `Result.flatMap` chaining in orchestration | REJECT | House style at the CLI boundary is explicit `isFailure` branching (story-4.1 log #7, 4.5a log #15 precedent; reviewer notes consistency itself) |
 | 17 | P1/P2 compliance confirmations (FR21/epic alignment, R24 satisfied, no Money arithmetic, append-only intact, no migration) | ACKNOWLEDGE | No action |
 | 18 | Sibling-overlap: 0 overlaps (0 open PRs; 48 issues scanned; no 4.5c/export branches) | ACKNOWLEDGE | Clean verdict recorded |
+
+**Phase-4 review (2026-07-17):** `code-reviewer` (12 findings + 2 soft suggestions, **0
+blockers**) + `ddd-modeler` Mode B (**0 hard violations**, 3 observations) in parallel. Fix-now
+(folded into the two rebuilt top slices — envelope held at 10): `sanitizeSqlError` on the
+`counts()`/`record()` failure paths (sibling parity; raw SQLite errors could leak the DB path);
+NULL `idempotency_hash`/`corrects_id` correction-row fidelity fixture (the one production path
+producing SQL NULL was untested); exact-five-files bundle guard (pins the `config_state`
+exclusion); Core-purity sweep widened to all of `src/core/ports/`; `DataExported` fails-if
+docstring lines; inaccurate atomicity-test comment corrected; Scenario-3 tiering note.
+Doc-fixes (retro commit): R2 timestamp-clock signature correction; landed-slice annotation.
+Acknowledged: `proof` vs "export-proof" shortening (contract-documented; 4.5c note),
+snake_case-CSV/camelCase-JSON bundle convention (contract-ratified), function-size
+naturally-coarse candidates, spreadsheet numeric-coercion (out of invariant scope). Ratified
+Phase-3 deviations stand as reported in PR §8.
 
 ## DoR checklist
 

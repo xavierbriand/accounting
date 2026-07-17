@@ -7,14 +7,16 @@
  * fails if: TransactionIngested carries fields beyond type/transactionIds/sourceAccount, or
  *   TransactionCorrected carries fields beyond type/targetTransactionId/producedTransactionIds/
  *   changedFields/reason (a clock, an actor, or a PII field would leak into Core), or
- *   src/core/events/ or the port import Node APIs / better-sqlite3 / a clock (Core purity —
- *   architecture.md § Domain events).
+ *   DataExported regrows manifestHash (circular with invariant 8 — model note § Events) or its
+ *   archiveLocation accepts a path separator (absolute paths must never enter the trail), or
+ *   src/core/events/, src/core/config/, or any src/core/ports/ file imports Node APIs /
+ *   better-sqlite3 / zod / a clock (Core purity — architecture.md § Domain events).
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged, DataExported } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -127,6 +129,37 @@ describe('ConfigChanged — value object shape', () => {
   });
 });
 
+describe('DataExported — value object shape', () => {
+  it('carries type, archiveLocation, and exported (transactions, events) — no manifestHash', () => {
+    const event: DataExported = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 4, events: 6 },
+    };
+
+    expect(Object.keys(event).sort()).toEqual(['archiveLocation', 'exported', 'type'].sort());
+    expect(Object.keys(event.exported).sort()).toEqual(['events', 'transactions'].sort());
+  });
+
+  it('archiveLocation carries no path separators (bundle directory name only, never a path)', () => {
+    const event: DataExported = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 0, events: 0 },
+    };
+    expect(event.archiveLocation).not.toMatch(/[/\\]/);
+  });
+
+  it('is assignable to the DomainEvent union', () => {
+    const event: DomainEvent = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 4, events: 6 },
+    };
+    expect(event.type).toBe('DataExported');
+  });
+});
+
 describe('DomainEventRecorder — port shape', () => {
   it('a conforming implementation returns Result<void>', () => {
     const recorder: DomainEventRecorder = {
@@ -170,13 +203,17 @@ describe('Core purity — src/core/events/ and the DomainEventRecorder port', ()
     }
   });
 
-  // fails if: src/core/ports/domain-event-recorder.ts imports Node APIs, better-sqlite3, or a clock
-  it.each(FORBIDDEN_IMPORT_PATTERNS)(
-    'src/core/ports/domain-event-recorder.ts does not match forbidden pattern %s',
-    (pattern) => {
-      const filePath = path.join(__dirname, '../../../../src/core/ports/domain-event-recorder.ts');
-      const contents = fs.readFileSync(filePath, 'utf8');
-      expect(contents, `port file matched forbidden pattern ${pattern}`).not.toMatch(pattern);
-    },
-  );
+  // story-4.5b Phase-4: widened from the single domain-event-recorder.ts check to every
+  // port — a port that imports Infra machinery would invert the dependency rule silently.
+  it('no file under src/core/ports/ imports Node APIs, better-sqlite3, zod, or a clock', () => {
+    const files = sourceFilesUnder('core/ports');
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const file of files) {
+      const contents = fs.readFileSync(file, 'utf8');
+      for (const pattern of FORBIDDEN_IMPORT_PATTERNS) {
+        expect(contents, `${file} matched forbidden pattern ${pattern}`).not.toMatch(pattern);
+      }
+    }
+  });
 });

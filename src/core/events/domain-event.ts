@@ -22,4 +22,15 @@ export interface ConfigChanged {
   readonly currentDigest: string;
 }
 
-export type DomainEvent = TransactionIngested | TransactionCorrected | ConfigChanged;
+export interface DataExported {
+  readonly type: 'DataExported';
+  // Bundle directory name only — never an absolute path (extends the dbPath
+  // no-paths-in-the-trail ruling to this event's payload, model note § Events).
+  readonly archiveLocation: string;
+  readonly exported: {
+    readonly transactions: number;
+    readonly events: number;
+  };
+}
+
+export type DomainEvent = TransactionIngested | TransactionCorrected | ConfigChanged | DataExported;

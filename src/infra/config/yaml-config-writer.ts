@@ -3,14 +3,7 @@ import crypto from 'crypto';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import type { ConfigWriter, ConfigWriterError } from '@core/ports/config-writer.js';
 import { Result } from '@core/shared/result.js';
-
-// Replaces absolute filesystem paths in Node error messages with a safe token.
-// Mirrors sanitizeSqlError at src/cli/utils/sanitize-sql-error.ts.
-function sanitizeFsError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  // Replace leading absolute paths (Unix /... or Windows C:\... patterns)
-  return msg.replace(/(?:\/[^\s:,'"]+|[A-Za-z]:\\[^\s:,'"]+)/g, '<config>');
-}
+import { sanitizeFsError } from '../fs/sanitize-fs-error.js';
 
 export class YamlConfigWriter implements ConfigWriter {
   constructor(
@@ -26,7 +19,7 @@ export class YamlConfigWriter implements ConfigWriter {
     try {
       stat = fs.statSync(this.yamlPath, { bigint: true });
     } catch (err) {
-      return Result.fail({ kind: 'io', message: sanitizeFsError(err) });
+      return Result.fail({ kind: 'io', message: sanitizeFsError(err, '<config>') });
     }
 
     if (stat.mtimeNs !== this.expectedMtimeNs) {
@@ -38,7 +31,7 @@ export class YamlConfigWriter implements ConfigWriter {
     try {
       content = fs.readFileSync(this.yamlPath, 'utf8');
     } catch (err) {
-      return Result.fail({ kind: 'io', message: sanitizeFsError(err) });
+      return Result.fail({ kind: 'io', message: sanitizeFsError(err, '<config>') });
     }
 
     const doc = parseDocument(content);
@@ -146,7 +139,7 @@ export class YamlConfigWriter implements ConfigWriter {
       if (fs.existsSync(tmpPath)) {
         try { fs.unlinkSync(tmpPath); } catch { /* best-effort */ }
       }
-      return Result.fail({ kind: 'io', message: sanitizeFsError(err) });
+      return Result.fail({ kind: 'io', message: sanitizeFsError(err, '<config>') });
     }
   }
 }

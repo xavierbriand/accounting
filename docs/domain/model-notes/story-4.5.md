@@ -135,9 +135,18 @@ Past-tense, glossary vocabulary; plain VOs; `recorded_at` boundary-stamped, no a
 - **`ConfigChanged`** — `type`, `origin: 'external' | 'applied'`, `changedSections:
   readonly ChangedSection[]` (verbatim old→new), `previousDigest`, `currentDigest`. This story
   emits only `'external'`; Epic-5 5.4 fills `'applied'` (and may add a `planFile` field then).
-- **`DataExported`** — `type`, `archiveLocation`, `manifestHash`, `exported: { transactions:
+- **`DataExported`** — `type`, `archiveLocation` (the bundle's **directory name only**, never an
+  absolute path — extends the dbPath ruling to event payloads), `exported: { transactions:
   number; events: number }`. *(Delta from the epic text, which named two events — sign-off
   covers it.)*
+  > *Amendments (story-4.5b planning, user-approved 2026-07-17).* (a) **`manifestHash` dropped
+  > from this event** — it is circular with invariant 8: the hash doesn't exist until the bundle
+  > is written, and the event must be recorded before the write so the bundle's trail contains
+  > it. The export-proof lives in `manifest.json` (its hash, printed at export) and later in the
+  > dissolution receipt — an artifact, not a trail fact. (b) `archiveLocation` narrowed to the
+  > bundle directory basename (no filesystem-layout leak into the append-only trail).
+  > (c) The dissolution half split at planning into **4.5b (export act)** / **4.5c (wipe act)** —
+  > the two composed acts ship as two stories.
 - **`DissolutionPerformed`** — `type`, `archiveLocation`, `manifestHash`, `wipedStores:
   readonly string[]`. Persisted in the dissolution receipt, not the wiped DB.
 

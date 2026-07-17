@@ -348,7 +348,7 @@ As a **User**,
 I want config changes and a graceful dissolution (export + secure wipe) recorded as domain events,
 So that the audit trail is complete and I can port or wind down my data as a deliberate, recorded act.
 
-**Lane:** Full for the events; dissolution export/wipe is Infra-heavy. Emits `ConfigChanged`, `DataExported`, and `DissolutionPerformed` via the 4.1 recorder (`DataExported` added at the Phase-0 model session — the two-act dissolution shape makes the standalone export its own recorded fact); promotes the reserved **Dissolution** glossary term. Depends on 4.1; precedes Epic-5 Story 5.4 (which consumes `ConfigChanged`). **Split: 4.5a (config-change detection + `ConfigChanged`) / 4.5b (dissolution: export + wipe + receipt), 4.2/4.3 precedent.** Model note: [docs/domain/model-notes/story-4.5.md](domain/model-notes/story-4.5.md).
+**Lane:** Full for the events; dissolution export/wipe is Infra-heavy. Emits `ConfigChanged`, `DataExported`, and `DissolutionPerformed` via the 4.1 recorder (`DataExported` added at the Phase-0 model session — the two-act dissolution shape makes the standalone export its own recorded fact); promotes the reserved **Dissolution** glossary term. Depends on 4.1; precedes Epic-5 Story 5.4 (which consumes `ConfigChanged`). **Split: 4.5a (config-change detection + `ConfigChanged`) / 4.5b (export bundle + `DataExported`) / 4.5c (proof-gated wipe + receipt + `DissolutionPerformed`) — 4.2/4.3 precedent; the 4.5b/4.5c split of the two composed dissolution acts was decided at 4.5b planning (user-approved 2026-07-17).** Model note: [docs/domain/model-notes/story-4.5.md](domain/model-notes/story-4.5.md).
 
 ## Epic 5: Year-in-Review & Annual Planner
 

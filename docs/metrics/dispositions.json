@@ -1,0 +1,862 @@
+{
+  "totalRows": 688,
+  "parsedLogCount": 55,
+  "byTag": {
+    "adopted": 381,
+    "deferred": 19,
+    "rejected": 49,
+    "acknowledged": 226,
+    "unparsed": 13
+  },
+  "byPhase": [
+    {
+      "phase": "p2",
+      "legs": [
+        "plan-reviewer",
+        "sibling-overlap"
+      ],
+      "total": 541,
+      "byTag": {
+        "adopted": 315,
+        "deferred": 10,
+        "rejected": 49,
+        "acknowledged": 162,
+        "unparsed": 5
+      }
+    },
+    {
+      "phase": "p4",
+      "legs": [
+        "code-reviewer",
+        "ddd-modeler"
+      ],
+      "total": 147,
+      "byTag": {
+        "adopted": 66,
+        "deferred": 9,
+        "rejected": 0,
+        "acknowledged": 64,
+        "unparsed": 8
+      }
+    },
+    {
+      "phase": "unattributed",
+      "legs": [],
+      "total": 0,
+      "byTag": {
+        "adopted": 0,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    }
+  ],
+  "byRule": [
+    {
+      "rule": "R1",
+      "total": 8,
+      "acknowledged": 8,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R10",
+      "total": 6,
+      "acknowledged": 6,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R9",
+      "total": 5,
+      "acknowledged": 5,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R18",
+      "total": 2,
+      "acknowledged": 2,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R17",
+      "total": 1,
+      "acknowledged": 1,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R20",
+      "total": 1,
+      "acknowledged": 1,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R28",
+      "total": 1,
+      "acknowledged": 1,
+      "acknowledgeRate": 1
+    },
+    {
+      "rule": "R11",
+      "total": 11,
+      "acknowledged": 9,
+      "acknowledgeRate": 0.8181818181818182
+    },
+    {
+      "rule": "R19",
+      "total": 5,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.8
+    },
+    {
+      "rule": "R21",
+      "total": 5,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.8
+    },
+    {
+      "rule": "R22",
+      "total": 5,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.8
+    },
+    {
+      "rule": "R23",
+      "total": 5,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.8
+    },
+    {
+      "rule": "R26",
+      "total": 5,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.8
+    },
+    {
+      "rule": "R15",
+      "total": 6,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.6666666666666666
+    },
+    {
+      "rule": "R24",
+      "total": 6,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.6666666666666666
+    },
+    {
+      "rule": "R12",
+      "total": 16,
+      "acknowledged": 10,
+      "acknowledgeRate": 0.625
+    },
+    {
+      "rule": "R14",
+      "total": 5,
+      "acknowledged": 3,
+      "acknowledgeRate": 0.6
+    },
+    {
+      "rule": "R3",
+      "total": 12,
+      "acknowledged": 7,
+      "acknowledgeRate": 0.5833333333333334
+    },
+    {
+      "rule": "R13",
+      "total": 22,
+      "acknowledged": 12,
+      "acknowledgeRate": 0.5454545454545454
+    },
+    {
+      "rule": "R8",
+      "total": 18,
+      "acknowledged": 9,
+      "acknowledgeRate": 0.5
+    },
+    {
+      "rule": "R4",
+      "total": 6,
+      "acknowledged": 3,
+      "acknowledgeRate": 0.5
+    },
+    {
+      "rule": "R29",
+      "total": 2,
+      "acknowledged": 1,
+      "acknowledgeRate": 0.5
+    },
+    {
+      "rule": "R5",
+      "total": 9,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.4444444444444444
+    },
+    {
+      "rule": "R25",
+      "total": 5,
+      "acknowledged": 2,
+      "acknowledgeRate": 0.4
+    },
+    {
+      "rule": "R7",
+      "total": 11,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.36363636363636365
+    },
+    {
+      "rule": "R2",
+      "total": 21,
+      "acknowledged": 7,
+      "acknowledgeRate": 0.3333333333333333
+    },
+    {
+      "rule": "R16",
+      "total": 13,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.3076923076923077
+    },
+    {
+      "rule": "R6",
+      "total": 16,
+      "acknowledged": 4,
+      "acknowledgeRate": 0.25
+    },
+    {
+      "rule": "R31",
+      "total": 2,
+      "acknowledged": 0,
+      "acknowledgeRate": 0
+    },
+    {
+      "rule": "R30",
+      "total": 1,
+      "acknowledged": 0,
+      "acknowledgeRate": 0
+    },
+    {
+      "rule": "R96",
+      "total": 1,
+      "acknowledged": 0,
+      "acknowledgeRate": 0
+    },
+    {
+      "rule": "R97",
+      "total": 1,
+      "acknowledged": 0,
+      "acknowledgeRate": 0
+    },
+    {
+      "rule": "R98",
+      "total": 1,
+      "acknowledged": 0,
+      "acknowledgeRate": 0
+    }
+  ],
+  "byStory": [
+    {
+      "story": "4.1",
+      "total": 17,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 1,
+        "rejected": 1,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.2a",
+      "total": 9,
+      "byTag": {
+        "adopted": 4,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 5,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.2b",
+      "total": 10,
+      "byTag": {
+        "adopted": 6,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 4,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.3a",
+      "total": 36,
+      "byTag": {
+        "adopted": 24,
+        "deferred": 5,
+        "rejected": 1,
+        "acknowledged": 6,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.3b",
+      "total": 10,
+      "byTag": {
+        "adopted": 4,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 5,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "4.4a",
+      "total": 14,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 6,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.4b",
+      "total": 26,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 19,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.5a",
+      "total": 18,
+      "byTag": {
+        "adopted": 13,
+        "deferred": 1,
+        "rejected": 1,
+        "acknowledged": 3,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.5b",
+      "total": 18,
+      "byTag": {
+        "adopted": 15,
+        "deferred": 0,
+        "rejected": 1,
+        "acknowledged": 2,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "4.5c",
+      "total": 19,
+      "byTag": {
+        "adopted": 15,
+        "deferred": 0,
+        "rejected": 2,
+        "acknowledged": 2,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "A",
+      "total": 24,
+      "byTag": {
+        "adopted": 16,
+        "deferred": 0,
+        "rejected": 2,
+        "acknowledged": 6,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "B",
+      "total": 14,
+      "byTag": {
+        "adopted": 11,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 3,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "C",
+      "total": 21,
+      "byTag": {
+        "adopted": 14,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "ddd-1",
+      "total": 11,
+      "byTag": {
+        "adopted": 5,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 6,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "ddd-2",
+      "total": 7,
+      "byTag": {
+        "adopted": 5,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 1,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "h1",
+      "total": 30,
+      "byTag": {
+        "adopted": 17,
+        "deferred": 3,
+        "rejected": 0,
+        "acknowledged": 10,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h10a",
+      "total": 9,
+      "byTag": {
+        "adopted": 0,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 8,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "h10b",
+      "total": 9,
+      "byTag": {
+        "adopted": 1,
+        "deferred": 1,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h11",
+      "total": 8,
+      "byTag": {
+        "adopted": 0,
+        "deferred": 1,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h12",
+      "total": 5,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 3,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h2",
+      "total": 15,
+      "byTag": {
+        "adopted": 10,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 5,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h3",
+      "total": 14,
+      "byTag": {
+        "adopted": 5,
+        "deferred": 2,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h4",
+      "total": 28,
+      "byTag": {
+        "adopted": 20,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 8,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h5",
+      "total": 19,
+      "byTag": {
+        "adopted": 9,
+        "deferred": 1,
+        "rejected": 0,
+        "acknowledged": 9,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h6",
+      "total": 26,
+      "byTag": {
+        "adopted": 16,
+        "deferred": 1,
+        "rejected": 0,
+        "acknowledged": 9,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h7",
+      "total": 15,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "h8",
+      "total": 20,
+      "byTag": {
+        "adopted": 11,
+        "deferred": 0,
+        "rejected": 1,
+        "acknowledged": 7,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "h9",
+      "total": 6,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 4,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-01",
+      "total": 5,
+      "byTag": {
+        "adopted": 3,
+        "deferred": 1,
+        "rejected": 1,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-02",
+      "total": 3,
+      "byTag": {
+        "adopted": 0,
+        "deferred": 0,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-03",
+      "total": 4,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 2,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-04",
+      "total": 5,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-05",
+      "total": 14,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 0,
+        "rejected": 1,
+        "acknowledged": 2,
+        "unparsed": 3
+      }
+    },
+    {
+      "story": "maint-06",
+      "total": 15,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 2,
+        "acknowledged": 2,
+        "unparsed": 4
+      }
+    },
+    {
+      "story": "maint-07",
+      "total": 7,
+      "byTag": {
+        "adopted": 3,
+        "deferred": 0,
+        "rejected": 4,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-08",
+      "total": 9,
+      "byTag": {
+        "adopted": 5,
+        "deferred": 0,
+        "rejected": 4,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-09",
+      "total": 6,
+      "byTag": {
+        "adopted": 3,
+        "deferred": 0,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-10",
+      "total": 10,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 1,
+        "rejected": 2,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-11",
+      "total": 10,
+      "byTag": {
+        "adopted": 6,
+        "deferred": 1,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-12",
+      "total": 9,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 0,
+        "rejected": 1,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-13",
+      "total": 10,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-14",
+      "total": 10,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 3,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-15",
+      "total": 8,
+      "byTag": {
+        "adopted": 4,
+        "deferred": 0,
+        "rejected": 4,
+        "acknowledged": 0,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-16",
+      "total": 14,
+      "byTag": {
+        "adopted": 10,
+        "deferred": 0,
+        "rejected": 1,
+        "acknowledged": 2,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "maint-17",
+      "total": 9,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 1,
+        "unparsed": 1
+      }
+    },
+    {
+      "story": "maint-18",
+      "total": 7,
+      "byTag": {
+        "adopted": 3,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 4,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-19",
+      "total": 7,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 5,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-21",
+      "total": 10,
+      "byTag": {
+        "adopted": 5,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 5,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-22",
+      "total": 8,
+      "byTag": {
+        "adopted": 7,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 1,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-23",
+      "total": 9,
+      "byTag": {
+        "adopted": 2,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 7,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-24",
+      "total": 10,
+      "byTag": {
+        "adopted": 4,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 6,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-25",
+      "total": 3,
+      "byTag": {
+        "adopted": 1,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 2,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-26",
+      "total": 14,
+      "byTag": {
+        "adopted": 3,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 11,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-27",
+      "total": 4,
+      "byTag": {
+        "adopted": 1,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 3,
+        "unparsed": 0
+      }
+    },
+    {
+      "story": "maint-28",
+      "total": 10,
+      "byTag": {
+        "adopted": 8,
+        "deferred": 0,
+        "rejected": 0,
+        "acknowledged": 2,
+        "unparsed": 0
+      }
+    }
+  ]
+}

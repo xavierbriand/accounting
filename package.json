@@ -18,6 +18,7 @@
     "metrics:loop": "tsx harness/metrics/loop-metrics.ts",
     "metrics:usage": "tsx harness/metrics/usage-reader.ts",
     "metrics:story": "tsx harness/metrics/usage-reader.ts --story",
+    "metrics:dispositions": "tsx harness/disposition-report/disposition-report.ts",
     "dod:check": "tsx harness/dod-check/dod-check.ts"
   },
   "repository": {

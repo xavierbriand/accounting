@@ -10,7 +10,7 @@ export type SuggestionLogRow = {
   finding: string;
 };
 
-const STORY_HEADING = /^#\s*(?:Epic\s+\S+,\s*)?Story\s+([A-Za-z0-9.-]+)/m;
+const STORY_HEADING = /^#\s*(?:Epic\s+\S+,\s*)?Story[\s-]+([A-Za-z0-9.-]+)/m;
 
 function extractStoryId(markdown: string): string {
   const match = STORY_HEADING.exec(markdown);
@@ -77,17 +77,22 @@ function indexOfHeader(header: string[], name: string): number {
   return header.findIndex((cell) => cell.trim().toLowerCase() === name);
 }
 
+// Priority order for the tag-bearing column. "Tag"/"Class"/"Disposition" are
+// unambiguous — when present, the tag lives there and "Resolution" (if also
+// present) is free text. Only when none of those three exist does
+// "Resolution" itself carry the tag (the older Phase/Suggestion/Resolution/
+// Link dialect).
+const TAG_COLUMN_PRIORITY = ['tag', 'class', 'disposition', 'resolution'];
+
 function classifyHeader(header: string[]): HeaderRoles {
   const findingIdx = header.findIndex((cell) => {
     const lower = cell.trim().toLowerCase();
     return lower.startsWith('finding') || lower.startsWith('suggestion');
   });
-  const tagIdx =
-    indexOfHeader(header, 'tag') !== -1
-      ? indexOfHeader(header, 'tag')
-      : indexOfHeader(header, 'resolution') !== -1
-        ? indexOfHeader(header, 'resolution')
-        : indexOfHeader(header, 'disposition');
+  const tagIdx = TAG_COLUMN_PRIORITY.reduce(
+    (found, name) => (found !== -1 ? found : indexOfHeader(header, name)),
+    -1,
+  );
   return { findingIdx, tagIdx };
 }
 

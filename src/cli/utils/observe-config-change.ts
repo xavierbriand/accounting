@@ -17,13 +17,9 @@ function warn(stderr: NodeJS.WritableStream, detail: string): void {
   stderr.write(`[warning] config-change observation skipped: ${detail}\n`);
 }
 
-/**
- * Best-effort ambient audit observation (FR23, story-4.5a): getLast -> detect -> on a real
- * change, record then save; on bootstrap, save the baseline silently; on a no-op (cosmetic
- * edit), do nothing. Any internal failure warns to stderr and returns — this never blocks
- * the command it's wired into, and state is only saved on success, so the next run
- * re-detects and self-heals.
- */
+// Best-effort by design (FR23, story-4.5a): an audit observation must never block the
+// command it rides on, so every internal failure warns to stderr and returns. State is
+// saved only after a successful record, so a failed run self-heals on the next detection.
 export function observeConfigChange(deps: ObserveConfigChangeDeps): void {
   const { config, configStateStore, domainEventRecorder, hashFn, stderr } = deps;
 

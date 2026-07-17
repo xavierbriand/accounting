@@ -8,9 +8,10 @@
  *   value fails to satisfy the type for any of the three kinds.
  */
 import { describe, it, expect } from 'vitest';
+import * as fc from 'fast-check';
 import { diffConfigs } from '../../../../src/core/config/config-diff.js';
 import type { ChangedEntry, ChangedSection } from '../../../../src/core/config/config-diff.js';
-import type { CanonicalAppConfig } from '../../../../src/core/config/config-canonical-form.js';
+import type { CanonicalAppConfig, CanonicalBuffer } from '../../../../src/core/config/config-canonical-form.js';
 
 describe('ChangedEntry — value object shape', () => {
   it('an "added" entry carries key, kind, and current (no previous)', () => {
@@ -228,5 +229,69 @@ describe('diffConfigs — coverage completion (accounts/splits/recurring/autoTag
     expect(diffConfigs(previous, current)).toEqual([
       { section: 'autoTagRules', entries: [{ key: 'uber', kind: 'added', current: JSON.stringify(added) }] },
     ]);
+  });
+});
+
+describe('diffConfigs — model-note invariant 2: diff exactness (property over config pairs)', () => {
+  // fails if: diffConfigs reports an entry for an unchanged element (unsoundness) or
+  //   omits an entry for a genuinely added/removed/edited element (incompleteness).
+  const roleTaggedBuffer = fc.record({
+    name: fc.stringMatching(/^[A-Z][a-z]{2,8}$/),
+    role: fc.constantFrom('unchanged' as const, 'changed' as const, 'removed' as const, 'added' as const),
+    target: fc.integer({ min: 1, max: 99_999 }),
+  });
+
+  function bufferOf(name: string, target: number): CanonicalBuffer {
+    return { name, account: 'joint', target: `EUR ${target}.00`, targetDate: '2027-01-01', cap: undefined };
+  }
+
+  it('exactly the differing buffers appear: added/removed/changed as themselves, unchanged never', () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(roleTaggedBuffer, { selector: (e) => e.name, maxLength: 10 }),
+        (tagged) => {
+          const previous = baseCanonical({
+            buffers: tagged.filter((e) => e.role !== 'added').map((e) => bufferOf(e.name, e.target)),
+          });
+          const current = baseCanonical({
+            buffers: tagged
+              .filter((e) => e.role !== 'removed')
+              .map((e) => bufferOf(e.name, e.role === 'changed' ? e.target + 1 : e.target)),
+          });
+
+          const expected: ChangedEntry[] = [
+            ...tagged
+              .filter((e) => e.role === 'removed')
+              .map((e): ChangedEntry => ({ key: e.name, kind: 'removed', previous: JSON.stringify(bufferOf(e.name, e.target)) })),
+            ...tagged
+              .filter((e) => e.role === 'added')
+              .map((e): ChangedEntry => ({ key: e.name, kind: 'added', current: JSON.stringify(bufferOf(e.name, e.target)) })),
+            ...tagged
+              .filter((e) => e.role === 'changed')
+              .map(
+                (e): ChangedEntry => ({
+                  key: `${e.name}.target`,
+                  kind: 'changed',
+                  previous: `EUR ${e.target}.00`,
+                  current: `EUR ${e.target + 1}.00`,
+                }),
+              ),
+          ];
+
+          const byEntryKey = (a: ChangedEntry, b: ChangedEntry): number => a.key.localeCompare(b.key);
+          const buffersSection = diffConfigs(previous, current).find((s) => s.section === 'buffers');
+
+          if (expected.length === 0) {
+            expect(buffersSection).toBeUndefined();
+            return;
+          }
+          expect(buffersSection).toBeDefined();
+          expect([...(buffersSection as ChangedSection).entries].sort(byEntryKey)).toEqual(
+            [...expected].sort(byEntryKey),
+          );
+        },
+      ),
+      { numRuns: 200 },
+    );
   });
 });

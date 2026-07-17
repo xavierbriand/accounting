@@ -3,14 +3,19 @@ import type { StoredConfigState } from '@core/ports/config-state-store.js';
 import type { AppConfig } from '@core/config/app-config.js';
 import type { ConfigChanged } from '@core/events/domain-event.js';
 import { Result } from '@core/shared/result.js';
-import { canonicalConfigForm, parseCanonicalConfigForm, type CanonicalAppConfig } from './config-canonical-form.js';
+import {
+  parseCanonicalConfigForm,
+  toCanonicalAppConfig,
+  type CanonicalAppConfig,
+} from './config-canonical-form.js';
 import { diffConfigs } from './config-diff.js';
 
 export class ConfigChangeDetector {
   constructor(private readonly hashFn: HashFn) {}
 
   detect(previous: StoredConfigState | null, current: AppConfig): Result<ConfigChanged | null> {
-    const currentCanonical = canonicalConfigForm(current);
+    const currentCanonicalObj = toCanonicalAppConfig(current);
+    const currentCanonical = JSON.stringify(currentCanonicalObj);
     const currentDigest = this.hashFn(currentCanonical);
 
     if (previous === null || previous.digest === currentDigest) {
@@ -26,7 +31,7 @@ export class ConfigChangeDetector {
       );
     }
 
-    const changedSections = diffConfigs(previousCanonical, parseCanonicalConfigForm(currentCanonical));
+    const changedSections = diffConfigs(previousCanonical, currentCanonicalObj);
 
     return Result.ok({
       type: 'ConfigChanged',

@@ -26,7 +26,9 @@ const FORBIDDEN_IMPORT_PATTERNS = [
   /from ['"](?:node:)?fs['"]/,
   /from ['"](?:node:)?path['"]/,
   /from ['"]commander['"]/,
+  /from ['"]zod['"]/,
   /require\(['"]better-sqlite3['"]\)/,
+  /require\(['"]zod['"]\)/,
   /new Date\(/,
   /Date\.now\(/,
 ];

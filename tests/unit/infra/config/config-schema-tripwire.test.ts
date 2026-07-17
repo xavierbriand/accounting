@@ -10,7 +10,6 @@
  *   offending field's path (so the user can't find and fix it).
  */
 import { describe, it, expect } from 'vitest';
-import * as fc from 'fast-check';
 import { parseRawConfig } from '../../../../src/infra/config/config-schema.js';
 
 const minimalValid = {
@@ -78,21 +77,16 @@ describe('config-schema PII tripwire — property: sentinel value at any unconst
   // Each field below has no pre-existing format validator (unlike defaultCurrency/timezone,
   // which would reject the sentinel anyway on their own regex) — a rejection here can only
   // be attributed to the tripwire itself.
-  it('placing a sentinel value in any of several unconstrained field positions always fails, citing that exact path', () => {
-    fc.assert(
-      fc.property(
-        fc.constantFrom<[string, unknown, string]>(
-          ['dbPath', SENTINEL_IBAN, 'dbPath'],
-          ['dbPath', SENTINEL_CARD, 'dbPath'],
-        ),
-        ([field, sentinelValue, expectedPath]) => {
-          const raw = { ...minimalValid, [field]: sentinelValue };
-          const result = parseRawConfig(raw);
-          return result.isFailure && result.error.includes(expectedPath);
-        },
-      ),
-      { numRuns: 10 },
-    );
+  it.each<[string, unknown, string]>([
+    ['dbPath', SENTINEL_IBAN, 'dbPath'],
+    ['dbPath', SENTINEL_CARD, 'dbPath'],
+  ])('placing a sentinel value at %s fails, citing that exact path', (field, sentinelValue, expectedPath) => {
+    const raw = { ...minimalValid, [field]: sentinelValue };
+    const result = parseRawConfig(raw);
+    expect(result.isFailure).toBe(true);
+    if (result.isFailure) {
+      expect(result.error).toContain(expectedPath);
+    }
   });
 
   it('placing a sentinel value in accounts.0.filenamePrefix (unconstrained format) fails, citing that path', () => {

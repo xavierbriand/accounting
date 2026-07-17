@@ -140,7 +140,7 @@ function canonicalSettlement(settlement: SettlementConfig): CanonicalSettlement 
   return { accounts: settlement.accounts.map(canonicalSettlementAccount).sort(byKey((a) => a.account)) };
 }
 
-function toCanonicalAppConfig(config: AppConfig): CanonicalAppConfig {
+export function toCanonicalAppConfig(config: AppConfig): CanonicalAppConfig {
   return {
     defaultCurrency: config.defaultCurrency,
     timezone: config.timezone,

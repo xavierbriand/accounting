@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import Database from 'better-sqlite3';
 import { Result } from '@core/shared/result.js';
 import type { DataExporter, ExportCounts, WrittenBundle } from '@core/ports/data-exporter.js';
 import { toCsvLine } from './rfc4180.js';
 import { sanitizeFsError } from '../fs/sanitize-fs-error.js';
+import { sha256OfBytes, type ExportManifest } from './manifest.js';
 
 interface TransactionRow {
   id: string;
@@ -31,10 +31,6 @@ interface DomainEventRow {
   event_type: string;
   recorded_at: string;
   payload: string;
-}
-
-function sha256Of(content: string): string {
-  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 const TRANSACTIONS_CSV = 'transactions.csv';
@@ -84,13 +80,13 @@ export class FsDataExporter implements DataExporter {
       if (countsResult.isFailure) throw new Error(countsResult.error);
 
       const files = [
-        { name: TRANSACTIONS_CSV, sha256: sha256Of(transactionsCsv) },
-        { name: TRANSACTION_ENTRIES_CSV, sha256: sha256Of(entriesCsv) },
-        { name: DOMAIN_EVENTS_JSON, sha256: sha256Of(eventsJson) },
-        { name: ACCOUNTING_YAML, sha256: sha256Of(configYaml) },
+        { name: TRANSACTIONS_CSV, sha256: sha256OfBytes(transactionsCsv) },
+        { name: TRANSACTION_ENTRIES_CSV, sha256: sha256OfBytes(entriesCsv) },
+        { name: DOMAIN_EVENTS_JSON, sha256: sha256OfBytes(eventsJson) },
+        { name: ACCOUNTING_YAML, sha256: sha256OfBytes(configYaml) },
       ];
 
-      const manifest = {
+      const manifest: ExportManifest = {
         schemaVersion: 1,
         createdAt: new Date().toISOString(),
         counts: countsResult.value,
@@ -104,7 +100,7 @@ export class FsDataExporter implements DataExporter {
       // never a plausible-but-incomplete bundle at the final name.
       fs.renameSync(partialDir, finalDir);
 
-      return Result.ok({ manifestHash: sha256Of(manifestJson), location: finalDir });
+      return Result.ok({ manifestHash: sha256OfBytes(manifestJson), location: finalDir });
     } catch (err) {
       if (fs.existsSync(partialDir)) {
         try { fs.rmSync(partialDir, { recursive: true, force: true }); } catch { /* best-effort */ }

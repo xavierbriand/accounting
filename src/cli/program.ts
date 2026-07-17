@@ -24,6 +24,7 @@ import { runCategorizeCommand } from './commands/categorize-command.js';
 import { runStatusCommand } from './commands/status-command.js';
 import { runCorrectCommand } from './commands/correct-command.js';
 import { runExplainCommand } from './commands/explain-command.js';
+import { runExportCommand } from './commands/export-command.js';
 import { runMigrate } from './migrate.js';
 import { assertMigrated } from '../infra/db/migration-check.js';
 import { validateDbPath } from '../infra/db/db-path-validator.js';
@@ -34,6 +35,8 @@ import { SafeTransferCalculator } from '../core/transfer/safe-transfer-calculato
 import { SqliteBufferLedgerQuery } from '../infra/db/repositories/sqlite-buffer-ledger-query.js';
 import { SqliteContributionQuery } from '../infra/db/repositories/sqlite-contribution-query.js';
 import { nodeClock } from './utils/node-clock.js';
+import { nodeTimestampClock } from './utils/node-timestamp-clock.js';
+import { FsDataExporter } from '../infra/export/fs-data-exporter.js';
 import { writeJsonErrorIf } from './utils/json-envelope.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
@@ -344,6 +347,45 @@ program
   });
 
 program
+  .command('export')
+  .description('Export the ledger, audit trail, and a copy of accounting.yaml into a portable bundle')
+  .option('--out <dir>', 'Destination directory (default: ./exports)')
+  .option('--json', 'Output JSON instead of human-readable text', false)
+  .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
+  .action(async (options: { out?: string; json: boolean; dbPathOverride?: string }) => {
+    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
+    if (result.isFailure) {
+      process.stderr.write(`error: ${result.error.message}\n`);
+      process.exit(result.error.code);
+    }
+    const { config, resolvedDbPath, configService } = result.value;
+    const db = getDb(resolvedDbPath);
+
+    const migrationCheck = assertMigrated(db, resolvedDbPath);
+    if (migrationCheck.isFailure) {
+      process.stderr.write(`error: ${migrationCheck.error}\n`);
+      process.exit(2);
+    }
+    observeConfigChangeFor(db, config, process.stderr);
+
+    const dataExporter = new FsDataExporter(db, configService.getResolvedConfigPath());
+    const domainEventRecorder = new SqliteDomainEventRecorder(db);
+
+    await runExportCommand(
+      { out: options.out, json: options.json },
+      {
+        dataExporter,
+        domainEventRecorder,
+        clock: () => nodeTimestampClock(config.timezone),
+        cwd: process.cwd(),
+        stdout: process.stdout,
+        stderr: process.stderr,
+        exitCode: (code) => process.exit(code),
+      },
+    );
+  });
+
+program
   .command('categorize')
   .description('Scan a CSV for unmatched descriptions and warm accounting.yaml autotag rules (no DB writes)')
   .requiredOption('-f, --file <path>', 'Path to the bank CSV file')
@@ -417,7 +459,7 @@ program
 // throw a CommanderError instead of calling process.exit directly, so we can
 // translate the known bad-usage codes into the same --json failure envelope
 // every other INVALID_ARGUMENT site produces.
-const JSON_CAPABLE_COMMANDS = new Set(['ingest', 'correct', 'status', 'explain', 'categorize']);
+const JSON_CAPABLE_COMMANDS = new Set(['ingest', 'correct', 'status', 'explain', 'categorize', 'export']);
 
 const COMMANDER_PASSTHROUGH_CODES = new Set([
   'commander.help',

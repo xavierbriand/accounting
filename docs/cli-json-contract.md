@@ -31,9 +31,9 @@ JSON line (`JSON.stringify(...)`, no pretty-printing) terminated by `\n`:
 
 `ok` is the discriminator — parse with one rule regardless of command or outcome.
 `command` names the subcommand that produced the document (`status`, `explain`,
-`correct`, `ingest`, `categorize`). `error.suggestedAction` and `error.details` are
-present only when the failure has something concrete to add; absent otherwise (never
-`null` or an empty object as a placeholder).
+`correct`, `ingest`, `categorize`, `export`). `error.suggestedAction` and
+`error.details` are present only when the failure has something concrete to add;
+absent otherwise (never `null` or an empty object as a placeholder).
 
 ## 2. Streams discipline
 
@@ -68,7 +68,7 @@ codes only gained a matching `error.code` under `--json`.
 | Exit | Meaning |
 | --- | --- |
 | 0 | Success |
-| 1 | Unrecoverable read/query failure (DB unreachable, file unreadable, currency mismatch) |
+| 1 | Unrecoverable read/query failure (DB unreachable, file unreadable, currency mismatch); for `export`, also every write failure (`--out` unwritable, audit-event record failure, bundle write failure) — `export` has no snapshot/rollback pipeline to reserve exit 4 for, so `WRITE_FAILURE` maps to exit 1 there (story-4.5b) |
 | 2 | Input validation failure, not-found, or a pending decision under non-interactive/`--json` (needs review) |
 | 3 | Pre-commit snapshot failed (ingest only) |
 | 4 | Batch write failed after a successful snapshot (ingest/correct) |
@@ -82,9 +82,9 @@ codes only gained a matching `error.code` under `--json`.
 | `NOT_FOUND` | `correct`: target transaction id does not exist | 2 |
 | `NEEDS_REVIEW` | `ingest`/`categorize`: a decision is pending under non-interactive/`--json` | 2 |
 | `READ_FAILURE` | Input file unreadable, or CSV parse failure | 1 |
-| `QUERY_FAILURE` | Repository/read-model failure — idempotency check, buffer state, contribution query, `findById`, transaction build | 1 |
+| `QUERY_FAILURE` | Repository/read-model failure — idempotency check, buffer state, contribution query, `findById`, transaction build, `export`'s pre-flight count of what will travel | 1 |
 | `SNAPSHOT_FAILURE` | Pre-commit DB snapshot failed | 3 |
-| `WRITE_FAILURE` | `saveBatch`/`saveCorrection` failed (batch rolled back; snapshot retained on ingest) | 4 |
+| `WRITE_FAILURE` | `saveBatch`/`saveCorrection` failed (batch rolled back; snapshot retained on ingest); `export`'s `--out` resolution/validation failure, `DataExported` record failure, or bundle write failure | **1 (export), 4 (ingest/correct)** |
 | `CONFIG_WRITE_FAILURE` | `accounting.yaml` auto-tag-rule append failed (mtime race or pattern conflict) | 5 |
 
 `NOT_FOUND` and `NEEDS_REVIEW` both disambiguate what used to be an overloaded exit 2 —
@@ -273,7 +273,79 @@ under `--json` here. **Zero candidate groups** now writes a success envelope wit
 reintroduction (making the count real) is tracked as a config-writer feature, not a
 shape fix (issue #104).
 
-## 7. Non-interactive commit semantics (story-4.4a)
+### `export --json`
+
+```jsonc
+{
+  "location": "/Users/alex/exports/accounting-export-2026-07-17T14-30-05",
+  "proof": "9f2b...64-hex-chars...c1a0",
+  "exported": { "transactions": 42, "events": 7 }
+}
+```
+
+`location` is the **full absolute path** on stdout — stdout is for the user, not the
+append-only trail (the `DataExported` event's own `archiveLocation` field, by
+contrast, carries the bundle **directory name only**, never a path — see § Export
+bundle format below). `proof` is the SHA-256 (hex) of `manifest.json`'s bytes —
+story-4.5c's wipe will demand this same proof before erasing anything. `exported`
+counts include the `DataExported` event itself (`events` is one more than the count
+of events that existed *before* this run) — the bundle's own trail contains the
+export that produced it (invariant 8, `docs/domain/model-notes/story-4.5.md`).
+
+Failure envelopes: `WRITE_FAILURE` (`--out` cannot be created/is not writable, the
+`DataExported` audit-event record failed, or the bundle write failed — exit 1, see
+§ 3/§ 4 above) and `QUERY_FAILURE` (the pre-flight count of what will travel failed
+— exit 1). There is no `INVALID_ARGUMENT` call site in `export`'s own action handler
+today (a bad `--out` value is a write-time failure, not a parse-time one) — Commander-
+level parse errors (unknown option, etc.) still route through the shared
+`INVALID_ARGUMENT` envelope per § 3 "Commander-level parse errors" (`export` is a
+`JSON_CAPABLE_COMMANDS` member).
+
+## 7. Export bundle format (story-4.5b, FR21)
+
+`accounting export [--out <dir>] [--json]` writes a directory named
+`accounting-export-<seconds-resolution-stamp>/` (e.g.
+`accounting-export-2026-07-17T14-30-05`) under `--out` (default `./exports`,
+resolved relative to the current working directory). The directory is staged as
+`<name>.partial` and atomic-renamed into place only on full success — a crashed or
+failed export leaves at most a `.partial` remnant, never a plausible-but-incomplete
+bundle; a target that already exists is refused (an export is never overwritten).
+Permissions are least-privilege: `0700` on the directory, `0600` on every file
+(POSIX only — no-op on Windows, which has no equivalent permission model).
+
+**Layout:**
+
+| File | Contents |
+| --- | --- |
+| `transactions.csv` | Every row of the `transactions` table, **including** the nullable `idempotency_hash` column (migration 003) — it is a column, not a separate table. Columns: `id, occurred_at, description, created_at, idempotency_hash, corrects_id, kind`. |
+| `transaction-entries.csv` | Every row of `transaction_entries`. Columns: `id, transaction_id, account, side, amount_cents, currency`. |
+| `domain-events.json` | A JSON array, one object per `domain_events` row: `{ seq, type, recordedAt, ...eventPayloadFields }` — `type` is the event discriminator (`event_type` column), `recordedAt` is the boundary-stamped recording clock (`recorded_at` column, verbatim), and the remaining fields are the event's own payload, spread in. Includes the bundle's own `DataExported` event (invariant 8 — recorded before the bundle is written). |
+| `accounting.yaml` | A byte-verbatim copy of the config file this export ran against. |
+| `manifest.json` | `{ schemaVersion, createdAt, counts: { transactions, events }, files: [{ name, sha256 }] }` — `files` lists the four files above (never itself, self-reference isn't meaningful); `counts` equals both the row counts actually written and the `DataExported` event's own `exported` field. |
+
+CSV fields are escaped per RFC 4180 (comma/quote/newline → quoted, doubled internal
+quotes) by a small hand-rolled escaper — round-trip-proven against the project's own
+`csv-parse` dependency rather than adding a stringify library.
+
+**Proof.** The export-proof printed on success (and returned as `data.proof` under
+`--json`) is the SHA-256 of `manifest.json`'s bytes, computed once at write time and
+never recomputed by re-serializing — a consumer re-hashes the file on disk to verify
+it byte-for-byte.
+
+**`config_state` is excluded by design.** It is a derivable detection cache (the
+last-seen canonical config + digest for ambient config-change detection,
+story-4.5a) — not household data. QA's "export is complete — every byte"
+(`docs/quality-assurance.md` § Portability) reads on the household's own records
+(ledger, audit trail, rules); `config_state` regenerates itself on the next
+ledger-opening command against whatever `accounting.yaml` the export already copied
+verbatim, so nothing is actually lost by leaving it out.
+
+**Restore is not yet implemented.** The bundle is documented and re-importable in
+principle (every field is named and typed above), but there is no `accounting
+import`/restore command today — tracked at
+[#232](https://github.com/xavierbriand/accounting/issues/232).
+
+## 8. Non-interactive commit semantics (story-4.4a)
 
 `ingest --non-interactive` and `ingest --json` (either flag alone) both persist a
 clean batch immediately — there is no dry-run/preview mode today. A future
@@ -288,13 +360,13 @@ than short-circuiting before the snapshot. This is a behaviour question, not a s
 question, and is intentionally out of this contract's scope; the JSON shape
 (`summary.total: 0`, `duplicates` populated) is unaffected either way.
 
-## 8. `migrate` is excluded
+## 9. `migrate` is excluded
 
 `accounting migrate` has no `--json` mode and is not covered by this contract — it is
 a one-time schema-setup operation with no structured result to report, and pre-dates
 FR20. This is an intentional exclusion, not an oversight.
 
-## 9. Versioning
+## 10. Versioning
 
 No `contractVersion` field exists today (see § 5). If an external consumer other than
 scripts/LLM agents in this repository appears, this document is the place to add one.

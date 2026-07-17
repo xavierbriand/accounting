@@ -280,6 +280,9 @@ Then('the final stderr line parses as a WRITE_FAILURE envelope', function (state
 
 Then('no bundle directory and no partial remnant exist under the out directory', function (state: ExportWorld) {
   if (!fs.existsSync(state.outDir!)) return; // never created — also acceptable
+  // The "cannot be written" fixture is itself a plain file blocking the --out
+  // path (see the Given step) — there is no directory to scan for remnants.
+  if (!fs.statSync(state.outDir!).isDirectory()) return;
   const entries = fs.readdirSync(state.outDir!);
   const plausible = entries.filter((name) => name.startsWith('accounting-export-'));
   expect(plausible, `unexpected bundle/partial remnants: ${plausible.join(', ')}`).toHaveLength(0);

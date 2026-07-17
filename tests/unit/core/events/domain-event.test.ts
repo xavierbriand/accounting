@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged } from '../../../../src/core/events/domain-event.js';
+import type { DomainEvent, TransactionIngested, TransactionCorrected, ConfigChanged, DataExported } from '../../../../src/core/events/domain-event.js';
 import type { DomainEventRecorder } from '../../../../src/core/ports/domain-event-recorder.js';
 import { Result } from '@core/shared/result.js';
 
@@ -124,6 +124,37 @@ describe('ConfigChanged — value object shape', () => {
       currentDigest: 'b'.repeat(64),
     };
     expect(event.type).toBe('ConfigChanged');
+  });
+});
+
+describe('DataExported — value object shape', () => {
+  it('carries type, archiveLocation, and exported (transactions, events) — no manifestHash', () => {
+    const event: DataExported = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 4, events: 6 },
+    };
+
+    expect(Object.keys(event).sort()).toEqual(['archiveLocation', 'exported', 'type'].sort());
+    expect(Object.keys(event.exported).sort()).toEqual(['events', 'transactions'].sort());
+  });
+
+  it('archiveLocation carries no path separators (bundle directory name only, never a path)', () => {
+    const event: DataExported = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 0, events: 0 },
+    };
+    expect(event.archiveLocation).not.toMatch(/[/\\]/);
+  });
+
+  it('is assignable to the DomainEvent union', () => {
+    const event: DomainEvent = {
+      type: 'DataExported',
+      archiveLocation: 'accounting-export-2026-07-17T14-30-05',
+      exported: { transactions: 4, events: 6 },
+    };
+    expect(event.type).toBe('DataExported');
   });
 });
 

@@ -297,7 +297,7 @@ So that I can run one command on Sunday morning and answer "what's the picture?"
 **And** the default window is the next calendar month from `asOf` — `[first-of-next-month, last-of-that-month]`. `--from <YYYY-MM-DD> --to <YYYY-MM-DD>` overrides; both must be ISO 8601 and `from <= to`.
 **And** `--json` switches output to a single-object JSON document matching the documented shape (`{ asOf, window, buffers, transfer, forecast }`); `Money` values serialize via `Money.toString()`.
 **And** when `SafeTransferCalculator.calculateForWindow` fails (stale `targetDate`, `monthsRemaining=0`, etc.), the CLI renders **Buffers** normally, prints the calc error + a Suggested-action prose line in the **Transfer** section, and exits with code 0. JSON shape: `transfer: { error, suggestedAction }` (no `totalRequired`/`perPartner`/`lineItems` keys when failed).
-**And** `accounting status` is read-only: no DB writes, no snapshot. It runs `assertMigrated` to fail fast on an unmigrated DB.
+**And** `accounting status` is read-only: no snapshot, and no DB writes **except** the sanctioned ambient audit observation — recording a detected `ConfigChanged` event and updating the last-seen config state (Story 4.5a amendment, user-approved 2026-07-17). It runs `assertMigrated` to fail fast on an unmigrated DB.
 **And** invalid CLI input (bad date format, `from > to`, missing `accounting.yaml`) exits with POSIX code 2 and a path-cited message on stderr; unrecoverable runtime errors (DB read failure, currency mismatch) exit with code 1.
 **And** the underlying upstream services remain pure: `runStatusCommand` injects `clock: () => string` (defaulting to `nodeClock`) so unit tests run without `Date.now()`.
 
@@ -348,7 +348,7 @@ As a **User**,
 I want config changes and a graceful dissolution (export + secure wipe) recorded as domain events,
 So that the audit trail is complete and I can port or wind down my data as a deliberate, recorded act.
 
-**Lane:** Full for the events; dissolution export/wipe is Infra-heavy. Emits `ConfigChanged` and `DissolutionPerformed` via the 4.1 recorder; promotes the reserved **Dissolution** glossary term. Depends on 4.1; precedes Epic-5 Story 5.4 (which consumes `ConfigChanged`).
+**Lane:** Full for the events; dissolution export/wipe is Infra-heavy. Emits `ConfigChanged`, `DataExported`, and `DissolutionPerformed` via the 4.1 recorder (`DataExported` added at the Phase-0 model session — the two-act dissolution shape makes the standalone export its own recorded fact); promotes the reserved **Dissolution** glossary term. Depends on 4.1; precedes Epic-5 Story 5.4 (which consumes `ConfigChanged`). **Split: 4.5a (config-change detection + `ConfigChanged`) / 4.5b (dissolution: export + wipe + receipt), 4.2/4.3 precedent.** Model note: [docs/domain/model-notes/story-4.5.md](domain/model-notes/story-4.5.md).
 
 ## Epic 5: Year-in-Review & Annual Planner
 

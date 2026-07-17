@@ -45,6 +45,11 @@ export type UnlistedControlFinding = {
   file: string;
 };
 
+export type MissingSpecVersionFinding = {
+  kind: 'missing-spec-version';
+  file: string;
+};
+
 export type DriftFinding =
   | RetroOnlyFinding
   | TableOnlyFinding
@@ -53,7 +58,8 @@ export type DriftFinding =
   | ClaudeRangeFinding
   | MissingRoleFinding
   | RoleToolsViolationFinding
-  | UnlistedControlFinding;
+  | UnlistedControlFinding
+  | MissingSpecVersionFinding;
 
 export type ComposeDriftResult = {
   retroOnly: Set<string>;
@@ -207,6 +213,7 @@ export type AgentSpecEntry = {
   file: string;
   role: string | undefined;
   tools: string[];
+  specVersion?: number;
 };
 
 const VALID_ROLES: ReadonlySet<string> = new Set(['doer', 'judge', 'advisor']);
@@ -227,6 +234,18 @@ export function checkAgentSpecRoles(entries: AgentSpecEntry[]): DriftFinding[] {
           findings.push({ kind: 'role-tools-violation', file: entry.file, tool });
         }
       }
+    }
+  }
+  return findings;
+}
+
+// Same tier as the missing-role check (story-h12, #165's golden-fixture-eval
+// precondition — #172's Check E builds on this schema).
+export function checkAgentSpecVersions(entries: AgentSpecEntry[]): DriftFinding[] {
+  const findings: DriftFinding[] = [];
+  for (const entry of entries) {
+    if (entry.specVersion === undefined) {
+      findings.push({ kind: 'missing-spec-version', file: entry.file });
     }
   }
   return findings;

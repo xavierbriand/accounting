@@ -4,6 +4,7 @@ export type AgentSpecFrontmatter = {
   model?: string;
   tools: string[];
   role?: string;
+  specVersion?: number;
 };
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/;
@@ -47,6 +48,16 @@ export function parseAgentSpecFrontmatter(content: string): AgentSpecFrontmatter
       case 'tools':
         result.tools = parseToolsValue(value);
         break;
+      case 'spec-version': {
+        const parsed = Number(value);
+        // Fail-safe: a non-numeric value stays honestly absent rather than
+        // being coerced into a fake version — Check F's missing-spec-version
+        // finding depends on this distinction (mirrors the role: invalid-vs-
+        // absent posture, though spec-version has no "invalid but present"
+        // detail — absent is the only signal it needs).
+        result.specVersion = Number.isInteger(parsed) ? parsed : undefined;
+        break;
+      }
       default:
         break;
     }

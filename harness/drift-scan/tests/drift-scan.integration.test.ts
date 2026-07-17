@@ -232,6 +232,12 @@ describe('drift-scan integration', () => {
         expect(finding['range']).toBeUndefined();
         expect(finding['detail']).toBeUndefined();
         expect(finding['tool']).toBeUndefined();
+      } else if (kind === 'missing-spec-version') {
+        expect(finding['path']).toBeUndefined();
+        expect(finding['tag']).toBeUndefined();
+        expect(finding['range']).toBeUndefined();
+        expect(finding['detail']).toBeUndefined();
+        expect(finding['tool']).toBeUndefined();
       } else {
         throw new Error(`unexpected finding kind: ${String(kind)}`);
       }
@@ -454,7 +460,7 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     writeAndCommit(
       tmpDir,
       '.claude/agents/clean-doer.md',
-      '---\nname: clean-doer\ntools: Read, Write, Edit\nrole: doer\n---\nBody.\n',
+      '---\nname: clean-doer\ntools: Read, Write, Edit\nrole: doer\nspec-version: 1\n---\nBody.\n',
       'chore: fixture clean doer spec',
     );
     writeAndCommit(

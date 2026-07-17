@@ -209,6 +209,28 @@ the table.
 **Verdict (agent):** No blocking overlaps. No open PR/issue already addresses the
 Commander-parse-error-bypasses-`--json`-envelope gap itself.
 
+**Phase 4 re-check (post-implementation).** Re-ran against the actual diff
+(`origin/main..HEAD`), not just the plan.
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 4 | Branch is 1 commit behind `origin/main` (missing story-maint-28's merged dev-dependency bump) — routine rebase-lag, not a real conflict | ACKNOWLEDGE | Rebase before merge per § 6.4.1; already planned (also folded into the #227 rebase below). |
+| 5 | PR #227 (story-maint-27: Node 20→24 LTS + commander 15 bump) is now non-draft and mergeable — it supersedes the closed #221 and will auto-close #223. Its "zero code change" audit predates this story's `exitOverride()`/`CommanderError`-code-list logic and its test file's literal Commander prose-string assertions (`tests/integration/cli/commander-parse-error-envelope.test.ts`), so it doesn't yet verify against them | ACKNOWLEDGE | Already anticipated in this plan's Risks table. Whichever of {#224, #227} merges second re-verifies against the other. Handled procedurally: a session loop is watching #227 and will rebase this branch + re-run the full suite + the manual repro once it merges, before this PR goes any further. |
+| 6 | Issues #88/#93 re-confirmed against the actual diff — still disjoint `program.ts` regions, no open PR attacks either | ACKNOWLEDGE | No conflict; same disposition as Phase 2 findings #2/#3. |
+
+**Phase 4 `code-reviewer` findings (P1/P2/P3, CLAUDE.md § 6.1 phase 4).** 2 P1, 0 P2, 4 P3 (3 soft).
+
+| # | Finding | Tag | Resolution |
+|---|---------|-----|------------|
+| 7 | [P1/R2/R31] `process.exit(2)` in the catch block fires for **any** command hitting a `COMMANDER_PARSE_ERROR_CODES` match, not just the 5 `JSON_CAPABLE_COMMANDS` — `migrate` (no `--json` option, explicitly excluded by contract § 8) silently changes from Commander's default exit 1 to exit 2 on a malformed invocation. Untested, undocumented side effect outside this story's actual scope. | FIX-NOW | **Done** — scoped exit 2 + envelope to `JSON_CAPABLE_COMMANDS` only; `migrate` falls through to `process.exit(err.exitCode)`. Regression test added (`migrate --nope` stays exit 1, no envelope). Commits `a23b942`/`9002d4e`; verified live (`node dist/cli/program.js migrate --nope --json` → exit 1, no JSON line). |
+| 8 | [P1/R6] `commander-parse-error-envelope.test.ts`'s single file-level `fails if` clause accurately describes only 4 of the 8 tests (the `INVALID_ARGUMENT`-translation ones); the non-json regression guard, `--help`/`--version` passthrough, and unknown-command passthrough tests aren't covered by it, unlike this file's sibling precedents which pair a file-level clause with per-test inline comments once a file covers >1-2 scenarios. | FIX-NOW | **Done** — per-test inline `fails if` comments added to the 4 uncovered tests. Commit `3e787e7`. |
+| 9 | [P3/soft] Direct `process.stderr.write(formatJsonError(...))` inside its own `if` duplicates the "write only when json" pattern already centralized in `json-envelope.ts`'s `writeJsonErrorIf` helper, used at every other `INVALID_ARGUMENT` call site. | FIX-NOW | **Done** — restructured to call `writeJsonErrorIf`; bundled into commit `9002d4e`. |
+| 10 | [P3/R13,R28] Slice count computes to 5 via `countSlices`, below this story's own stated 6-10 target. | ACKNOWLEDGE | The fix-now round for findings 7-9 adds at least one more slice, bringing the count into range; no separate action. |
+| 11 | [P3/soft] `commander.invalidArgument` is in the allowlist but currently unreachable (no command defines a custom `.argParser()`) — untested, dead-code-adjacent. | ACKNOWLEDGE | Deliberate design choice from Phase 1 (full enumeration of Commander's documented bad-usage error surface, reviewed at Phase 2 without objection) — kept for completeness against Commander's public API, not orphaned application logic. Not worth removing for a currently-hypothetical gap only to re-add it the first time a command adds an `.argParser()`. |
+| 12 | [P3/soft] The new ~53-line composition-root block in `program.ts` isn't extracted to a helper. | ACKNOWLEDGE | Reviewer's own note: "worth extracting only if this area grows further." No action. |
+| 13 | [soft] Commit `9a02617`'s subject bundles two behavior classes via a semicolon. | ACKNOWLEDGE | Matches the plan's own slice-5 wording verbatim; reviewer confirms "likely fine as-is." |
+| 14 | [soft] The plan's accepted `--json`-as-option-value false-positive risk is unchanged by the implementation, no new test covers it. | ACKNOWLEDGE | Consistent with the plan's explicit non-goal; no action. |
+
 ## DoR checklist
 
 - [x] Phase 0 (Model): No model impact declared above.

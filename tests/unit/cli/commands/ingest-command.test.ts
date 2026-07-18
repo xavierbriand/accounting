@@ -906,3 +906,170 @@ describe('runIngestCommand — same-run auto-tag from remembered rules (Story E)
     expect(capturedExitCode).toContain(0);
   });
 });
+
+describe('runIngestCommand — same-run auto-tag edge semantics (Story E)', () => {
+  function makeLowOutcomeWithId(id: string, description: string, category: string): BuildOutcome {
+    const base = makeLowOutcome(description, category);
+    return { ...base, transaction: { ...base.transaction, id } as unknown as BuildOutcome['transaction'] };
+  }
+
+  function makeDeps(
+    outcomes: BuildOutcome[],
+    prompter: InteractivePrompter,
+  ): {
+    deps: IngestCommandDeps;
+    stderr: Writable & { captured: string };
+    exitCodes: number[];
+    saveBatchMock: ReturnType<typeof vi.fn>;
+  } {
+    const stdout = makeStdout();
+    const stderr = makeStderr();
+    const exitCodes: number[] = [];
+    const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: outcomes.length }));
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: {
+        parse: () => Result.ok({
+          items: outcomes.map((o) => ({
+            sourceAccount: 'main-X',
+            occurredAt: o.transaction.occurredAt,
+            description: o.transaction.description,
+            direction: 'outflow' as const,
+            amount: EUR,
+          })),
+          errors: [],
+        }),
+      },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
+      transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: prompter,
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => exitCodes.push(code),
+      transactionRepository: { saveBatch: saveBatchMock },
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    return { deps, stderr, exitCodes, saveBatchMock };
+  }
+
+  it('forward-only: a rule remembered later does not retroactively re-tag an already-visited kept row', async () => {
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'FOO ALPHA', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'BAR BETA', 'Uncategorized'),
+    ];
+
+    const prompter: InteractivePrompter = {
+      selectCategory: vi.fn()
+        .mockResolvedValueOnce({ action: 'keep' })
+        .mockResolvedValueOnce({ action: 'change', category: 'Groceries' }),
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      // Row 2 remembers a pattern that would also match row 1's ("FOO ALPHA") description —
+      // row 1 was already visited and kept, so it must stay untouched (no rescan).
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'foo' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const { deps, saveBatchMock, exitCodes } = makeDeps(outcomes, prompter);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(saveBatchMock).toHaveBeenCalledOnce();
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[0]).toMatchObject({ category: 'Uncategorized', confidence: 'low' });
+    expect(committed[1]).toMatchObject({ category: 'Groceries', confidence: 'high' });
+    expect(exitCodes).toContain(0);
+  });
+
+  it('first-rule-wins: a later row matching two remembered rules gets the first-remembered category', async () => {
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'ALPHA ONE', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'BETA TWO', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-3', 'ALPHA BETA THREE', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'CategoryX' })
+      .mockResolvedValueOnce({ action: 'change', category: 'CategoryY' })
+      .mockRejectedValue(new Error('selectCategory should not be called a third time — row 3 matches two remembered rules and should auto-tag'));
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn()
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'alpha' })
+        .mockResolvedValueOnce({ action: 'remember', pattern: 'beta' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const { deps, saveBatchMock, exitCodes } = makeDeps(outcomes, prompter);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(selectCategoryMock).toHaveBeenCalledTimes(2);
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[2]).toMatchObject({ category: 'CategoryX', confidence: 'high' });
+    expect(exitCodes).toContain(0);
+  });
+
+  it('a remembered pattern that matches nothing later never fires — the next row is still prompted', async () => {
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'GAMMA ONE', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'DELTA TWO', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'CategoryZ' })
+      .mockResolvedValueOnce({ action: 'keep' });
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'no-match-token' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const { deps, saveBatchMock, exitCodes } = makeDeps(outcomes, prompter);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(selectCategoryMock).toHaveBeenCalledTimes(2);
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[1]).toMatchObject({ category: 'Uncategorized', confidence: 'low' });
+    expect(exitCodes).toContain(0);
+  });
+
+  it('case-insensitivity: an upper-case remembered pattern matches a lower-case later description', async () => {
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'Merchant Foo', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'merchant bar', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'CategoryC' })
+      .mockRejectedValue(new Error('selectCategory should not be called a second time — the case-insensitive match should auto-tag'));
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'MERCHANT' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const { deps, stderr, saveBatchMock, exitCodes } = makeDeps(outcomes, prompter);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(selectCategoryMock).toHaveBeenCalledTimes(1);
+    expect(stderr.captured).toContain('Auto-tagged "merchant bar" → CategoryC (rule remembered this run)');
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[1]).toMatchObject({ category: 'CategoryC', confidence: 'high' });
+    expect(exitCodes).toContain(0);
+  });
+});

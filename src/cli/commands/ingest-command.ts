@@ -237,6 +237,39 @@ async function commitBatch(
   exitCode(0);
 }
 
+// Rebuilds the expense-side entry's account from the new category so the change is
+// durable through saveBatch (entries[].account is what gets written to the DB;
+// outcome.category alone is summary-only). Only the 'expense' classification has an
+// Expense:<category> debit; income and internal-transfer don't get rewritten here. The
+// 'low' confidence outcomes that reach this helper are by definition 'expense' (auto-tag
+// rules don't match income), so the rewrite is sound. Shared by the manual 'change'
+// prompt and the same-run auto-tag branch (Story E) so the two paths cannot drift.
+function applyCategoryChange(outcome: BuildOutcome, category: string): BuildOutcome | null {
+  const newExpenseAccount = expenseAccount(category);
+  const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
+    e.side === 'debit' && e.account.startsWith('Expense:')
+      ? { account: newExpenseAccount, side: e.side, amount: e.amount }
+      : { account: e.account, side: e.side, amount: e.amount },
+  );
+  const newTxResult = Transaction.create({
+    id: outcome.transaction.id,
+    occurredAt: outcome.transaction.occurredAt,
+    description: outcome.transaction.description,
+    entries: newEntries,
+  });
+  // Practically unreachable: rewriting one entry's account without changing amounts
+  // can't violate the double-entry balance. Callers keep the original outcome and warn
+  // rather than trust a transaction we couldn't validate.
+  if (!newTxResult.isSuccess) return null;
+
+  return {
+    ...outcome,
+    category,
+    confidence: 'high',
+    transaction: newTxResult.value,
+  };
+}
+
 async function runInteractiveLoop(
   built: readonly BuildOutcome[],
   lowConfidence: readonly BuildOutcome[],
@@ -267,30 +300,9 @@ async function runInteractiveLoop(
     if (answer.action === 'change') {
       const idx = resolved.findIndex((o) => o === outcome);
       if (idx !== -1) {
-        // Rebuild the expense-side entry's account from the new category so the
-        // change is durable through saveBatch (entries[].account is what gets
-        // written to the DB; outcome.category alone is summary-only). Only the
-        // 'expense' classification has an Expense:<category> debit; income and
-        // internal-transfer don't get rewritten here. The 'low' confidence
-        // outcomes that hit this prompt are by definition 'expense' (auto-tag
-        // rules don't match income), so the rewrite is sound.
-        const newExpenseAccount = expenseAccount(answer.category);
-        const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
-          e.side === 'debit' && e.account.startsWith('Expense:')
-            ? { account: newExpenseAccount, side: e.side, amount: e.amount }
-            : { account: e.account, side: e.side, amount: e.amount },
-        );
-        const newTxResult = Transaction.create({
-          id: outcome.transaction.id,
-          occurredAt: outcome.transaction.occurredAt,
-          description: outcome.transaction.description,
-          entries: newEntries,
-        });
-        if (!newTxResult.isSuccess) {
-          // Practically unreachable: rewriting one entry's account without changing amounts
-          // can't violate the double-entry balance. But guarding the failure path keeps the
-          // remembered-rule buffer in sync with what was actually persisted to the DB —
-          // skip the rest of this iteration so we don't buffer a rule for a category the
+        const updated = applyCategoryChange(outcome, answer.category);
+        if (updated === null) {
+          // Skip the rest of this iteration so we don't buffer a rule for a category the
           // outcome wasn't tagged with. Phase-4 review surfaced the unguarded fall-through.
           writeln(
             stderr,
@@ -298,12 +310,7 @@ async function runInteractiveLoop(
           );
           continue;
         }
-        resolved[idx] = {
-          ...outcome,
-          category: answer.category,
-          confidence: 'high',
-          transaction: newTxResult.value,
-        };
+        resolved[idx] = updated;
       }
       if (!categories.includes(answer.category)) {
         categories.push(answer.category);

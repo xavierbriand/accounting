@@ -341,3 +341,39 @@ When('I run a fresh ingest with {string} on a single-row CSV at {string} with de
   const flags = flagsStr.trim().split(/\s+/);
   state.lastResult = spawnCli(['ingest', '--file', csvPath, ...flags], { cwd: state.tmpDir });
 });
+
+// Story E — same-run re-application of remembered rules (#93 Option B, closes #103)
+
+function writeRepeatedMerchantCsvForBdd(tmpDir: string, filename: string, description: string): string {
+  const csvPath = path.join(tmpDir, filename);
+  const header = 'Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation';
+  const safeDesc = description.replace(/;/g, ',');
+  const row1 = `15/03/2026;${safeDesc};${safeDesc};REF001;;Carte;Loisirs;Abonnements;-42,00;;15/03/2026;15/03/2026;0`;
+  const row2 = `16/03/2026;${safeDesc};${safeDesc};REF002;;Carte;Loisirs;Abonnements;-17,50;;16/03/2026;16/03/2026;0`;
+  fs.writeFileSync(csvPath, `${header}\n${row1}\n${row2}\n`, 'latin1');
+  return csvPath;
+}
+
+Given('a CSV at {string} where {string} appears on two distinct dates', function (state: IngestWorld, filename: string, description: string) {
+  state.csvPath = writeRepeatedMerchantCsvForBdd(state.tmpDir!, filename, description);
+});
+
+Then('both transactions for description {string} have the expense account for category {string}', function (state: IngestWorld, description: string, category: string) {
+  const db = new Database(state.dbPath!);
+  const rows = db.prepare(`
+    SELECT te.account as account
+    FROM transactions t
+    JOIN transaction_entries te ON te.transaction_id = t.id
+    WHERE t.description = ? AND te.side = 'debit'
+  `).all(description) as Array<{ account: string }>;
+  db.close();
+  expect(rows).toHaveLength(2);
+  for (const row of rows) {
+    expect(row.account).toBe(`Expense:${category}`);
+  }
+});
+
+Then('the accounting.yaml on disk contains {string} exactly once', function (state: IngestWorld, needle: string) {
+  const yamlContent = fs.readFileSync(path.join(state.tmpDir!, 'accounting.yaml'), 'utf8');
+  expect(yamlContent.split(needle).length - 1).toBe(1);
+});

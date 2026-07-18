@@ -270,6 +270,23 @@ function applyCategoryChange(outcome: BuildOutcome, category: string): BuildOutc
   };
 }
 
+// #103 Option B: rules remembered so far this run re-apply to later pending rows without
+// re-prompting. Same `new RegExp(pattern, 'i')` construction config-schema.ts gives the
+// identical pattern on the next invocation, so in-run behavior matches next-invocation
+// behavior. First-matching-rule-wins in insertion order (deterministic); forward-only —
+// only rows visited after a rule is remembered can match it.
+function findMatchingRememberedRule(
+  description: string,
+  rememberedMap: ReadonlyMap<string, { category: string; pattern: string }>,
+): { category: string; pattern: string } | undefined {
+  for (const rule of rememberedMap.values()) {
+    if (new RegExp(rule.pattern, 'i').test(description)) {
+      return rule;
+    }
+  }
+  return undefined;
+}
+
 async function runInteractiveLoop(
   built: readonly BuildOutcome[],
   lowConfidence: readonly BuildOutcome[],
@@ -285,6 +302,26 @@ async function runInteractiveLoop(
   if (!categories.includes('Uncategorized')) categories.push('Uncategorized');
 
   for (const outcome of lowConfidence) {
+    const matchedRule = findMatchingRememberedRule(outcome.transaction.description, rememberedMap);
+    if (matchedRule !== undefined) {
+      const idx = resolved.findIndex((o) => o === outcome);
+      const updated = idx === -1 ? null : applyCategoryChange(outcome, matchedRule.category);
+      if (updated !== null) {
+        resolved[idx] = updated;
+        writeln(
+          stderr,
+          `Auto-tagged "${outcome.transaction.description}" → ${matchedRule.category} (rule remembered this run)`,
+        );
+        continue;
+      }
+      // Practically unreachable (see applyCategoryChange) — fall through to the normal
+      // prompt so the row still gets resolved instead of being silently dropped.
+      writeln(
+        stderr,
+        `Warning: could not auto-apply the remembered rule for "${outcome.transaction.description}"; falling back to manual review.`,
+      );
+    }
+
     const answer = await prompt.selectCategory(
       outcome.transaction.description,
       outcome.category,

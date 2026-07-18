@@ -135,6 +135,22 @@ Phase-2 review 2026-07-18: `sibling-overlap` only (Reduced lane). 0 blocking; 1 
 | 1 | #117 targets the shared `fresh migrated DB` Given step this scenario reuses | ACKNOWLEDGE | Coordination note only — no active PR; whichever lands second re-checks the step |
 | 2 | #215/#213/#104/#107 share `ingest-command.ts` but touch disjoint regions; #235 zero-file-overlap; no other attempt at Option B | ACKNOWLEDGE | No action |
 
+**Phase-4 review (2026-07-18):** `code-reviewer` (13 findings, **0 blockers**) +
+`sibling-overlap` re-scan (clean; #117 dormant). Fix-now (one feat slice `a034507`):
+invalid-pattern crash guard in `findMatchingRememberedRule` (the reviewer proved the throw
+REACHABLE — ScriptedPrompter passes patterns through unvalidated, unlike the inquirer
+prompter's validate callback and config-schema's next-invocation superRefine) + unit test;
+fails-if block itemizes the four edge modes + the guard (R6). CodeQL `js/regex-injection`
+(high): assessed as the feature itself — user-authored regex, byte-identical construction to
+config-schema's — crash edge now guarded; **dismissal decision presented to the user at the
+merge gate**. Process finding accepted: the guard surfaced as an uncommitted worktree change
+mid-review — retro Change item minted (hold Phase-4 edits until the review lands).
+Acknowledged: `runInteractiveLoop` 83 LOC (naturally-coarse interactive router; second data
+point annotated on #110), `applyCategoryChange` null-path untested (practically unreachable by
+construction; shared helper preserves equivalence), makeDeps duplication (opportunistic),
+feature fails-if precision nit. Slice count 4+1 fix — under R13's target, dod-check-confirmed
+advisory.
+
 ## DoR checklist
 
 - [x] Phase 0 (Model): No model impact — declared above (R24).

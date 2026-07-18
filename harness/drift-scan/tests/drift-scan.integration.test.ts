@@ -6,6 +6,7 @@ import { initTempRepo, writeAndCommit, cleanupTempDirs } from '../../lib/temp-gi
 import { parseAgentSpecFrontmatter } from '../../lib/agent-spec.js';
 import {
   checkAgentSpecRoles,
+  checkAgentSpecVersions,
   checkControlCompleteness,
   extractInventoryControlPaths,
 } from '../lib/drift-parser.js';
@@ -117,6 +118,7 @@ describe('drift-scan integration', () => {
     expect(result.stderr).not.toContain('missing-role:');
     expect(result.stderr).not.toContain('role-tools-violation:');
     expect(result.stderr).not.toContain('unlisted-control:');
+    expect(result.stderr).not.toContain('missing-spec-version:');
   });
 
   // (Gherkin scenario: real registry conforms.) In-process: composes the
@@ -136,7 +138,12 @@ describe('drift-scan integration', () => {
       const frontmatter = parseAgentSpecFrontmatter(
         fs.readFileSync(path.join(agentsDir, f), 'utf8'),
       );
-      return { file: `.claude/agents/${f}`, role: frontmatter.role, tools: frontmatter.tools };
+      return {
+        file: `.claude/agents/${f}`,
+        role: frontmatter.role,
+        tools: frontmatter.tools,
+        specVersion: frontmatter.specVersion,
+      };
     });
     const controlFiles = [
       ...listMd(agentsDir).map((f) => `.claude/agents/${f}`),
@@ -149,6 +156,7 @@ describe('drift-scan integration', () => {
 
     const findings = [
       ...checkAgentSpecRoles(entries),
+      ...checkAgentSpecVersions(entries),
       ...checkControlCompleteness(controlFiles, extractInventoryControlPaths(inventory)),
     ];
     expect(findings).toEqual([]);
@@ -380,6 +388,33 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     expect(result.stderr).toContain('Check F');
     expect(result.stderr).toContain('missing-role');
     expect(result.stderr).toContain('.claude/agents/no-role.md');
+  });
+
+  // fails if the CLI wiring never runs checkAgentSpecVersions (the unit tests
+  // prove the function; this proves drift-scan actually reports the finding —
+  // the sibling shape missing-role/role-tools-violation/unlisted-control have,
+  // story-h12 Phase-4 gap-fill).
+  it('exits 1 and names the file + missing-spec-version when an agent spec has no spec-version: key', () => {
+    const tmpDir = buildAgentSpecFixtureRepo();
+    TEMP_DIRS.push(tmpDir);
+    writeAndCommit(
+      tmpDir,
+      '.claude/agents/unversioned.md',
+      '---\nname: unversioned\ntools: Read\nrole: judge\n---\nBody.\n',
+      'chore: fixture agent spec without spec-version',
+    );
+    writeAndCommit(
+      tmpDir,
+      'docs/harness/control-inventory.md',
+      `# Control inventory\n\n${inventoryRow('.claude/agents/known-agent.md')}${inventoryRow('.claude/commands/known-command.md')}${inventoryRow('.claude/agents/unversioned.md')}`,
+      'chore: register unversioned in inventory',
+    );
+
+    const result = runScannerAt(tmpDir, ['--all']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Check F');
+    expect(result.stderr).toContain('missing-spec-version');
+    expect(result.stderr).toContain('.claude/agents/unversioned.md');
   });
 
   // fails if the parser coerces an invalid role value into a valid one

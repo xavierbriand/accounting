@@ -49,13 +49,15 @@ export function parseAgentSpecFrontmatter(content: string): AgentSpecFrontmatter
         result.tools = parseToolsValue(value);
         break;
       case 'spec-version': {
-        const parsed = Number(value);
-        // Fail-safe: a non-numeric value stays honestly absent rather than
-        // being coerced into a fake version — Check F's missing-spec-version
-        // finding depends on this distinction (mirrors the role: invalid-vs-
-        // absent posture, though spec-version has no "invalid but present"
-        // detail — absent is the only signal it needs).
-        result.specVersion = Number.isInteger(parsed) ? parsed : undefined;
+        // Fail-safe: an empty, whitespace-only, or non-positive-integer value
+        // stays honestly absent rather than being coerced into a fake version
+        // (Number('') === 0 would otherwise slip a blank key past Check F —
+        // the exact inversion of the fail-safe this exists for; story-h12
+        // Phase-4 finding). Check F's missing-spec-version depends on this.
+        const trimmed = value.trim();
+        const parsed = Number(trimmed);
+        result.specVersion =
+          trimmed !== '' && Number.isInteger(parsed) && parsed >= 1 ? parsed : undefined;
         break;
       }
       default:

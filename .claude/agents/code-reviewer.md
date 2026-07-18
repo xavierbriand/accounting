@@ -129,7 +129,7 @@ Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\
 **Table-only tags (story-h12 demotion, measured).** For **R9, R10, R11**, the coverage-table
 line above is the *only* place they appear unless you found an actual violation — do **not**
 emit a numbered P-finding that merely confirms compliance (correct R10 usage, a justified R11
-empty slot, an absent R9 inline fix). Measured basis: 100% (n=5), 83.3% (n=6), and 81.8% (n=11)
+empty slot, an absent R9 inline fix). Measured basis: 100% (n=5), 100% (n=6), and 81.8% (n=11)
 of numbered findings carrying these tags were acknowledge-only
 (`docs/metrics/dispositions.md`, story-h12). A real violation still earns a full finding.
 

@@ -218,4 +218,16 @@ role: this too
     const spec = '---\nname: bad-version-agent\ntools: Read\nspec-version: one\n---\n';
     expect(parseAgentSpecFrontmatter(spec).specVersion).toBeUndefined();
   });
+
+  // fails if the Number('') === 0 coercion returns: a blank `spec-version:` key
+  // (author forgot the number) must read as absent so Check F still fires —
+  // story-h12 Phase-4 finding, the exact inversion of the fail-safe intent.
+  it.each<[string, string]>([
+    ['empty value', '---\nname: a\ntools: Read\nspec-version:\n---\n'],
+    ['whitespace value', '---\nname: a\ntools: Read\nspec-version:   \n---\n'],
+    ['decimal value', '---\nname: a\ntools: Read\nspec-version: 1.5\n---\n'],
+    ['zero value', '---\nname: a\ntools: Read\nspec-version: 0\n---\n'],
+  ])('treats a %s for spec-version as absent', (_label, spec) => {
+    expect(parseAgentSpecFrontmatter(spec).specVersion).toBeUndefined();
+  });
 });

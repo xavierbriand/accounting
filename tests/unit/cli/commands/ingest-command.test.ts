@@ -841,7 +841,12 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
 // fails if: a rule remembered mid-run does not auto-tag a later matching row (the second
 //           row re-prompts instead of auto-tagging), or the auto branch's rewrite diverges
 //           from the manual 'change' branch (wrong account persisted), or the stderr notice
-//           is missing/misformatted.
+//           is missing/misformatted. Edge modes (one test each, Phase-4 itemization): an
+//           already-kept row gets retroactively re-tagged (forward-only broken); a later
+//           rule shadows an earlier match (first-rule-wins broken); a non-matching pattern
+//           fires anyway; an upper-case pattern misses a lower-case description
+//           (case-insensitivity drifts from config-schema's next-invocation semantics); a
+//           syntactically invalid pattern throws out of the visit-time check (crash guard).
 
 describe('runIngestCommand — same-run auto-tag from remembered rules (Story E)', () => {
   function makeLowOutcomeWithId(id: string, description: string, category: string): BuildOutcome {
@@ -1070,6 +1075,37 @@ describe('runIngestCommand — same-run auto-tag edge semantics (Story E)', () =
     expect(stderr.captured).toContain('Auto-tagged "merchant bar" → CategoryC (rule remembered this run)');
     const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
     expect(committed[1]).toMatchObject({ category: 'CategoryC', confidence: 'high' });
+    expect(exitCodes).toContain(0);
+  });
+
+  // fails if findMatchingRememberedRule lets a syntactically invalid user-edited
+  // pattern throw out of the visit-time check — an invalid regex must not crash
+  // mid-ingest; the rule simply never fires this run and the second occurrence
+  // falls through to a normal prompt (Phase-4 guard, CodeQL js/regex-injection
+  // adjacent robustness).
+  it('an invalid remembered pattern never fires and never crashes — later rows prompt normally', async () => {
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'Merchant Foo', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'Merchant Foo again', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'CategoryC' })
+      .mockResolvedValueOnce({ action: 'keep' });
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'Merchant(' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const { deps, stderr, exitCodes } = makeDeps(outcomes, prompter);
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(selectCategoryMock).toHaveBeenCalledTimes(2);
+    expect(stderr.captured).not.toContain('Auto-tagged');
     expect(exitCodes).toContain(0);
   });
 });

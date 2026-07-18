@@ -280,8 +280,18 @@ function findMatchingRememberedRule(
   rememberedMap: ReadonlyMap<string, { category: string; pattern: string }>,
 ): { category: string; pattern: string } | undefined {
   for (const rule of rememberedMap.values()) {
-    if (new RegExp(rule.pattern, 'i').test(description)) {
-      return rule;
+    // A syntactically invalid user-edited pattern must not crash mid-ingest:
+    // it simply never fires this run (the YAML write still happens; the next
+    // invocation's config load reports it with a path-cited error). The regex
+    // is user-authored by design — CodeQL's js/regex-injection on this line is
+    // the feature, matching config-schema.ts's identical next-invocation
+    // construction on the same string.
+    try {
+      if (new RegExp(rule.pattern, 'i').test(description)) {
+        return rule;
+      }
+    } catch {
+      continue;
     }
   }
   return undefined;

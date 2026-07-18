@@ -836,3 +836,73 @@ describe('runIngestCommand — configWriter buffer-then-flush (Story C)', () => 
     expect(exitCodes).toContain(0);
   });
 });
+
+// ---- Story E — same-run re-application of remembered rules (#93 Option B, closes #103) ----
+// fails if: a rule remembered mid-run does not auto-tag a later matching row (the second
+//           row re-prompts instead of auto-tagging), or the auto branch's rewrite diverges
+//           from the manual 'change' branch (wrong account persisted), or the stderr notice
+//           is missing/misformatted.
+
+describe('runIngestCommand — same-run auto-tag from remembered rules (Story E)', () => {
+  function makeLowOutcomeWithId(id: string, description: string, category: string): BuildOutcome {
+    const base = makeLowOutcome(description, category);
+    return { ...base, transaction: { ...base.transaction, id } as unknown as BuildOutcome['transaction'] };
+  }
+
+  it('auto-tags a later pending row matching a rule remembered earlier in the same run, without a second prompt', async () => {
+    const stdout = makeStdout();
+    const stderr = makeStderr();
+    const capturedExitCode: number[] = [];
+
+    const outcomes = [
+      makeLowOutcomeWithId('tx-1', 'MERCHANT-A FIRST', 'Uncategorized'),
+      makeLowOutcomeWithId('tx-2', 'MERCHANT-A SECOND', 'Uncategorized'),
+    ];
+
+    const selectCategoryMock = vi.fn()
+      .mockResolvedValueOnce({ action: 'change', category: 'Shopping' })
+      .mockRejectedValue(new Error('selectCategory should not be called a second time — the second row should auto-tag'));
+
+    const prompter: InteractivePrompter = {
+      selectCategory: selectCategoryMock,
+      confirmBatch: vi.fn().mockResolvedValue(true),
+      confirmRememberRule: vi.fn().mockResolvedValue({ action: 'remember', pattern: 'merchant-a' }),
+      confirmDissolution: vi.fn(),
+    };
+
+    const saveBatchMock = vi.fn().mockReturnValue(Result.ok({ written: 2 }));
+
+    const deps: IngestCommandDeps = {
+      config: baseConfig,
+      csvParser: {
+        parse: () => Result.ok({
+          items: outcomes.map((o) => ({ sourceAccount: 'main-X', occurredAt: o.transaction.occurredAt, description: o.transaction.description, direction: 'outflow' as const, amount: EUR })),
+          errors: [],
+        }),
+      },
+      idempotencyService: { filterNew: (items) => Result.ok({ fresh: items.map((i) => ({ item: i, idempotencyHash: `hash-${i.description}` })), duplicates: [] }) },
+      transactionBuilder: () => ({ buildAll: () => Result.ok({ built: outcomes, failed: [] }) }),
+      pickSourceAccount: () => Result.ok(makeAccount('main-X', 'X_')),
+      readFile: () => Result.ok('csv-content'),
+      prompt: prompter,
+      stdout: stdout as Writable,
+      stderr: stderr as Writable,
+      exitCode: (code) => capturedExitCode.push(code),
+      transactionRepository: { saveBatch: saveBatchMock },
+      snapshotService: makeNoOpSnapshotService(),
+      dbPath: TEST_DB_PATH,
+      configWriter: makeNoOpConfigWriterStub(),
+      domainEventRecorder: makeNoOpDomainEventRecorder(),
+    };
+
+    await runIngestCommand({ file: '/tmp/X_2026.csv', nonInteractive: false, json: false }, deps);
+
+    expect(selectCategoryMock).toHaveBeenCalledTimes(1);
+    expect(stderr.captured).toContain('Auto-tagged "MERCHANT-A SECOND" → Shopping (rule remembered this run)');
+    expect(saveBatchMock).toHaveBeenCalledOnce();
+    const committed = saveBatchMock.mock.calls[0][0] as ReadonlyArray<{ category: string; confidence: string }>;
+    expect(committed[0]).toMatchObject({ category: 'Shopping', confidence: 'high' });
+    expect(committed[1]).toMatchObject({ category: 'Shopping', confidence: 'high' });
+    expect(capturedExitCode).toContain(0);
+  });
+});

@@ -113,9 +113,15 @@ Light lane (touches `.claude/agents` + behavior-changing harness code — Reduce
   `SuggestionLogRow { story: string; phase: 'p2' | 'p4' | 'unattributed'; tag: NormalizedTag; rules: readonly string[]; finding: string }`;
   `NormalizedTag = 'adopted' | 'deferred' | 'rejected' | 'acknowledged' | 'unparsed'`
   (fix-now → adopted; no-action/compliance rows → acknowledged).
+- **New** `harness/disposition-report/attribute.ts` — phase/rule/leg heuristics
+  (`extractRules`, `attributePhase`, `legsForPhase` + helpers). *(Phase-4 R2 correction — named
+  in Selected solution and the slice plan but omitted from this list at drafting.)*
 - **New** `harness/disposition-report/aggregate.ts` —
   `aggregate(rows): DispositionReport` (per-tag totals, per-phase, per-rule ranked
-  acknowledge-only rates with n, per-story).
+  acknowledge-only rates with n, per-story) plus `formatMarkdownReport(report): string` /
+  `formatJsonReport(report): string`. *(Phase-4 R2 correction: the formatters and the
+  `DispositionReport` shape — `totalRows`, `parsedLogCount`, `byTag`, `byPhase`, `byRule`,
+  `byStory` — are #164's consumed data contract and belong in this enumeration.)*
 - **New** `harness/disposition-report/disposition-report.ts` — CLI entry; writes
   `docs/metrics/dispositions.{md,json}`; exit 1 on zero logs parsed (self-check).
 - **New** `harness/disposition-report/README.md` — usage, honesty limits (heuristic
@@ -179,6 +185,22 @@ Target ~7 slices (R13/R28; derive-from-surface lesson).
    prose edits validated by drift-scan + Check F, R20-titled if it lands empty because the data
    refutes every demotion candidate.)*
 7. `refactor(h12)` — Phase-4 slot (R11 empty-with-justification if none).
+
+*(Landed-slice annotation, Phase 4: 8 slices — the parser grew an unplanned wiring pair plus a
+3-red/1-green real-tree-fix cluster inside slice 4; the planned refactor slot landed as a real
+Phase-4 **fix** slice (blank-spec-version fail-safe + Check F coverage + citation correction)
+rather than empty-with-justification. Within R13's 6–10.)*
+
+**Phase-4 review (2026-07-18):** `code-reviewer` (12 findings, **0 blockers**) +
+`sibling-overlap` re-scan (clean; #217 fix verified in the live diff; #98 found already closed
+2026-07-04). Fix-now (one feat slice): blank/whitespace/decimal/zero `spec-version` values now
+read as absent (`Number('') === 0` had inverted the fail-safe); `checkAgentSpecVersions`
+composed into the real-registry conformance test + named in the clean-repo assertions + a
+negative fixture subprocess test (sibling parity); code-reviewer.md's R10 citation corrected to
+the artifact (100%, n=6 — slice-6 prose had used the implementer's pre-final-run numbers;
+R12's 62.5% mis-cited as 56.3% in the slice-6 commit body is the same class, decisions
+unaffected, retro lesson minted). Doc-fixes (retro commit): the two R2 corrections above.
+Acknowledged: fails-if style gaps on simple tests (house-consistent), byRule shape-check nit.
 
 Docs commits: canonical prep `chore(docs): story-h12 plan + P1/P2/P3 review` (plan +
 loop.csv drain) and `chore(retro)` — envelope-exempt (R30).

@@ -91,7 +91,7 @@ See § 8: **R26** lane provenance.
 2. **Critical review** (Opus, P1/P2/P3): invoke `plan-reviewer` sub-agent AND `sibling-overlap` sub-agent **in parallel** (single message, two Agent tool calls); consume both structured findings; tag each finding adopted/deferred/rejected in the suggestion log. Deferred → GitHub issue. *Exit (DoR):* both agents complete, no un-tagged suggestions, every deferred has an issue link.
 3. **Implement** (Sonnet): failing acceptance → failing unit → green → structured report. *Exit:* tests green, branch pushed, PR in draft.
 4. **Code review + refactor** (Opus): invoke `code-reviewer` sub-agent (`subagent_type: "code-reviewer"`) with the PR number and plan path — and, when the story has a model note, `ddd-modeler` (Mode B, model conformance) **in parallel** (single message, two Agent tool calls, same pattern as phase 2); consume the structured findings; classify each fix-now / defer-issue / acknowledge. Sub-rules (see § 8): **R5** Gherkin-to-test mapping · **R6** `fails if` honesty · **R7** test-mechanism honesty · **R8** mock diversity · **R9** trivial inline fix carve-out. *Exit:* refactor merged, CI green.
-5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. New rules add a row to § 8. *Exit:* file committed. Merge user-gated.
+5. **Retrospective.** Keep/Change/Try at `docs/retrospectives/story-<id>.md`. New rules add a row to § 8. Try items are valid only as a same-PR edit (cite the file) or a filed issue (cite `#N`) — dod-check's advisory `try-unfunneled` finding checks this (story-h13); "next process-touching PR" is not a valid deferral. *Exit:* file committed. Merge user-gated.
 
 #### Plan-mode verification (R32)
 

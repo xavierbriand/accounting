@@ -31,6 +31,12 @@ import {
 import { checkWeightRatio, type WeightRatioHeavyFinding } from './lib/weight-ratio.js';
 import { checkPhaseEvidence, type PhaseEvidenceFinding } from './lib/phase-evidence.js';
 import { checkLoopFreshness, type LoopFreshnessFinding } from './lib/loop-freshness.js';
+import {
+  extractTrySection,
+  extractTryBullets,
+  checkTryFunnel,
+  type TryUnfunneledFinding,
+} from './lib/try-funnel.js';
 import { sumShippedDiffLoc, countLoc } from '../lib/process-artifacts.js';
 
 export type StoryIdUnresolvedFinding = {
@@ -48,7 +54,8 @@ export type DodFinding =
   | StoryIdUnresolvedFinding
   | WeightRatioHeavyFinding
   | PhaseEvidenceFinding
-  | LoopFreshnessFinding;
+  | LoopFreshnessFinding
+  | TryUnfunneledFinding;
 
 const HARD_KINDS: ReadonlySet<DodFinding['kind']> = new Set([
   'missing-story-id',
@@ -66,6 +73,7 @@ export function isAlwaysAdvisory(finding: DodFinding): boolean {
   if (finding.kind === 'weight-ratio-heavy') return true;
   if (finding.kind === 'phase-evidence-missing') return true;
   if (finding.kind === 'loop-csv-stale') return true;
+  if (finding.kind === 'try-unfunneled') return true;
   if (finding.kind === 'commit-envelope') {
     return finding.rule === null || (finding.min !== null && finding.count < finding.min);
   }
@@ -153,6 +161,29 @@ function getCommitLog(repoRoot: string, degraded: string[]): CommitLogEntry[] {
 function findPlanFile(repoRoot: string, storyId: string): string | null {
   const candidate = path.join(repoRoot, 'docs', 'plans', `story-${storyId}.md`);
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+function findRetroFile(repoRoot: string, storyId: string): string | null {
+  const candidate = path.join(repoRoot, 'docs', 'retrospectives', `story-${storyId}.md`);
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+function runTryFunnelCheck(repoRoot: string, degraded: string[]): DodFinding[] {
+  const resolution = resolveStoryId(repoRoot, degraded);
+  if ('unresolved' in resolution) {
+    degraded.push(`runTryFunnelCheck: story id unresolved (${resolution.unresolved})`);
+    return [];
+  }
+  const retroPath = findRetroFile(repoRoot, resolution.storyId);
+  if (!retroPath) {
+    degraded.push(`runTryFunnelCheck: no retro file for story id "${resolution.storyId}"`);
+    return [];
+  }
+  const trySection = extractTrySection(fs.readFileSync(retroPath, 'utf8'));
+  if (trySection === null) {
+    return [];
+  }
+  return checkTryFunnel(extractTryBullets(trySection));
 }
 
 function runCommitSubjectCheck(repoRoot: string, degraded: string[]): DodFinding[] {
@@ -506,6 +537,16 @@ function formatLoopFreshnessLines(findings: DodFinding[]): string[] {
   );
 }
 
+function formatTryFunnelLines(findings: DodFinding[]): string[] {
+  const tryUnfunneledFindings = findings.filter(
+    (f): f is TryUnfunneledFinding => f.kind === 'try-unfunneled',
+  );
+  if (tryUnfunneledFindings.length === 0) return [];
+  return tryUnfunneledFindings.map(
+    (f) => `  try-unfunneled: "${f.bullet}" (advisory)`,
+  );
+}
+
 function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
   return [
     ...formatCommitSubjectLines(findings, isDraft),
@@ -514,6 +555,7 @@ function formatHumanReport(findings: DodFinding[], isDraft: boolean): string {
     ...formatWeightRatioLines(findings),
     ...formatPhaseEvidenceLines(findings),
     ...formatLoopFreshnessLines(findings),
+    ...formatTryFunnelLines(findings),
   ].join('\n');
 }
 
@@ -537,6 +579,7 @@ function main(): void {
     'weight-ratio': () => runWeightRatioCheck(repoRoot, degraded),
     'phase-evidence': () => runPhaseEvidenceCheck(repoRoot, degraded),
     'loop-freshness': () => runLoopFreshnessCheck(repoRoot, degraded),
+    'try-funnel': () => runTryFunnelCheck(repoRoot, degraded),
   };
 
   const selectedChecks = onlyCheck ? [onlyCheck] : Object.keys(checks);

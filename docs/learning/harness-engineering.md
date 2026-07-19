@@ -49,7 +49,7 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 - **No prompt versioning.** Agent .md files mutate without a changelog. — **Closed by story-h12**: `spec-version` frontmatter on every agent spec, presence enforced by drift-scan Check F.
 - **No quantitative retro signal.** Loop metrics live as raw text in 16+ retros and are never aggregated. — **Closed by story-h4/h12**: `docs/metrics/loop.csv` (weight ratios, deterministic from git) and [docs/metrics/dispositions.md](../metrics/dispositions.md) (688 findings across 55 suggestion logs, per-rule disposition rates).
-- **No agent-output evals.** Zero golden tests for plan-reviewer / code-reviewer. — **Closed (re-scoped) by story-h12**: evals-lite measures disposition rates over every historical suggestion log instead of golden fixtures — Module 4c's contrarian beat, vindicated (the data demoted three checklist rules and fed the h13 rule walk).
+- **No agent-output evals.** Zero golden tests for plan-reviewer / code-reviewer. — **Closed (re-scoped) by story-h12**: evals-lite measures disposition rates over every historical suggestion log instead of golden fixtures — Module 4c's contrarian beat, vindicated (the data demoted four checklist rules — R1/R9/R10/R11 — to table-only and fed the h13 rule walk).
 - **No cost/token telemetry.** No statusline metric, no JSONL session log parsing, no per-story budget. — **Closed by story-h4**: [harness/metrics/](../../harness/metrics/) (`usage-reader.ts` + `loop-metrics.ts`), per-story token attribution as a retro Cost section.
 - **No CI gate on agent-spec changes.** Editing `code-reviewer.md` triggers nothing. — **Closed by story-h10b + ddd-2 (R27)**: drift-scan walks `.claude/` specs in CI — rule-tag currency (Check D) and role/tool discipline + spec-version (Check F).
 - **No sibling-overlap detection at plan time.** R19 said "check open PRs/issues" — manually. — **Closed by story-h3** (the `sibling-overlap` agent now runs at Phase 2, automated); R19 itself was later tombstoned as fully absorbed ([rule walk 2026-07](rule-walk-2026-07.md)).
@@ -170,7 +170,7 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 
 ### Module 4 — Eval-driven agent engineering + prompt engineering *(centerpiece)*
 
-> **Shipped in reduced form** as evals-lite (story-h12): the 4c contrarian beat won. Instead of golden fixtures, disposition-rate measurement over 688 real findings across 55 suggestion logs ([docs/metrics/dispositions.md](../metrics/dispositions.md)) — which demoted three checklist rules to table-only and became the evidence base for the h13 rule walk. Golden fixtures remain unbuilt; 4a's spec-versioning shipped with h12.
+> **Shipped in reduced form** as evals-lite (story-h12): the 4c contrarian beat won. Instead of golden fixtures, disposition-rate measurement over 688 real findings across 55 suggestion logs ([docs/metrics/dispositions.md](../metrics/dispositions.md)) — which demoted four checklist rules (R1/R9/R10/R11) to table-only and became the evidence base for the h13 rule walk. Golden fixtures remain unbuilt; 4a's spec-versioning shipped with h12.
 
 This is the largest module and the one most worth studying carefully. It also has the most ways to do badly.
 

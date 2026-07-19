@@ -29,7 +29,7 @@ Indicative quote (paraphrased via the summary): *"Modern infrastructure must no 
 The harness has automated the bulk of single-PR verification:
 
 - Phase 2 plan-reviewer + Phase 4 code-reviewer sub-agents ([CLAUDE.md § 6.1](../../CLAUDE.md))
-- The R-tag retro rules ([CLAUDE.md § 8](../../CLAUDE.md); R1–R32 as of 2026-07, 24 live after the [rule-expiry walk](rule-walk-2026-07.md)) — each crystallized from a real failure mode, and now with a demonstrated retirement mechanism
+- The R-tag retro rules ([CLAUDE.md § 8](../../CLAUDE.md); R1–R32 as of 2026-07: 25 live, i.e. 24 cited keeps + R32 on watch, after the [rule-expiry walk](rule-walk-2026-07.md) tombstoned six) — each crystallized from a real failure mode, and now with a demonstrated retirement mechanism
 - 100% branch coverage on `src/core/`; property tests via `fast-check` for financial invariants
 - DoR/DoD gates with a 10-item merge checklist ([CLAUDE.md § 7](../../CLAUDE.md))
 - Failure-signature taxonomy ([Part B of harness-engineering.md](harness-engineering.md#failure-signatures-to-learn-to-spot)) — vocabulary for naming what goes wrong

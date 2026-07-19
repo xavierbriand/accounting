@@ -283,6 +283,32 @@ export function extractInventoryControlPaths(inventoryContent: string): Set<stri
   return paths;
 }
 
+export type PendingMarker = {
+  file: string;
+  kind: 'pending' | 'hole';
+  stampedStory?: string;
+  stampedDate?: string;
+};
+
+const PENDING_HOLE_STAMP_PATTERN =
+  /\*\((pending|hole)(?:\s*[—-]\s*story-([^,)]+),\s*(\d{4}-\d{2}-\d{2}))?\)\*/gi;
+
+export function extractPendingMarkers(content: string, file: string): PendingMarker[] {
+  const markers: PendingMarker[] = [];
+  const pattern = new RegExp(PENDING_HOLE_STAMP_PATTERN.source, 'gi');
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    const kind = match[1].toLowerCase() === 'hole' ? 'hole' : 'pending';
+    const marker: PendingMarker = { file, kind };
+    if (match[2] !== undefined) {
+      marker.stampedStory = match[2].trim();
+      marker.stampedDate = match[3];
+    }
+    markers.push(marker);
+  }
+  return markers;
+}
+
 export function formatJsonReport(findings: DriftFinding[]): string {
   return JSON.stringify({ findings });
 }

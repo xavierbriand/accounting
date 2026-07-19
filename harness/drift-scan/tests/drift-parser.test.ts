@@ -711,7 +711,8 @@ describe('extractPendingMarkers', () => {
     const content = 'R1 *(pending)*\nsome prose\nR2 *(hole — story-h9, 2025-01-01)*\n';
     const markers = extractPendingMarkers(content, 'fixture.md');
     expect(markers).toHaveLength(2);
-    expect(markers[0]).toMatchObject({ kind: 'pending', stampedDate: undefined });
+    expect(markers[0].kind).toBe('pending');
+    expect(markers[0].stampedDate).toBeUndefined();
     expect(markers[1]).toMatchObject({ kind: 'hole', stampedStory: 'h9', stampedDate: '2025-01-01' });
   });
 

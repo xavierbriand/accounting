@@ -107,6 +107,17 @@ describe('extractRetroTags', () => {
     expect(tags.has('R20')).toBe(false);
   });
 
+  // fails if the stamped marker form (Story h13's new expiry-tracking
+  // convention) isn't recognized as a suppression at all — a freshly stamped
+  // *(pending)* marker would then immediately hard-fail Check A the moment
+  // it's stamped, defeating the whole point of Check G's advisory grace
+  // period.
+  it('suppresses tags with a stamped *(pending — story-<id>, YYYY-MM-DD)* marker', () => {
+    const retro = '# Story\n\nR20 *(pending — story-h13, 2026-07-19)*\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+  });
+
   it('does not suppress a different tag that appears without a pending marker', () => {
     const retro = '# Story\n\nR20 *(pending)*\nR5 is applied.\n';
     const tags = extractRetroTags(retro);
@@ -315,6 +326,14 @@ describe('extractClaudeTagRefs', () => {
   it('suppresses tags with (Hole) case variant', () => {
     const tags = extractClaudeTagRefs('§ 8 skips R22 (Hole) (no tombstone row).');
     expect(tags.has('R22')).toBe(false);
+  });
+
+  // fails if a stamped *(hole)* marker isn't recognized as a suppression —
+  // Check D would then hard-fail the moment a hole marker gains its Story
+  // h13 expiry stamp, before Check G's advisory grace period ever applies.
+  it('suppresses tags with a stamped *(hole — story-<id>, YYYY-MM-DD)* marker', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R95 *(hole — story-h1, 2026-01-01)* (no tombstone row).');
+    expect(tags.has('R95')).toBe(false);
   });
 
   it('does not suppress a different tag that appears without a hole marker', () => {

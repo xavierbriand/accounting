@@ -4,6 +4,7 @@ export type AgentSpecFrontmatter = {
   model?: string;
   tools: string[];
   role?: string;
+  specVersion?: number;
 };
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/;
@@ -47,6 +48,18 @@ export function parseAgentSpecFrontmatter(content: string): AgentSpecFrontmatter
       case 'tools':
         result.tools = parseToolsValue(value);
         break;
+      case 'spec-version': {
+        // Fail-safe: an empty, whitespace-only, or non-positive-integer value
+        // stays honestly absent rather than being coerced into a fake version
+        // (Number('') === 0 would otherwise slip a blank key past Check F —
+        // the exact inversion of the fail-safe this exists for; story-h12
+        // Phase-4 finding). Check F's missing-spec-version depends on this.
+        const trimmed = value.trim();
+        const parsed = Number(trimmed);
+        result.specVersion =
+          trimmed !== '' && Number.isInteger(parsed) && parsed >= 1 ? parsed : undefined;
+        break;
+      }
       default:
         break;
     }

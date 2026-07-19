@@ -11,6 +11,7 @@ import {
   extractClaudeTagRefs,
   composeClaudeDrift,
   checkAgentSpecRoles,
+  checkAgentSpecVersions,
   checkControlCompleteness,
   extractInventoryControlPaths,
   formatJsonReport,
@@ -145,9 +146,10 @@ function runAgentSpecCheck(repoRoot: string): DriftFinding[] {
   const entries: AgentSpecEntry[] = agentSpecFiles.map((specFile) => {
     const content = fs.readFileSync(path.join(repoRoot, specFile), 'utf8');
     const parsed = parseAgentSpecFrontmatter(content);
-    return { file: specFile, role: parsed.role, tools: parsed.tools };
+    return { file: specFile, role: parsed.role, tools: parsed.tools, specVersion: parsed.specVersion };
   });
   const roleFindings = checkAgentSpecRoles(entries);
+  const specVersionFindings = checkAgentSpecVersions(entries);
 
   const inventoryPath = path.join(repoRoot, 'docs', 'harness', 'control-inventory.md');
   const inventoryPaths = fs.existsSync(inventoryPath)
@@ -156,7 +158,7 @@ function runAgentSpecCheck(repoRoot: string): DriftFinding[] {
   const allControlFiles = getClaudeSpecFiles(repoRoot);
   const completenessFindings = checkControlCompleteness(allControlFiles, inventoryPaths);
 
-  return [...roleFindings, ...completenessFindings];
+  return [...roleFindings, ...specVersionFindings, ...completenessFindings];
 }
 
 function formatHumanReport(findings: DriftFinding[]): string {
@@ -172,7 +174,8 @@ function formatHumanReport(findings: DriftFinding[]): string {
     (f) =>
       f.kind === 'missing-role' ||
       f.kind === 'role-tools-violation' ||
-      f.kind === 'unlisted-control',
+      f.kind === 'unlisted-control' ||
+      f.kind === 'missing-spec-version',
   );
 
   if (ruleFindings.length > 0) {
@@ -212,6 +215,8 @@ function formatHumanReport(findings: DriftFinding[]): string {
         lines.push(`  role-tools-violation: ${f.tool} (in ${f.file}, non-doer role carries a mutation tool)`);
       } else if (f.kind === 'unlisted-control') {
         lines.push(`  unlisted-control: ${f.file} (no row in docs/harness/control-inventory.md)`);
+      } else if (f.kind === 'missing-spec-version') {
+        lines.push(`  missing-spec-version: ${f.file} (no spec-version frontmatter key)`);
       }
     }
   }

@@ -10,6 +10,7 @@ import {
   composeClaudeDrift,
   formatJsonReport,
   checkAgentSpecRoles,
+  checkAgentSpecVersions,
   checkControlCompleteness,
   extractInventoryControlPaths,
   type AgentSpecEntry,
@@ -406,6 +407,17 @@ describe('formatJsonReport', () => {
     expect(parsed.findings[1].tool).toBe('Edit');
     expect(parsed.findings[2].kind).toBe('unlisted-control');
   });
+
+  // fails if the story-h12 missing-spec-version kind needs a formatter
+  // change to round-trip (same generic-serialization guard as the Check F
+  // kinds above, R8 mock-diversity).
+  it('emits missing-spec-version without a formatter change', () => {
+    const findings = [{ kind: 'missing-spec-version' as const, file: '.claude/agents/bad.md' }];
+    const output = formatJsonReport(findings);
+    const parsed = JSON.parse(output) as { findings: Array<Record<string, unknown>> };
+    expect(parsed.findings[0].kind).toBe('missing-spec-version');
+    expect(parsed.findings[0].file).toBe('.claude/agents/bad.md');
+  });
 });
 
 const VALID_ROLES = new Set(['doer', 'judge', 'advisor']);
@@ -492,6 +504,40 @@ describe('checkAgentSpecRoles', () => {
         },
       ),
     );
+  });
+});
+
+function versionedEntry(file: string, specVersion: number | undefined): AgentSpecEntry {
+  return { file, role: 'doer', tools: [], specVersion };
+}
+
+describe('checkAgentSpecVersions', () => {
+  // fails if the check does not fire when spec-version: is entirely absent
+  // from a spec's parsed frontmatter (Gherkin scenario 3: agent spec missing
+  // spec-version -> Check F reports missing-spec-version).
+  it('reports missing-spec-version when specVersion is undefined', () => {
+    const findings = checkAgentSpecVersions([versionedEntry('.claude/agents/a.md', undefined)]);
+    expect(findings).toContainEqual({ kind: 'missing-spec-version', file: '.claude/agents/a.md' });
+  });
+
+  // fails if a spec carrying a real spec-version is still flagged (Gherkin
+  // scenario 3: with all six headers present it reports none).
+  it('does not flag a spec with a numeric specVersion', () => {
+    const findings = checkAgentSpecVersions([versionedEntry('.claude/agents/a.md', 1)]);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('reports one missing-spec-version finding per unversioned spec in a mixed list', () => {
+    const findings = checkAgentSpecVersions([
+      versionedEntry('.claude/agents/a.md', 1),
+      versionedEntry('.claude/agents/b.md', undefined),
+      versionedEntry('.claude/agents/c.md', 2),
+      versionedEntry('.claude/agents/d.md', undefined),
+    ]);
+    expect(findings).toEqual([
+      { kind: 'missing-spec-version', file: '.claude/agents/b.md' },
+      { kind: 'missing-spec-version', file: '.claude/agents/d.md' },
+    ]);
   });
 });
 

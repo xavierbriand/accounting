@@ -4,6 +4,7 @@ description: Read-only agent that checks open PRs and issues for scope overlap w
 model: sonnet
 tools: Read, Glob, Grep, Bash
 role: judge
+spec-version: 1
 ---
 
 You are a sibling-overlap auditor. Given a story plan file path:

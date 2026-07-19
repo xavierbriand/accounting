@@ -191,4 +191,43 @@ role: this too
       ),
     );
   });
+
+  // fails if the `spec-version` frontmatter key isn't parsed into
+  // `specVersion` as a number — Check F's missing-spec-version finding
+  // (story-h12, #165's golden-fixture-eval precondition) depends on this
+  // being a real number, not a string, when present.
+  it('parses spec-version into a numeric specVersion field', () => {
+    const spec = '---\nname: versioned-agent\ntools: Read\nspec-version: 1\nrole: doer\n---\n';
+    const parsed = parseAgentSpecFrontmatter(spec);
+    expect(parsed.specVersion).toBe(1);
+  });
+
+  // fails if the parser invents a default version when the key is absent —
+  // Check F's missing-spec-version finding must be able to tell "absent"
+  // from "present" (mirrors the role: absent-vs-invalid distinction above).
+  it('leaves specVersion undefined when the key is absent', () => {
+    const spec = '---\nname: unversioned-agent\ntools: Read\n---\n';
+    expect(parseAgentSpecFrontmatter(spec).specVersion).toBeUndefined();
+  });
+
+  // fails if a non-numeric spec-version value (e.g. a stray quoted string or
+  // typo) is silently coerced into a fake version number instead of being
+  // treated as honestly absent — same fail-safe posture as the unclosed-fence
+  // case above.
+  it('treats a non-numeric spec-version value as absent rather than coercing it', () => {
+    const spec = '---\nname: bad-version-agent\ntools: Read\nspec-version: one\n---\n';
+    expect(parseAgentSpecFrontmatter(spec).specVersion).toBeUndefined();
+  });
+
+  // fails if the Number('') === 0 coercion returns: a blank `spec-version:` key
+  // (author forgot the number) must read as absent so Check F still fires —
+  // story-h12 Phase-4 finding, the exact inversion of the fail-safe intent.
+  it.each<[string, string]>([
+    ['empty value', '---\nname: a\ntools: Read\nspec-version:\n---\n'],
+    ['whitespace value', '---\nname: a\ntools: Read\nspec-version:   \n---\n'],
+    ['decimal value', '---\nname: a\ntools: Read\nspec-version: 1.5\n---\n'],
+    ['zero value', '---\nname: a\ntools: Read\nspec-version: 0\n---\n'],
+  ])('treats a %s for spec-version as absent', (_label, spec) => {
+    expect(parseAgentSpecFrontmatter(spec).specVersion).toBeUndefined();
+  });
 });

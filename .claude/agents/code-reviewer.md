@@ -126,7 +126,7 @@ Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\
 
 - R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
-**Table-only tags (story-h12 demotion, measured).** For **R9, R10, R11**, the coverage-table
+**Table-only tags (story-h12 demotion, measured).** For **R9, R10 (now tombstoned — story-h13), R11**, the coverage-table
 line above is the *only* place they appear unless you found an actual violation — do **not**
 emit a numbered P-finding that merely confirms compliance (correct R10 usage, a justified R11
 empty slot, an absent R9 inline fix). Measured basis: 100% (n=5), 100% (n=6), and 81.8% (n=11)

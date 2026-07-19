@@ -89,6 +89,9 @@ is too long for table cells — a separate signed artifact linked from the table
 ## Production-code surface (R2)
 
 - **New** `docs/learning/rule-walk-2026-07.md` — the walk artifact (evidence per rule).
+  *(Phase-4 R2 correction: the shipped `PendingMarker` discriminant is `kind: 'pending' | 'hole'`,
+  not the drafted `tag?`; the `→ lands as:` retro field was descoped — `try-unfunneled` enforces
+  the substance, the literal field added only ceremony.)*
 - `CLAUDE.md` § 8 — tombstone rows for retirees (strikethrough + rationale + date + walk
   link); R22 hole closed (minted row or permanent tombstone); pending/hole markers gain
   stamps.
@@ -186,6 +189,20 @@ Phase-2 review 2026-07-18: `sibling-overlap` only (Reduced lane). 0 blocking; 5 
 | 3 | #193 — marker-vocabulary consistency with the Check B *(new)* proposal | ACKNOWLEDGE | Naming glance only; stamped-marker syntax documented in R2 |
 | 4 | #198/#176 — two more queued advisory findings for the same dod-check union/table | ACKNOWLEDGE | Noted in PR body as unclaimed file-adjacent backlog |
 | 5 | #236 (story-E) confirmed zero-overlap (pure src/cli) | ACKNOWLEDGE | No action |
+
+**Phase-4 review (2026-07-19):** `code-reviewer` (13 findings, **0 blockers**) +
+`sibling-overlap` re-scan (clean; closing keywords added for #164/#200 on its catch). Fix-now:
+walk arithmetic corrected (31 rows/24 keeps); R20's criterion recorded honestly as **(d)
+mandate contradicted by unanimous practice** (outside the pre-committed a/b/c — noted in the
+walk preamble); six stale retiree references annotated across sibling docs; Check G/try-funnel
+registered in the control inventory; drift-scan README count fixed; Check G `--json` shape
+coverage added (one R10-style test slice — the planned refactor slot's budget, justification in
+the retro). Adopted: harness-glossary deltas proposed (tombstone/expiry stamp/Try-funnel —
+user-gated). Acknowledged: PendingMarker `kind` vs plan's `tag` (ratified deviation family; this
+correction), the dropped `→ lands as:` field (the check enforces the substance; field descoped
+with rationale), slice-4 split (same class as the ratified slice-3 split), soft R12 subject
+note. The #178-note finding was a race with the PR §8 fill (present since before review
+completion) — story-E's hold-edits lesson re-minted in the retro.
 
 ## DoR checklist
 

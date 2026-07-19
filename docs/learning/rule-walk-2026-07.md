@@ -32,7 +32,7 @@ with a new retro citation.
 | R17 | **RETIRE** (a) | 100%/1, origin-only (maint-16); the fragmentation convention is self-sustaining — `docs/status.d/README.md` documents format + conflict protocol; the row duplicated a README. |
 | R18 | keep | 100%/2 but recently *hardened* (h12/#217 push-ownership hard rule is R18's enforcement arm); load-bearing citation: 4.4b push violation. |
 | R19 | **RETIRE** (a) | 80%/5; last real exercise is its own origin (maint-16). Substance fully absorbed: § 6.7 mandates the sub-loop, the template's sibling-work step is the check, the sibling-overlap agent is the mechanism, and the uniqueness half is R23. |
-| R20 | **RETIRE** (b) | n=1; the mandated retitle has **never once been performed** — both citing retros (h9, maint-20) treated empty slices as acceptable-not-mandatory, contradicting the rule's own text. R11's acceptable-empty-slice framing governs; an empty `feat:` gets the same justification-body treatment. |
+| R20 | **RETIRE** (d) | n=1; the mandated retitle has **never once been performed** — both citing retros (h9, maint-20) treated empty slices as acceptable-not-mandatory, contradicting the rule's own text. R11's acceptable-empty-slice framing governs; an empty `feat:` gets the same justification-body treatment. |
 | R21 | keep | 80%/5; it *is* the drift-scan infrastructure (Checks A/B/D/F — and now G). Widened in place this story: markers must carry stamps. |
 | R22 | **hole closed** | Never minted. Three claimants dispositioned under the new expiry rule: **h1** (over-import trap, 2026-05-11) — expired, no second-story data in 30+ stories; **h2** (delete-identifier grep audit, 2026-05-12) — expired, never re-observed; **h3** (parallel Phase 2 default, 2026-07-02) — **absorbed**: § 6.1 phase 2 prose already mandates the single-message parallel launch, practiced universally since. Tombstone row minted; the two reviewer-spec `*(hole)*` suppressions removed. |
 | R23 | keep | 80%/5; actively firing with a real open gap (maint-28: branch-name grep missed a content-level collision). |
@@ -55,7 +55,8 @@ evidence, not rates alone).
 
 ## Effect
 
-30 rows walked → **6 tombstoned** (R1, R10, R15, R17, R19, R20), **1 hole closed** (R22 —
-permanent tombstone; three claims dispositioned), **1 unverified with a stamped watch** (R32),
-**22 load-bearing keeps** each with a citation. #200 resolved by R15's retirement. First
+31 pre-existing rows walked → **6 tombstoned** (R1, R10, R15, R17, R19, R20), **1 unverified
+with a recorded watch** (R32), **24 load-bearing keeps** each with a citation — plus the R22
+hole closed with a newly minted permanent tombstone row (three claims dispositioned).
+*(Arithmetic corrected at Phase 4 — the first draft said 30/22.)* #200 resolved by R15's retirement. First
 subtraction in the loop's history; the next walk is due at the next health check.

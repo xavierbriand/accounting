@@ -14,7 +14,7 @@ Eight checks, one findings union:
   carrying the story id in their subject, excluding the preparatory `chore(docs): ... plan + P1/P2/P3
   review` commit, the `chore(retro): ...` commit, **and each `test: … — failing` red-half** — the TDD
   rhythm (§6.4) splits every behaviour into a `test: — failing` + `feat: — minimal green` pair, so
-  collapsing the red half yields one slice per behaviour (`refactor:` and R10 green-on-landing `test:`
+  collapsing the red half yields one slice per behaviour (`refactor:` and green-on-landing `test:` (formerly R10, absorbed into R28)
   commits stand as their own slices). Counting raw commits instead would double the figure and
   false-hard-fail once out of draft. `countChangeBodyCommits` (the pre-R28 raw count) is retained for
   R16 zero-behaviour stories, where the two agree (no failing/green pairs). Merge

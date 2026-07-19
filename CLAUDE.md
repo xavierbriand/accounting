@@ -159,7 +159,7 @@ Items 4, 5, 6, 7, and 11 are enforced deterministically by [`harness/dod-check`]
 2. Migrations idempotent.
 3. Every new invariant in Core has a property test.
 4. No `any`, no TODO comments, no dead code.
-5. Commits follow § 6.4 rhythm (or R15 collapse). Each subject references the story id.
+5. Commits follow § 6.4 rhythm (or R16 collapse). Each subject references the story id.
 6. All 10 PR template sections filled — no `TBD`.
 7. Suggestion log: no un-tagged items; every `deferred` links an issue.
 8. P1/P2/P3 retro-checks pass.

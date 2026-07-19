@@ -1,6 +1,6 @@
 # harness/drift-scan
 
-Enforces four consistency invariants:
+Enforces five consistency invariants (Checks A, B, D, F, G — C and E are reserved letters):
 
 **Check A — R-tag drift:** CLAUDE.md § 8 rule table ↔ retrospective files. A tag referenced in a retro but absent from § 8 is reported as `retro-only` drift; a § 8 row with no retro mention is reported as `table-only` drift — **unless the row is tombstoned** (its rule cell starts with `~~` (struck), or is the R22-style permanent "*Never minted*" tombstone). A tombstoned row carries its retirement rationale in-row plus a link to the walk artifact that retired it, so no live retro reference is expected (story-h13).
 

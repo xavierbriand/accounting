@@ -103,7 +103,7 @@ Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\
 
 - R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
-**Table-only tags (story-h12 demotion, measured).** For **R1, R9, R11**, the coverage-table line
+**Table-only tags (story-h12 demotion, measured).** For **R1 (now tombstoned — story-h13), R9, R11**, the coverage-table line
 above is the *only* place they appear unless you found an actual violation — do **not** emit a
 numbered P-finding that merely confirms compliance. Measured basis: 100% (n=8), 100% (n=5), and
 81.8% (n=11) of numbered findings carrying these tags were acknowledge-only

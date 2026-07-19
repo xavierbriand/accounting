@@ -1,7 +1,7 @@
 # Story <id> — <title>
 
 <!--
-Plan template (CLAUDE.md § 6.1 phase 1, R1). Copy to docs/plans/story-<id>.md.
+Plan template (CLAUDE.md § 6.1 phase 1; rides the R30 prep commit — formerly R1). Copy to docs/plans/story-<id>.md.
 Referenced by .claude/commands/new-story-preflight.md step 3.
 Sections follow the de-facto shape of recent plans (story-maint-18 onward);
 the PR template's sections 1–6 are filled FROM these. Delete the comments as

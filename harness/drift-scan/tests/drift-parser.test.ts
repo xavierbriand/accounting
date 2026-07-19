@@ -13,7 +13,11 @@ import {
   checkAgentSpecVersions,
   checkControlCompleteness,
   extractInventoryControlPaths,
+  extractPendingMarkers,
+  checkPendingExpiry,
+  isAdvisoryFinding,
   type AgentSpecEntry,
+  type PendingMarker,
 } from '../lib/drift-parser.js';
 
 const CLAUDE_MD_FIXTURE = `
@@ -99,6 +103,17 @@ describe('extractRetroTags', () => {
 
   it('suppresses tags with (Pending) case variant', () => {
     const retro = '# Story\n\nR20 (Pending)\n';
+    const tags = extractRetroTags(retro);
+    expect(tags.has('R20')).toBe(false);
+  });
+
+  // fails if the stamped marker form (Story h13's new expiry-tracking
+  // convention) isn't recognized as a suppression at all — a freshly stamped
+  // *(pending)* marker would then immediately hard-fail Check A the moment
+  // it's stamped, defeating the whole point of Check G's advisory grace
+  // period.
+  it('suppresses tags with a stamped *(pending — story-<id>, YYYY-MM-DD)* marker', () => {
+    const retro = '# Story\n\nR20 *(pending — story-h13, 2026-07-19)*\n';
     const tags = extractRetroTags(retro);
     expect(tags.has('R20')).toBe(false);
   });
@@ -313,6 +328,14 @@ describe('extractClaudeTagRefs', () => {
     expect(tags.has('R22')).toBe(false);
   });
 
+  // fails if a stamped *(hole)* marker isn't recognized as a suppression —
+  // Check D would then hard-fail the moment a hole marker gains its Story
+  // h13 expiry stamp, before Check G's advisory grace period ever applies.
+  it('suppresses tags with a stamped *(hole — story-<id>, YYYY-MM-DD)* marker', () => {
+    const tags = extractClaudeTagRefs('§ 8 skips R95 *(hole — story-h1, 2026-01-01)* (no tombstone row).');
+    expect(tags.has('R95')).toBe(false);
+  });
+
   it('does not suppress a different tag that appears without a hole marker', () => {
     const tags = extractClaudeTagRefs('R22 *(hole)*\nR13 is applied.');
     expect(tags.has('R22')).toBe(false);
@@ -417,6 +440,31 @@ describe('formatJsonReport', () => {
     const parsed = JSON.parse(output) as { findings: Array<Record<string, unknown>> };
     expect(parsed.findings[0].kind).toBe('missing-spec-version');
     expect(parsed.findings[0].file).toBe('.claude/agents/bad.md');
+  });
+
+  // fails if the story-h13 Check G kinds (pending-unstamped, pending-expired)
+  // need a formatter change to round-trip, or their stamp fields are dropped —
+  // the --json consumer contract must carry the same data the human report
+  // prints (Phase-4 R8 gap-fill: the sibling try-unfunneled kind had this
+  // coverage; these two did not).
+  it('emits the two Check G kinds with their stamp fields without a formatter change', () => {
+    const findings = [
+      { kind: 'pending-unstamped' as const, file: 'docs/retrospectives/story-x.md' },
+      {
+        kind: 'pending-expired' as const,
+        file: 'docs/retrospectives/story-y.md',
+        stampedStory: 'h1',
+        stampedDate: '2026-01-01',
+      },
+    ];
+    const output = formatJsonReport(findings);
+    const parsed = JSON.parse(output) as { findings: Array<Record<string, unknown>> };
+    expect(parsed.findings).toHaveLength(2);
+    expect(parsed.findings[0].kind).toBe('pending-unstamped');
+    expect(parsed.findings[0].file).toBe('docs/retrospectives/story-x.md');
+    expect(parsed.findings[1].kind).toBe('pending-expired');
+    expect(parsed.findings[1].stampedStory).toBe('h1');
+    expect(parsed.findings[1].stampedDate).toBe('2026-01-01');
   });
 });
 
@@ -626,5 +674,253 @@ describe('extractInventoryControlPaths', () => {
   it('rejects inventory paths containing traversal segments', () => {
     const inventory = '| evil | `.claude/agents/../../../etc/passwd.md` | doer |\n';
     expect(extractInventoryControlPaths(inventory).size).toBe(0);
+  });
+});
+
+describe('extractPendingMarkers', () => {
+  // fails if the parser misses the bare (unstamped) *(pending)* marker form
+  // that story-h1/h2/h3's retros still use verbatim (Story h13 slice 2:
+  // stamp parsing — bare form, no stamp captured).
+  it('extracts a bare *(pending)* marker with no stamp', () => {
+    const markers = extractPendingMarkers('R22 *(pending)*\n', 'docs/retrospectives/story-fixture.md');
+    expect(markers).toEqual([
+      { file: 'docs/retrospectives/story-fixture.md', kind: 'pending' },
+    ]);
+  });
+
+  // fails if the parser misses the bare *(hole)* marker form — the
+  // `.claude/` spec-side counterpart of *(pending)* (Story h13 slice 2).
+  it('extracts a bare *(hole)* marker with no stamp', () => {
+    const markers = extractPendingMarkers('§ 8 skips R95 *(hole)*\n', '.claude/agents/fixture.md');
+    expect(markers).toEqual([{ file: '.claude/agents/fixture.md', kind: 'hole' }]);
+  });
+
+  // fails if the stamp regex misses the em-dash separator CLAUDE.md's own
+  // R21 row documents as the canonical form (`*(pending — story-<id>,
+  // YYYY-MM-DD)*`) — Story h13 slice 2's headline scenario.
+  it('extracts a stamped *(pending)* marker with an em-dash separator', () => {
+    const markers = extractPendingMarkers(
+      'R33 *(pending — story-h13, 2026-07-18)*\n',
+      'docs/retrospectives/story-fixture.md',
+    );
+    expect(markers).toEqual([
+      {
+        file: 'docs/retrospectives/story-fixture.md',
+        kind: 'pending',
+        stampedStory: 'h13',
+        stampedDate: '2026-07-18',
+      },
+    ]);
+  });
+
+  // fails if the stamp regex is rigid about the em-dash and rejects the
+  // plain-hyphen variant the plan explicitly asks to tolerate (Story h13
+  // slice 2: "em-dash as written; tolerate hyphen").
+  it('tolerates a plain hyphen separator in a stamped marker', () => {
+    const markers = extractPendingMarkers(
+      'R33 *(pending - story-h13, 2026-07-18)*\n',
+      'docs/retrospectives/story-fixture.md',
+    );
+    expect(markers[0]).toMatchObject({ stampedStory: 'h13', stampedDate: '2026-07-18' });
+  });
+
+  // fails if the stamp regex mishandles a story id that itself contains a
+  // hyphen (e.g. story-maint-26) — a real id shape in this repo's history.
+  it('captures a hyphenated story id inside the stamp', () => {
+    const markers = extractPendingMarkers(
+      '*(hole — story-maint-26, 2026-01-01)*\n',
+      '.claude/agents/fixture.md',
+    );
+    expect(markers[0]).toMatchObject({ stampedStory: 'maint-26', stampedDate: '2026-01-01' });
+  });
+
+  // fails if the parser treats CLAUDE.md's own R21 row prose — which
+  // documents the stamped-marker *format* using the literal placeholder
+  // `story-<id>, YYYY-MM-DD` — as a real applied marker. The placeholder
+  // date isn't digits, so this must not match at all (Story h13 slice 2/3:
+  // the R21-row self-reference trap sampled directly from CLAUDE.md).
+  it('does not match the R21 row\'s own format-documentation placeholder', () => {
+    const r21RowSample =
+      'opt-out via `*(pending)*` (retro) / `*(hole)*` (`.claude/` spec) markers — every marker ' +
+      'carries a stamp `*(pending — story-<id>, YYYY-MM-DD)*` and expires';
+    const markers = extractPendingMarkers(r21RowSample, 'CLAUDE.md');
+    // The two bare examples (`*(pending)*`, `*(hole)*`) DO match as unstamped
+    // markers when scanned directly — that's the real trap Check G's wiring
+    // must strip out (§ 8 exclusion), proven at the integration tier; this
+    // unit test only pins the parser's own honest, un-excluded behaviour.
+    expect(markers).toEqual([
+      { file: 'CLAUDE.md', kind: 'pending' },
+      { file: 'CLAUDE.md', kind: 'hole' },
+    ]);
+  });
+
+  it('extracts multiple markers from the same document in order', () => {
+    const content = 'R1 *(pending)*\nsome prose\nR2 *(hole — story-h9, 2025-01-01)*\n';
+    const markers = extractPendingMarkers(content, 'fixture.md');
+    expect(markers).toHaveLength(2);
+    expect(markers[0].kind).toBe('pending');
+    expect(markers[0].stampedDate).toBeUndefined();
+    expect(markers[1]).toMatchObject({ kind: 'hole', stampedStory: 'h9', stampedDate: '2025-01-01' });
+  });
+
+  it('returns an empty array when no marker is present', () => {
+    expect(extractPendingMarkers('Nothing to see here.\n', 'fixture.md')).toEqual([]);
+  });
+});
+
+function pendingMarker(overrides: Partial<PendingMarker> = {}): PendingMarker {
+  return { file: 'fixture.md', kind: 'pending', ...overrides };
+}
+
+describe('checkPendingExpiry', () => {
+  // fails if a stampless marker is silently ignored instead of forcing a
+  // codify-or-drop decision (Gherkin scenario 2, first fixture leg — Story
+  // h13 slice 3a).
+  it('reports pending-unstamped for a marker with no stamp', () => {
+    const findings = checkPendingExpiry([pendingMarker()], {
+      now: new Date('2026-07-18'),
+      statusFragmentDates: [],
+    });
+    expect(findings).toEqual([{ kind: 'pending-unstamped', file: 'fixture.md', markerKind: 'pending' }]);
+  });
+
+  // fails if the 90-day age threshold isn't wired at all (Gherkin scenario
+  // 2, third fixture leg — a stamp well past the threshold).
+  it('reports pending-expired when the stamp is more than 90 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-07-18'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([
+      { kind: 'pending-expired', file: 'fixture.md', markerKind: 'pending', stampedStory: 'h1', stampedDate: '2026-01-01' },
+    ]);
+  });
+
+  // fails if the age boundary is off-by-one in either direction — exactly
+  // 90 days must NOT expire ("older than 90 days").
+  it('does not expire a stamp exactly 90 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-04-01'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('expires a stamp at 91 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-04-02'), statusFragmentDates: [] },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe('pending-expired');
+  });
+
+  // fails if the second (fresh) fixture leg of Gherkin scenario 2 wrongly
+  // fires — a recent stamp with few postdating fragments must report nothing.
+  it('reports nothing for a fresh stamp under both thresholds', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h13', stampedDate: '2026-07-10' })],
+      {
+        now: new Date('2026-07-18'),
+        statusFragmentDates: [new Date('2026-07-11'), new Date('2026-07-12')],
+      },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  // fails if the "10 merged stories" leg of the OR is dropped or miscounts
+  // fragments that predate the stamp (which must NOT count).
+  it('reports pending-expired when 10 status.d fragments postdate the stamp, even if fresh by age', () => {
+    const postdating = Array.from({ length: 10 }, (_, i) => new Date(`2026-07-1${i}`));
+    const predating = [new Date('2026-01-01'), new Date('2026-06-01')];
+    const findings = checkPendingExpiry(
+      [pendingMarker({ kind: 'hole', stampedStory: 'h9', stampedDate: '2026-07-09' })],
+      { now: new Date('2026-07-19'), statusFragmentDates: [...predating, ...postdating] },
+    );
+    expect(findings).toEqual([
+      { kind: 'pending-expired', file: 'fixture.md', markerKind: 'hole', stampedStory: 'h9', stampedDate: '2026-07-09' },
+    ]);
+  });
+
+  it('does not expire when only 9 fragments postdate the stamp', () => {
+    const postdating = Array.from({ length: 9 }, (_, i) => new Date(`2026-07-1${i}`));
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h9', stampedDate: '2026-07-09' })],
+      { now: new Date('2026-07-19'), statusFragmentDates: postdating },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('processes multiple markers independently', () => {
+    const findings = checkPendingExpiry(
+      [
+        pendingMarker({ file: 'a.md' }),
+        pendingMarker({ file: 'b.md', stampedStory: 'h1', stampedDate: '2026-07-01' }),
+      ],
+      { now: new Date('2026-07-18'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([{ kind: 'pending-unstamped', file: 'a.md', markerKind: 'pending' }]);
+  });
+
+  // property: a marker's disposition is exactly determined by the
+  // stamp-presence / age / postdating-count formula — no hidden branch.
+  // Vacuity check performed manually: inverting `ageMs > NINETY_DAYS_MS` to
+  // `<` during development flipped this property red (shrunk to a 91-day-old
+  // stamp with 0 postdating fragments), confirming the property is not
+  // vacuous before restoring the correct operator.
+  it('property: pending-expired fires iff stamped AND (age>90d OR postdatingCount>=10)', () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.integer({ min: 0, max: 500 }),
+        fc.integer({ min: 0, max: 20 }),
+        (stamped, ageDays, postdatingCount) => {
+          const now = new Date('2026-07-18T00:00:00Z');
+          const stampedDate = new Date(now.getTime() - ageDays * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
+          const statusFragmentDates = Array.from(
+            { length: postdatingCount },
+            (_, i) => new Date(now.getTime() - (ageDays - 1 - i) * 24 * 60 * 60 * 1000),
+          );
+          const marker = stamped
+            ? pendingMarker({ stampedStory: 'x', stampedDate })
+            : pendingMarker();
+          const findings = checkPendingExpiry([marker], { now, statusFragmentDates });
+
+          if (!stamped) {
+            return findings.length === 1 && findings[0].kind === 'pending-unstamped';
+          }
+          const shouldExpire = ageDays > 90 || postdatingCount >= 10;
+          if (shouldExpire) {
+            return findings.length === 1 && findings[0].kind === 'pending-expired';
+          }
+          return findings.length === 0;
+        },
+      ),
+    );
+  });
+});
+
+describe('isAdvisoryFinding', () => {
+  // fails if Check G's two new finding kinds aren't classified as advisory —
+  // the exit-code gate would then wrongly go hard on them (Story h13 slice 3a).
+  it('classifies pending-unstamped and pending-expired as advisory', () => {
+    expect(isAdvisoryFinding({ kind: 'pending-unstamped', file: 'x.md', markerKind: 'pending' })).toBe(true);
+    expect(
+      isAdvisoryFinding({
+        kind: 'pending-expired',
+        file: 'x.md',
+        markerKind: 'hole',
+        stampedStory: 'h1',
+        stampedDate: '2026-01-01',
+      }),
+    ).toBe(true);
+  });
+
+  // fails if an existing hard-tier kind is accidentally reclassified as
+  // advisory when the split is introduced.
+  it('does not classify table-only as advisory', () => {
+    expect(isAdvisoryFinding({ kind: 'table-only', tag: 'R1', file: 'CLAUDE.md' })).toBe(false);
   });
 });

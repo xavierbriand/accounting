@@ -25,7 +25,7 @@ Gaps).
 
 | Control | Where | Kind | Mechanism | Paired counterpart | Notes/Gap |
 | --- | --- | --- | --- | --- | --- |
-| R1 — plan file committed alongside code | CLAUDE.md § 8 | guide | inferential | drift-scan Check B (`missing-path`, indirectly — checks the plan's *surface* paths exist, not that the plan itself is committed) | Partial pairing only |
+| R1 — plan file committed alongside code *(retired, story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | drift-scan Check B (`missing-path`, indirectly — checks the plan's *surface* paths exist, not that the plan itself is committed) | Partial pairing only |
 | R2 — production-code surface section | CLAUDE.md § 8 | guide | inferential | drift-scan Check B consumes this section's contents | — |
 | R3 — tool-bundle import audit on new deps | CLAUDE.md § 8 | guide | inferential | none | No sensor: relies on P3 review noticing an unjustified `package.json` diff |
 | R4 — composition-root subprocess test | CLAUDE.md § 8 | guide | inferential | none | No sensor: relies on P3/code-reviewer noticing `program.ts` touched without a subprocess test |
@@ -34,24 +34,24 @@ Gaps).
 | R7 — in-process vs subprocess honesty | CLAUDE.md § 8 | guide | inferential | none | Same as R6 |
 | R8 — mock-diversity check on structured output | CLAUDE.md § 8 | guide | inferential | none | No sensor |
 | R9 — trivial inline fix carve-out | CLAUDE.md § 8 | guide | inferential | none | Bounds an Opus judgment call, not machine-checkable |
-| R10 — green-on-landing `test:` acceptable when sibling condition | CLAUDE.md § 8 | guide | inferential | none | — |
+| R10 — green-on-landing `test:` *(retired, absorbed into R28 — story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | none | — |
 | R11 — empty `refactor:` commit acceptable with justification | CLAUDE.md § 8 | guide | inferential | none | — |
 | R12 — commit subject summary verb | CLAUDE.md § 8 | guide | inferential | none | — |
 | R13 — 6–10 commit envelope | CLAUDE.md § 8 | guide+sensor (braided) | computational | dod-check commit-envelope gate | See [Envelope](#the-commit-envelope-braided-control) below — this row is the guide half |
 | R14 — adapter-story 5–7 commit envelope | CLAUDE.md § 8 | guide+sensor (braided) | computational | dod-check commit-envelope gate | Same braided control, different declared range |
-| R15 — major-bump-zero-code 4-commit collapse | CLAUDE.md § 8 | guide | inferential | none (dod-check reads the plan's declared rule, not which subcase applies) | — |
+| R15 — major-bump-zero-code collapse *(retired, superseded by R16 — story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | none (dod-check reads the plan's declared rule, not which subcase applies) | — |
 | R16 — R15 collapse extended | CLAUDE.md § 8 | guide+sensor (braided) | computational | dod-check commit-envelope gate | Third envelope shape recognized by `EnvelopeRule` |
-| R17 — status log fragmentation | CLAUDE.md § 8 | guide | inferential | none | Structural convention, not enforced |
+| R17 — status log fragmentation *(retired, self-sustaining convention — story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | none | Structural convention, not enforced |
 | R18 — worktree push protocol | CLAUDE.md § 8 | guide | inferential | none | Relies on session discipline; no sensor observes `git push` targets |
-| R19 — sibling-overlap check before planning | CLAUDE.md § 8 | guide | inferential | `sibling-overlap` agent (judge) at Phase 2/4 | Sensed by an agent, not a computational check |
-| R20 — empty `feat:` retitle rule | CLAUDE.md § 8 | guide | inferential | none | — |
+| R19 — sibling-overlap check *(retired, absorbed into sub-loop template + agent leg — story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | `sibling-overlap` agent (judge) at Phase 2/4 | Sensed by an agent, not a computational check |
+| R20 — empty `feat:` retitle *(retired, never fired — story-h13 walk)* | CLAUDE.md § 8 | guide | inferential | none | — |
 | R21 — drift-scan enforces § 8 ↔ retro / plan ↔ source / `.claude/` ↔ § 8 | CLAUDE.md § 8 | guide+sensor (braided) | computational | drift-scan Checks A, B, D (this rule *is* the guide describing those sensors) | The rule and its sensors are two strands of one control |
 | R23 — story-id uniqueness check | CLAUDE.md § 8 | guide | inferential | maintenance-sub-loop template checklist item | Sensed by a manual checklist item, not code |
 | R24 — Phase-0 model note requirement | CLAUDE.md § 8 | guide | inferential | `ddd-modeler` Mode A (advisor-shaped) at Phase 0 | — |
 | R25 — Phase-4 model-conformance review | CLAUDE.md § 8 | guide | inferential | `ddd-modeler` Mode B (judge) at Phase 4 | Fully paired |
 | R26 — risk-based lanes | CLAUDE.md § 8 | guide | inferential | none | Lane selection is a plan-authoring decision; see [Lanes](#the-three-lanes) below for the lane table itself as a separate guide |
 
-*(R22 is a numbering hole — see CLAUDE.md § 8 preamble; no row exists and none is invented here.)*
+*(R22 is a permanent never-minted tombstone row since story-h13 — see CLAUDE.md § 8 and the 2026-07 rule walk; its three pending claims were dispositioned there.)*
 
 ## Agents (`.claude/agents/*.md`, 6 files)
 
@@ -81,6 +81,7 @@ Gaps).
 | Check B — plan ↔ source drift | `harness/drift-scan/drift-scan.ts` (`runPlanCheck`) | sensor, gate in CI | computational | R1, R2 | No opt-out marker (a missing path is never legitimate) |
 | Check D — `.claude/` rule-tag drift | `harness/drift-scan/drift-scan.ts` (`runClaudeCheck`) | sensor, gate in CI | computational | R21 | `*(hole)*` opt-out marker |
 | Check F — agent-spec role + control completeness | `harness/drift-scan/drift-scan.ts` (`runAgentSpecCheck`), new this story | sensor, gate in CI | computational | this table + model note invariants 1–3 | `missing-role`, `role-tools-violation`, `unlisted-control`; no opt-out marker |
+| Check G — pending/hole marker expiry | `harness/drift-scan/drift-scan.ts` (Check G wiring), story-h13 | sensor, **advisory** (first advisory-tier drift-scan check) | computational | R21 (stamped-marker clause) | `pending-unstamped`, `pending-expired`; promotion decision at the next health check |
 
 *(There is no "Check C" or "Check E" in this repo yet: C is reserved for a proposed glossary-conformance check (#154), E for a proposed `model:` ↔ § 6.2 conformance check (#172) — both letters held to avoid collision, per the model note.)*
 
@@ -90,6 +91,7 @@ Gaps).
 | --- | --- | --- | --- | --- | --- |
 | Commit subjects (story-id + envelope) | `harness/dod-check/dod-check.ts` (`runCommitSubjectCheck`) | gate (story-id: hard; envelope: braided, see below) | computational | commit convention (§ 6.4), R13/R14/R16 | — |
 | TODO / TBD | `harness/dod-check/dod-check.ts` (`runTodoCheck`, `runPrTbdCheck`) | gate (hard for TODO; draft-aware for PR TBD) | computational | DoD item 4, § 7 | — |
+| Try-funnel | `harness/dod-check/dod-check.ts` (`try-unfunneled`), story-h13 | **advisory** | computational | § 6.1 phase-5 Try-funnel rule | Try bullets need a file citation or `#N`; close-out phrase exempt |
 | Gherkin↔step mapping | `harness/dod-check/dod-check.ts` (`runGherkinMapCheck`) | gate, hard | computational | R5 | — |
 | Weight ratio | `harness/dod-check/dod-check.ts` (`runWeightRatioCheck`) | sensor, always-advisory (never gates) | computational | story-h8 retro (truthful weight metric) | Deliberately non-blocking |
 
@@ -170,7 +172,8 @@ Gaps).
 
 Recorded here, not fixed in this story:
 
-- **Guides with no paired sensor.** R3, R4, R6, R7, R8, R9, R10, R11, R12, R15, R17, R18, R20 (see
+- **Guides with no paired sensor.** R3, R4, R6, R7, R8, R9, R11, R12, R18 (see
+  — R10/R15/R17/R20 left this list via the story-h13 retirements)
   their rows above) rely entirely on inferential review (P3/code-reviewer/Opus judgment) — no
   computational check observes whether the agent actually followed them. This is the expected shape
   for prose that resists mechanization (e.g. "summary verb over scenario enumeration," R12), not a

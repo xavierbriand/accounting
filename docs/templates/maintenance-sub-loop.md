@@ -20,6 +20,9 @@ This is the **runnable** form of the rule. The conceptual statement lives in CLA
   - Major bumps of runtime deps, critical-path major bumps (`better-sqlite3`, `dinero.js`, `zod`, `commander`, `vitest`), or any breaking change flagged in a changelog → file an issue + plan as a full story.
   - Minor/patch bumps of critical-path deps still merge routinely, but with a closer changelog read (deprecations, removed exports, runtime-behaviour notes); escalate if non-trivial.
 - [ ] **`npm audit --audit-level=high`** — `high`/`critical` → file an issue + fix before this story.
+- [ ] **Drain.** Close or explicitly re-justify **≥1** deferred-suggestion/aging item this session
+  (cite it in the plan's Context) — the loop must subtract process debt at the same rate it adds
+  it (story-h13, #164).
 - [ ] **Proceed-to-planning** decision recorded in the new plan file's Context section.
 
 ## Output

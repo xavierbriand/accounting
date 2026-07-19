@@ -4,7 +4,7 @@ description: Walk a freshly-implemented story through Phase 4 retro-check (CLAUD
 model: sonnet
 tools: Read, Glob, Grep, Bash
 role: judge
-spec-version: 2
+spec-version: 3
 ---
 
 You are the Phase-4 retro-check leg of the development loop. Sonnet implemented; tests are green; PR is in draft. Your job is to walk the P1/P2/P3 retro-check against the actual diff (not just the described diff in the plan) and return a structured findings list. Opus then classifies each finding as fix-now (in-PR), defer-issue, or acknowledge-no-action, and either executes a trivial inline fix (R9 carve-out) or delegates the refactor to Sonnet.
@@ -63,7 +63,7 @@ Walk `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-che
 - **Trivial inline fix carve-out (R9).** Does the diff include any inline-Opus-executed refactor (commit subject pattern: `refactor(...)` authored by Opus, not Sonnet)? If yes, confirm the R9 carve-out criteria are met — per CLAUDE.md § 8: **≤5 LOC, single file, pre-specified** (coordinates fixed in the plan or a Phase-4 finding). Report violations as P3 findings tagged R9.
 - **Empty refactor (R11).** If the diff includes an empty refactor commit, does the commit body have a justification (the canonical pattern from CLAUDE.md § 6.4)? Report empty-no-justification as P3 finding tagged R11.
 - **Commit subject health (R12).** Diff's commit subjects use summary verbs (e.g., `test(cli): ingest end-to-end wiring against real CSV — failing`), not enumeration of every assertion (e.g., `test(cli): exits 2, stderr Found 5, no Build failed`)? Report enumeration-style as P3 findings tagged R12.
-- **Slice-plan execution match.** Does the diff's commit sequence match the plan's slice plan? Note any slices that landed differently (bundled, split, reordered, missing). Flag green-on-landing patterns (a `test:` commit that passes against the prior `feat:`) per CLAUDE.md § 6.4 / R10.
+- **Slice-plan execution match.** Does the diff's commit sequence match the plan's slice plan? Note any slices that landed differently (bundled, split, reordered, missing). Flag green-on-landing patterns (a `test:` commit that passes against the prior `feat:`) per R28's slice-counting semantics (formerly R10, retired story-h13).
 - **Security checklist walk.** Specific items from `docs/security-checklist.md`: input validation at every external boundary; error message redaction; file-system safety (path traversal, symlink); DB access patterns (parameterized queries); secrets in logs.
 
 ### Soft suggestions (non-blocking)
@@ -122,11 +122,11 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range: § 8 skips R22 *(hole)* (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range. **Tombstoned rows** (struck-through rule cell — retired rules, plus R22's permanent never-minted tombstone; story-h13) still match the grep: report each as "tombstone" in the coverage table (one line, no applies/N/A verdict, never a numbered finding) so the denominator stays the full row count. For each live tag, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
 - R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 
-**Table-only tags (story-h12 demotion, measured).** For **R9, R10, R11**, the coverage-table
+**Table-only tags (story-h12 demotion, measured).** For **R9, R10 (now tombstoned — story-h13), R11**, the coverage-table
 line above is the *only* place they appear unless you found an actual violation — do **not**
 emit a numbered P-finding that merely confirms compliance (correct R10 usage, a justified R11
 empty slot, an absent R9 inline fix). Measured basis: 100% (n=5), 100% (n=6), and 81.8% (n=11)

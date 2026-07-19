@@ -5,7 +5,7 @@ Widened with four honesty gates (story-h11, #163) that verify the *expensive* Do
 dressed-up placeholders, a ticked merge checklist, evidenced Phase-4 runs, a fresh loop.csv — rather
 than only the cheap-to-fake commit-subject/TBD/envelope surface.
 
-Seven checks, one findings union:
+Eight checks, one findings union:
 
 - **Commit subjects** — every commit subject in `origin/main...HEAD` must reference the current
   story id (bracket `[story-<id>]`, bare `story-<id>`, or capitalized `Story <id>`); the slice count is
@@ -14,7 +14,7 @@ Seven checks, one findings union:
   carrying the story id in their subject, excluding the preparatory `chore(docs): ... plan + P1/P2/P3
   review` commit, the `chore(retro): ...` commit, **and each `test: … — failing` red-half** — the TDD
   rhythm (§6.4) splits every behaviour into a `test: — failing` + `feat: — minimal green` pair, so
-  collapsing the red half yields one slice per behaviour (`refactor:` and R10 green-on-landing `test:`
+  collapsing the red half yields one slice per behaviour (`refactor:` and green-on-landing `test:` (formerly R10, absorbed into R28)
   commits stand as their own slices). Counting raw commits instead would double the figure and
   false-hard-fail once out of draft. `countChangeBodyCommits` (the pre-R28 raw count) is retained for
   R16 zero-behaviour stories, where the two agree (no failing/green pairs). Merge
@@ -50,6 +50,12 @@ Seven checks, one findings union:
   process-artifact filter so plan/retro/status-fragment churn doesn't count as "shipped"). A ratio
   above 1.0 (plan bigger than what shipped) reports a `weight-ratio-heavy` finding — a signal the plan
   over-specified relative to the actual change, never a merge blocker.
+- **Try-funnel** (story-h13) — scans the current story's own retro file's `## Try` section. A Try
+  bullet must carry either a file citation (a backtick-fenced path, or a markdown link) or an issue
+  reference (`#<n>`); a bullet with neither reports `try-unfunneled`. The recurring "No new § 8 rule
+  minted" close-out phrase family is exempt. Always-advisory. Degrades gracefully (no finding) when
+  the story id can't resolve or the retro file doesn't exist yet — the common case while a story is
+  still in flight.
 
 ## Invocation
 
@@ -64,6 +70,7 @@ npx tsx harness/dod-check/dod-check.ts --check gherkin
 npx tsx harness/dod-check/dod-check.ts --check weight-ratio
 npx tsx harness/dod-check/dod-check.ts --check phase-evidence
 npx tsx harness/dod-check/dod-check.ts --check loop-freshness
+npx tsx harness/dod-check/dod-check.ts --check try-funnel
 
 # Machine-readable output
 npx tsx harness/dod-check/dod-check.ts --json
@@ -87,6 +94,7 @@ Three tiers:
 | `weight-ratio-heavy` (plan LOC exceeds shipped diff LOC) | **always-advisory** — reported, never gates |
 | `phase-evidence-missing` (ticked phase-4 box, no § 7 P4 row) | **always-advisory** — reported, never gates |
 | `loop-csv-stale` (plan id missing from `docs/metrics/loop.csv`) | **always-advisory** — reported, never gates |
+| `try-unfunneled` (Try bullet with no file/issue citation) | **always-advisory** — reported, never gates |
 
 Exit code: `1` iff a **hard** finding exists, **or** a **draft-aware** finding exists and the PR is
 out of draft. **Always-advisory** findings never affect the exit code — a non-story PR, an
@@ -154,7 +162,7 @@ findings are still computed and reported regardless of any degradation. Degradat
 Human-readable findings go to **stderr**, grouped `Commit subjects:` / `TODO/TBD:` / `Gherkin↔step:`
 (the `TODO/TBD:` group also carries `merge-checklist-unticked` lines, since both checks share the
 `todo-tbd` key and PR-body resolution), followed by any ungrouped `weight-ratio-heavy`,
-`phase-evidence-missing`, and `loop-csv-stale` lines. Draft-aware findings carry an
+`phase-evidence-missing`, `loop-csv-stale`, and `try-unfunneled` lines. Draft-aware findings carry an
 `(advisory — PR is draft)` suffix while the PR is a draft; always-advisory findings carry a bare
 `(advisory)` suffix regardless of draft state. `--json` sends
 `{ "findings": DodFinding[], "degraded": string[] }` to **stdout** instead.

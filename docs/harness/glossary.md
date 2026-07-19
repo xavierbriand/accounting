@@ -175,3 +175,27 @@ Seeded 2026-07-04 (story-ddd-2) from the 2026 harness-engineering literature. De
 **Example.** A new agent spec added without an inventory row fails drift-scan (`unlisted-control`) in the very edit that adds it.
 
 **Technical notes.** [docs/harness/control-inventory.md](control-inventory.md) — agent-maintained (descriptive), unlike this glossary. For file-based `.claude/` controls it is an *enforced registry* (Check F); for prose/CI controls it is documentation kept honest by review. Ours.
+
+## Tombstone *(proposed, story-h13 — user sign-off at the merge gate)*
+
+**Everyday definition.** A retired rule's row, kept in place but struck through, carrying why and when it was retired — subtraction that preserves the record instead of erasing it.
+
+**Example.** R15's row stays in § 8, struck, saying "superseded by R16's generalization" with a link to the walk that retired it; re-minting is un-striking with a new retro citation.
+
+**Technical notes.** Rule cell wrapped in `~~…~~` (the `| R<n> |` grep anchor survives); drift-scan Check A exempts tombstoned rows from the retro-reference requirement; R22 is the one *permanent never-minted* tombstone. Introduced by the 2026-07 rule walk (story-h13, #164).
+
+## Expiry stamp *(proposed, story-h13 — user sign-off at the merge gate)*
+
+**Everyday definition.** The date-and-story tag every pending marker must carry, so a deferred decision cannot quietly live forever.
+
+**Example.** `*(pending — story-h13, 2026-07-18)*` — after 90 days or 10 merged stories, drift-scan's Check G reports it expired, forcing codify-or-drop.
+
+**Technical notes.** Stamped forms parsed by `extractPendingMarkers`; `pending-unstamped` / `pending-expired` are advisory-tier findings (drift-scan's first); scope is live canon only. Widened into R21 by story-h13.
+
+## Try-funnel *(proposed, story-h13 — user sign-off at the merge gate)*
+
+**Everyday definition.** The rule that a retrospective's Try items must land somewhere checkable — a file edited in the same PR or a filed issue — so good intentions cannot silently evaporate.
+
+**Example.** "Install coverage tooling (noted on #209)" funnels; "worth reaching for again" does not, and dod-check surfaces it.
+
+**Technical notes.** dod-check's advisory `try-unfunneled` finding; the "No new § 8 rule minted" close-out family is exempt. Baseline at introduction: 4 of 12 Try bullets across the five prior retros funneled. Introduced by story-h13 (#164) from the ≥14-of-25 silent-drop evidence.

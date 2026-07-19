@@ -58,6 +58,13 @@ function tempClaudeAgentPath(name: string): string {
   return path.join(REPO_ROOT, '.claude', 'agents', name);
 }
 
+// docs/templates/ is scanned by Check G but by no other check (Check F only
+// scans .claude/agents + .claude/commands) — the clean injection point for
+// isolated Check G fixtures that don't also trip unrelated Check F noise.
+function tempTemplatePath(name: string): string {
+  return path.join(REPO_ROOT, 'docs', 'templates', name);
+}
+
 const TEMP_RETRO_FILES: string[] = [];
 let CLAUDE_MD_SNAPSHOT: string | null = null;
 
@@ -119,6 +126,8 @@ describe('drift-scan integration', () => {
     expect(result.stderr).not.toContain('role-tools-violation:');
     expect(result.stderr).not.toContain('unlisted-control:');
     expect(result.stderr).not.toContain('missing-spec-version:');
+    expect(result.stderr).not.toContain('pending-unstamped:');
+    expect(result.stderr).not.toContain('pending-expired:');
   });
 
   // (Gherkin scenario: real registry conforms.) In-process: composes the
@@ -276,6 +285,35 @@ describe('drift-scan integration', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('R96');
     expect(result.stderr).toContain('table-only:');
+  });
+
+  // fails if Check A's tombstone exemption doesn't reach the CLI wiring —
+  // a struck (`~~...~~`) row with no retro reference must NOT be reported,
+  // while a live (non-struck) orphan row still is (Story h13 slice 3:
+  // tombstone-aware Check A, real-tree regression guard).
+  it('a struck (tombstoned) row with no retro reference does not contribute to table-only', () => {
+    const claudeMdPath = path.join(REPO_ROOT, 'CLAUDE.md');
+    CLAUDE_MD_SNAPSHOT = fs.readFileSync(claudeMdPath, 'utf8');
+    fs.writeFileSync(
+      claudeMdPath,
+      CLAUDE_MD_SNAPSHOT +
+        '\n| R96 | ~~drift-scan test orphan~~ *Retired 2026-07-19 (test): superseded* | [none](docs/retrospectives/none.md) |' +
+        '\n| R97 | drift-scan test orphan, still live | [none](docs/retrospectives/none.md) |\n',
+      'utf8',
+    );
+
+    const result = runScanner();
+    expect(result.status).toBe(1);
+    expect(result.stderr).not.toContain('R96');
+    expect(result.stderr).toContain('R97');
+    expect(result.stderr).toContain('table-only:');
+  });
+
+  // fails if the R22 hole-closing tombstone regresses — the ONE finding
+  // this story's slice 3 must permanently clear (Story h13, table-only:R22).
+  it('the real tree reports no table-only finding for R22 (permanent tombstone resolved)', () => {
+    const result = runScanner();
+    expect(result.stderr).not.toContain('R22');
   });
 
   // fails if runClaudeCheck/extractEnumeratedRuleRanges doesn't detect the
@@ -514,5 +552,87 @@ describe('drift-scan Check F — agent-spec role + control completeness (temp re
     const result = runScannerAt(tmpDir, ['--all']);
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('Check F');
+  });
+});
+
+describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', () => {
+  const TEMP_FILES: string[] = [];
+
+  afterEach(() => {
+    for (const f of TEMP_FILES.splice(0)) {
+      if (fs.existsSync(f)) {
+        fs.unlinkSync(f);
+      }
+    }
+  });
+
+  // fails if an unstamped marker in live canon is silently ignored, or if
+  // the advisory tier wrongly gates the exit code (Gherkin scenario 2, first
+  // fixture leg; Story h13 slice 3: advisory-exit subprocess proof).
+  it('reports pending-unstamped (advisory) and exits 0 for an unstamped marker', () => {
+    const templateFile = tempTemplatePath('story-test-g-unstamped.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending)* still open.\n');
+
+    const result = runScanner();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('Check G');
+    expect(result.stderr).toContain('pending-unstamped');
+    expect(result.stderr).toContain('(advisory)');
+  });
+
+  // fails if the 90-day expiry threshold isn't wired end-to-end through the
+  // CLI, or if an expired advisory finding wrongly gates the exit code
+  // (Gherkin scenario 2, third fixture leg).
+  it('reports pending-expired (advisory) and exits 0 for a long-stamped marker', () => {
+    const templateFile = tempTemplatePath('story-test-g-expired.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h1, 2026-01-01)* still open.\n');
+
+    const result = runScanner();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('Check G');
+    expect(result.stderr).toContain('pending-expired');
+    expect(result.stderr).toContain('(advisory)');
+  });
+
+  // fails if the --json path drops advisory findings or their stamp fields,
+  // or lets an advisory finding gate the exit code under --json (Phase-4 R8
+  // gap-fill — the human-report path above was covered; the machine path
+  // was not).
+  it('--json carries pending-expired with stamp fields and still exits 0', () => {
+    const templateFile = tempTemplatePath('story-test-g-expired-json.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h1, 2026-01-01)* still open.\n');
+
+    const result = runScanner(['--json']);
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+    const expired = parsed.findings.find((f) => f.kind === 'pending-expired');
+    expect(expired).toBeDefined();
+    expect(expired?.stampedStory).toBe('h1');
+    expect(expired?.stampedDate).toBe('2026-01-01');
+  });
+
+  // fails if a fresh stamp is misclassified as expired (Gherkin scenario 2,
+  // second fixture leg — "nothing for the second").
+  it('reports nothing for a fresh stamped marker', () => {
+    const templateFile = tempTemplatePath('story-test-g-fresh.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h13, 2026-07-19)* still open.\n');
+
+    const result = runScanner();
+    expect(result.stderr).not.toContain('Check G');
+  });
+
+  // fails if CLAUDE.md's own R21 row — which documents the stamped-marker
+  // *format* using literal `*(pending)*` / `*(hole)*` examples — is scanned
+  // without excluding § 8 first. Without the exclusion this fires forever on
+  // a clean tree (the self-referential trap sampled directly from CLAUDE.md
+  // for slice 2's fixtures). Real-tree proof, no injected fixture.
+  it('the real tree reports no Check G finding (CLAUDE.md § 8 self-reference excluded)', () => {
+    const result = runScanner();
+    expect(result.stderr).not.toContain('pending-unstamped:');
+    expect(result.stderr).not.toContain('pending-expired:');
   });
 });

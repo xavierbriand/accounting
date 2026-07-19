@@ -44,7 +44,7 @@ with a new retro citation.
 | R29 | keep | 50%/2; mechanically enforced (11 eslint test-smell rules) + judgment residuals in the reviewer. |
 | R30 | keep | 0%/1 always-actioned; hard-mechanical (`PREP_COMMIT_SUBJECT`); known friction (exact-phrase drift, maint-25/27/28) is an argument for the rule, not against it. |
 | R31 | keep | 0%/2 always-actioned but **prose-only** — no tool, not even a reviewer-prompt line. Watch: mechanization candidate (a dod-check advisory when a PR touches `--json` emitters without touching the contract doc) at the next harness story. |
-| R32 | **unverified** | Untagged, single incident (maint-26 origin, 2026-07-17). Watch condition: a second `ExitPlanMode` transport anomaly. Expiry stamp applied — codify-or-drop by 2026-10-16 under Check G. |
+| R32 | **unverified** | Untagged, single incident (maint-26 origin, 2026-07-17). Watch condition: a second `ExitPlanMode` transport anomaly. Watch condition recorded here (no `*(pending)*` marker — R32 is a live-but-unverified rule, not an unminted claim; Check G tracks markers only). Revisit: next walk, or 2026-10-16. |
 
 ## Data-quality notes
 

@@ -50,6 +50,20 @@ export type MissingSpecVersionFinding = {
   file: string;
 };
 
+export type PendingUnstampedFinding = {
+  kind: 'pending-unstamped';
+  file: string;
+  markerKind: 'pending' | 'hole';
+};
+
+export type PendingExpiredFinding = {
+  kind: 'pending-expired';
+  file: string;
+  markerKind: 'pending' | 'hole';
+  stampedStory: string;
+  stampedDate: string;
+};
+
 export type DriftFinding =
   | RetroOnlyFinding
   | TableOnlyFinding
@@ -59,7 +73,21 @@ export type DriftFinding =
   | MissingRoleFinding
   | RoleToolsViolationFinding
   | UnlistedControlFinding
-  | MissingSpecVersionFinding;
+  | MissingSpecVersionFinding
+  | PendingUnstampedFinding
+  | PendingExpiredFinding;
+
+const ADVISORY_KINDS: ReadonlySet<DriftFinding['kind']> = new Set([
+  'pending-unstamped',
+  'pending-expired',
+]);
+
+// Mirrors dod-check's `isAlwaysAdvisory` split (Story h13, drift-scan's first
+// advisory-tier check) — advisory findings still print but never gate the
+// exit code.
+export function isAdvisoryFinding(finding: DriftFinding): boolean {
+  return ADVISORY_KINDS.has(finding.kind);
+}
 
 export type ComposeDriftResult = {
   retroOnly: Set<string>;
@@ -307,6 +335,38 @@ export function extractPendingMarkers(content: string, file: string): PendingMar
     markers.push(marker);
   }
   return markers;
+}
+
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+const POSTDATING_FRAGMENT_EXPIRY_THRESHOLD = 10;
+
+export function checkPendingExpiry(
+  markers: PendingMarker[],
+  options: { now: Date; statusFragmentDates: Date[] },
+): DriftFinding[] {
+  const findings: DriftFinding[] = [];
+  for (const marker of markers) {
+    if (marker.stampedDate === undefined) {
+      findings.push({ kind: 'pending-unstamped', file: marker.file, markerKind: marker.kind });
+      continue;
+    }
+    const stampTime = new Date(`${marker.stampedDate}T00:00:00Z`).getTime();
+    const ageMs = options.now.getTime() - stampTime;
+    const postdatingCount = options.statusFragmentDates.filter(
+      (d) => d.getTime() > stampTime,
+    ).length;
+    const expired = ageMs > NINETY_DAYS_MS || postdatingCount >= POSTDATING_FRAGMENT_EXPIRY_THRESHOLD;
+    if (expired) {
+      findings.push({
+        kind: 'pending-expired',
+        file: marker.file,
+        markerKind: marker.kind,
+        stampedStory: marker.stampedStory ?? 'unknown',
+        stampedDate: marker.stampedDate,
+      });
+    }
+  }
+  return findings;
 }
 
 export function formatJsonReport(findings: DriftFinding[]): string {

@@ -596,6 +596,24 @@ describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', ()
     expect(result.stderr).toContain('(advisory)');
   });
 
+  // fails if the --json path drops advisory findings or their stamp fields,
+  // or lets an advisory finding gate the exit code under --json (Phase-4 R8
+  // gap-fill — the human-report path above was covered; the machine path
+  // was not).
+  it('--json carries pending-expired with stamp fields and still exits 0', () => {
+    const templateFile = tempTemplatePath('story-test-g-expired-json.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h1, 2026-01-01)* still open.\n');
+
+    const result = runScanner(['--json']);
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+    const expired = parsed.findings.find((f) => f.kind === 'pending-expired');
+    expect(expired).toBeDefined();
+    expect(expired?.stampedStory).toBe('h1');
+    expect(expired?.stampedDate).toBe('2026-01-01');
+  });
+
   // fails if a fresh stamp is misclassified as expired (Gherkin scenario 2,
   // second fixture leg — "nothing for the second").
   it('reports nothing for a fresh stamped marker', () => {

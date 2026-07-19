@@ -441,6 +441,31 @@ describe('formatJsonReport', () => {
     expect(parsed.findings[0].kind).toBe('missing-spec-version');
     expect(parsed.findings[0].file).toBe('.claude/agents/bad.md');
   });
+
+  // fails if the story-h13 Check G kinds (pending-unstamped, pending-expired)
+  // need a formatter change to round-trip, or their stamp fields are dropped —
+  // the --json consumer contract must carry the same data the human report
+  // prints (Phase-4 R8 gap-fill: the sibling try-unfunneled kind had this
+  // coverage; these two did not).
+  it('emits the two Check G kinds with their stamp fields without a formatter change', () => {
+    const findings = [
+      { kind: 'pending-unstamped' as const, file: 'docs/retrospectives/story-x.md' },
+      {
+        kind: 'pending-expired' as const,
+        file: 'docs/retrospectives/story-y.md',
+        stampedStory: 'h1',
+        stampedDate: '2026-01-01',
+      },
+    ];
+    const output = formatJsonReport(findings);
+    const parsed = JSON.parse(output) as { findings: Array<Record<string, unknown>> };
+    expect(parsed.findings).toHaveLength(2);
+    expect(parsed.findings[0].kind).toBe('pending-unstamped');
+    expect(parsed.findings[0].file).toBe('docs/retrospectives/story-x.md');
+    expect(parsed.findings[1].kind).toBe('pending-expired');
+    expect(parsed.findings[1].stampedStory).toBe('h1');
+    expect(parsed.findings[1].stampedDate).toBe('2026-01-01');
+  });
 });
 
 const VALID_ROLES = new Set(['doer', 'judge', 'advisor']);

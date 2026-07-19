@@ -14,7 +14,10 @@ import {
   checkControlCompleteness,
   extractInventoryControlPaths,
   extractPendingMarkers,
+  checkPendingExpiry,
+  isAdvisoryFinding,
   type AgentSpecEntry,
+  type PendingMarker,
 } from '../lib/drift-parser.js';
 
 const CLAUDE_MD_FIXTURE = `
@@ -718,5 +721,162 @@ describe('extractPendingMarkers', () => {
 
   it('returns an empty array when no marker is present', () => {
     expect(extractPendingMarkers('Nothing to see here.\n', 'fixture.md')).toEqual([]);
+  });
+});
+
+function pendingMarker(overrides: Partial<PendingMarker> = {}): PendingMarker {
+  return { file: 'fixture.md', kind: 'pending', ...overrides };
+}
+
+describe('checkPendingExpiry', () => {
+  // fails if a stampless marker is silently ignored instead of forcing a
+  // codify-or-drop decision (Gherkin scenario 2, first fixture leg — Story
+  // h13 slice 3a).
+  it('reports pending-unstamped for a marker with no stamp', () => {
+    const findings = checkPendingExpiry([pendingMarker()], {
+      now: new Date('2026-07-18'),
+      statusFragmentDates: [],
+    });
+    expect(findings).toEqual([{ kind: 'pending-unstamped', file: 'fixture.md', markerKind: 'pending' }]);
+  });
+
+  // fails if the 90-day age threshold isn't wired at all (Gherkin scenario
+  // 2, third fixture leg — a stamp well past the threshold).
+  it('reports pending-expired when the stamp is more than 90 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-07-18'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([
+      { kind: 'pending-expired', file: 'fixture.md', markerKind: 'pending', stampedStory: 'h1', stampedDate: '2026-01-01' },
+    ]);
+  });
+
+  // fails if the age boundary is off-by-one in either direction — exactly
+  // 90 days must NOT expire ("older than 90 days").
+  it('does not expire a stamp exactly 90 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-04-01'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('expires a stamp at 91 days old', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h1', stampedDate: '2026-01-01' })],
+      { now: new Date('2026-04-02'), statusFragmentDates: [] },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe('pending-expired');
+  });
+
+  // fails if the second (fresh) fixture leg of Gherkin scenario 2 wrongly
+  // fires — a recent stamp with few postdating fragments must report nothing.
+  it('reports nothing for a fresh stamp under both thresholds', () => {
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h13', stampedDate: '2026-07-10' })],
+      {
+        now: new Date('2026-07-18'),
+        statusFragmentDates: [new Date('2026-07-11'), new Date('2026-07-12')],
+      },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  // fails if the "10 merged stories" leg of the OR is dropped or miscounts
+  // fragments that predate the stamp (which must NOT count).
+  it('reports pending-expired when 10 status.d fragments postdate the stamp, even if fresh by age', () => {
+    const postdating = Array.from({ length: 10 }, (_, i) => new Date(`2026-07-1${i}`));
+    const predating = [new Date('2026-01-01'), new Date('2026-06-01')];
+    const findings = checkPendingExpiry(
+      [pendingMarker({ kind: 'hole', stampedStory: 'h9', stampedDate: '2026-07-09' })],
+      { now: new Date('2026-07-19'), statusFragmentDates: [...predating, ...postdating] },
+    );
+    expect(findings).toEqual([
+      { kind: 'pending-expired', file: 'fixture.md', markerKind: 'hole', stampedStory: 'h9', stampedDate: '2026-07-09' },
+    ]);
+  });
+
+  it('does not expire when only 9 fragments postdate the stamp', () => {
+    const postdating = Array.from({ length: 9 }, (_, i) => new Date(`2026-07-1${i}`));
+    const findings = checkPendingExpiry(
+      [pendingMarker({ stampedStory: 'h9', stampedDate: '2026-07-09' })],
+      { now: new Date('2026-07-19'), statusFragmentDates: postdating },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('processes multiple markers independently', () => {
+    const findings = checkPendingExpiry(
+      [
+        pendingMarker({ file: 'a.md' }),
+        pendingMarker({ file: 'b.md', stampedStory: 'h1', stampedDate: '2026-07-01' }),
+      ],
+      { now: new Date('2026-07-18'), statusFragmentDates: [] },
+    );
+    expect(findings).toEqual([{ kind: 'pending-unstamped', file: 'a.md', markerKind: 'pending' }]);
+  });
+
+  // property: a marker's disposition is exactly determined by the
+  // stamp-presence / age / postdating-count formula — no hidden branch.
+  // Vacuity check performed manually: inverting `ageMs > NINETY_DAYS_MS` to
+  // `<` during development flipped this property red (shrunk to a 91-day-old
+  // stamp with 0 postdating fragments), confirming the property is not
+  // vacuous before restoring the correct operator.
+  it('property: pending-expired fires iff stamped AND (age>90d OR postdatingCount>=10)', () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.integer({ min: 0, max: 500 }),
+        fc.integer({ min: 0, max: 20 }),
+        (stamped, ageDays, postdatingCount) => {
+          const now = new Date('2026-07-18T00:00:00Z');
+          const stampedDate = new Date(now.getTime() - ageDays * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
+          const statusFragmentDates = Array.from(
+            { length: postdatingCount },
+            (_, i) => new Date(now.getTime() - (ageDays - 1 - i) * 24 * 60 * 60 * 1000),
+          );
+          const marker = stamped
+            ? pendingMarker({ stampedStory: 'x', stampedDate })
+            : pendingMarker();
+          const findings = checkPendingExpiry([marker], { now, statusFragmentDates });
+
+          if (!stamped) {
+            return findings.length === 1 && findings[0].kind === 'pending-unstamped';
+          }
+          const shouldExpire = ageDays > 90 || postdatingCount >= 10;
+          if (shouldExpire) {
+            return findings.length === 1 && findings[0].kind === 'pending-expired';
+          }
+          return findings.length === 0;
+        },
+      ),
+    );
+  });
+});
+
+describe('isAdvisoryFinding', () => {
+  // fails if Check G's two new finding kinds aren't classified as advisory —
+  // the exit-code gate would then wrongly go hard on them (Story h13 slice 3a).
+  it('classifies pending-unstamped and pending-expired as advisory', () => {
+    expect(isAdvisoryFinding({ kind: 'pending-unstamped', file: 'x.md', markerKind: 'pending' })).toBe(true);
+    expect(
+      isAdvisoryFinding({
+        kind: 'pending-expired',
+        file: 'x.md',
+        markerKind: 'hole',
+        stampedStory: 'h1',
+        stampedDate: '2026-01-01',
+      }),
+    ).toBe(true);
+  });
+
+  // fails if an existing hard-tier kind is accidentally reclassified as
+  // advisory when the split is introduced.
+  it('does not classify table-only as advisory', () => {
+    expect(isAdvisoryFinding({ kind: 'table-only', tag: 'R1', file: 'CLAUDE.md' })).toBe(false);
   });
 });

@@ -42,6 +42,19 @@ describe('ScriptedPrompter', () => {
     expect(result).toEqual({ action: 'remember', pattern: 'altima' });
   });
 
+  // fails if ScriptedPrompter loses intake parity with inquirerPrompter's
+  // validate callback (story-E Phase-4 follow-up): a script entry carrying an
+  // uncompilable pattern is a test-authoring bug and must fail loudly at the
+  // prompter, never flow into the matcher (CodeQL js/regex-injection intake
+  // mitigation, dismissal comment contract).
+  it('throws loudly when a remember entry carries an invalid regex pattern', async () => {
+    const script: Script[] = [
+      { type: 'confirmRememberRule', action: 'remember', pattern: 'Merchant(' },
+    ];
+    const prompter = new ScriptedPrompter(script);
+    await expect(prompter.confirmRememberRule()).rejects.toThrow(/invalid regex pattern/);
+  });
+
   it('skips __forceMtimeRace__ side-channel entries (consumed by program.ts, not the prompter)', async () => {
     const script: Script[] = [
       { type: '__forceMtimeRace__' },

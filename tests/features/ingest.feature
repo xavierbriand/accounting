@@ -131,6 +131,20 @@ Feature: Ingest CLI builds and reviews transactions from bank CSVs
     # fails if: the lowConfidence.length > 0 guard (ingest-command.ts:321-348) is removed
     # or the commit is hoisted above it, letting a pending-review batch persist.
 
+  Scenario: A remembered rule auto-tags later rows in the same run (Story E, closes #103)
+    Given a fresh migrated DB and accounting.yaml at a temp dir
+    And a CSV at "bpce-valid_repeat-merchant.csv" where "MERCHANT-A" appears on two distinct dates
+    When I run scripted ingest with category "Shopping" and remembered pattern "merchant" on "bpce-valid_repeat-merchant.csv"
+    Then the process exits with code 0
+    And stderr contains "Auto-tagged"
+    And stderr contains "rule remembered this run"
+    And both transactions for description "MERCHANT-A" have the expense account for category "Shopping"
+    And the accounting.yaml on disk contains "merchant" exactly once
+    # fails if: the visit-time check is missing (the second occurrence re-prompts —
+    # ScriptedPrompter's script-exhaustion/type-mismatch error crashes the process instead
+    # of exiting 0), the auto branch's rewrite diverges from the manual branch (wrong
+    # expense account persisted), or the stderr notice is absent.
+
   Scenario: Define-new + remember + re-ingest auto-tags (Story C round-trip — closes Story A retro carry-over)
     Given a fresh migrated DB and accounting.yaml at a temp dir
     And a single-row CSV at "bpce-valid_first.csv" with description "ALTIMA COURTAGE"

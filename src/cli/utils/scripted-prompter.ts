@@ -68,7 +68,19 @@ export class ScriptedPrompter implements InteractivePrompter {
 
   async confirmRememberRule(): Promise<RememberRuleResult> {
     const entry = this.nextOf('confirmRememberRule');
-    if (entry.action === 'remember') return { action: 'remember', pattern: entry.pattern };
+    if (entry.action === 'remember') {
+      // Intake parity with inquirerPrompter's validate callback (story-E
+      // Phase-4 follow-up): a script carrying an uncompilable pattern is a
+      // test-authoring bug and must fail loudly here, not reach the matcher.
+      try {
+        new RegExp(entry.pattern, 'i');
+      } catch {
+        throw new Error(
+          `ScriptedPrompter: confirmRememberRule script entry carries an invalid regex pattern: ${entry.pattern}`,
+        );
+      }
+      return { action: 'remember', pattern: entry.pattern };
+    }
     return { action: 'skip' };
   }
 

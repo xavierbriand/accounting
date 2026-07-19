@@ -237,6 +237,66 @@ async function commitBatch(
   exitCode(0);
 }
 
+// Rebuilds the expense-side entry's account from the new category so the change is
+// durable through saveBatch (entries[].account is what gets written to the DB;
+// outcome.category alone is summary-only). Only the 'expense' classification has an
+// Expense:<category> debit; income and internal-transfer don't get rewritten here. The
+// 'low' confidence outcomes that reach this helper are by definition 'expense' (auto-tag
+// rules don't match income), so the rewrite is sound. Shared by the manual 'change'
+// prompt and the same-run auto-tag branch (Story E) so the two paths cannot drift.
+function applyCategoryChange(outcome: BuildOutcome, category: string): BuildOutcome | null {
+  const newExpenseAccount = expenseAccount(category);
+  const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
+    e.side === 'debit' && e.account.startsWith('Expense:')
+      ? { account: newExpenseAccount, side: e.side, amount: e.amount }
+      : { account: e.account, side: e.side, amount: e.amount },
+  );
+  const newTxResult = Transaction.create({
+    id: outcome.transaction.id,
+    occurredAt: outcome.transaction.occurredAt,
+    description: outcome.transaction.description,
+    entries: newEntries,
+  });
+  // Practically unreachable: rewriting one entry's account without changing amounts
+  // can't violate the double-entry balance. Callers keep the original outcome and warn
+  // rather than trust a transaction we couldn't validate.
+  if (!newTxResult.isSuccess) return null;
+
+  return {
+    ...outcome,
+    category,
+    confidence: 'high',
+    transaction: newTxResult.value,
+  };
+}
+
+// #103 Option B: rules remembered so far this run re-apply to later pending rows without
+// re-prompting. Same `new RegExp(pattern, 'i')` construction config-schema.ts gives the
+// identical pattern on the next invocation, so in-run behavior matches next-invocation
+// behavior. First-matching-rule-wins in insertion order (deterministic); forward-only —
+// only rows visited after a rule is remembered can match it.
+function findMatchingRememberedRule(
+  description: string,
+  rememberedMap: ReadonlyMap<string, { category: string; pattern: string }>,
+): { category: string; pattern: string } | undefined {
+  for (const rule of rememberedMap.values()) {
+    // A syntactically invalid user-edited pattern must not crash mid-ingest:
+    // it simply never fires this run (the YAML write still happens; the next
+    // invocation's config load reports it with a path-cited error). The regex
+    // is user-authored by design — CodeQL's js/regex-injection on this line is
+    // the feature, matching config-schema.ts's identical next-invocation
+    // construction on the same string.
+    try {
+      if (new RegExp(rule.pattern, 'i').test(description)) {
+        return rule;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 async function runInteractiveLoop(
   built: readonly BuildOutcome[],
   lowConfidence: readonly BuildOutcome[],
@@ -252,6 +312,26 @@ async function runInteractiveLoop(
   if (!categories.includes('Uncategorized')) categories.push('Uncategorized');
 
   for (const outcome of lowConfidence) {
+    const matchedRule = findMatchingRememberedRule(outcome.transaction.description, rememberedMap);
+    if (matchedRule !== undefined) {
+      const idx = resolved.findIndex((o) => o === outcome);
+      const updated = idx === -1 ? null : applyCategoryChange(outcome, matchedRule.category);
+      if (updated !== null) {
+        resolved[idx] = updated;
+        writeln(
+          stderr,
+          `Auto-tagged "${outcome.transaction.description}" → ${matchedRule.category} (rule remembered this run)`,
+        );
+        continue;
+      }
+      // Practically unreachable (see applyCategoryChange) — fall through to the normal
+      // prompt so the row still gets resolved instead of being silently dropped.
+      writeln(
+        stderr,
+        `Warning: could not auto-apply the remembered rule for "${outcome.transaction.description}"; falling back to manual review.`,
+      );
+    }
+
     const answer = await prompt.selectCategory(
       outcome.transaction.description,
       outcome.category,
@@ -267,30 +347,9 @@ async function runInteractiveLoop(
     if (answer.action === 'change') {
       const idx = resolved.findIndex((o) => o === outcome);
       if (idx !== -1) {
-        // Rebuild the expense-side entry's account from the new category so the
-        // change is durable through saveBatch (entries[].account is what gets
-        // written to the DB; outcome.category alone is summary-only). Only the
-        // 'expense' classification has an Expense:<category> debit; income and
-        // internal-transfer don't get rewritten here. The 'low' confidence
-        // outcomes that hit this prompt are by definition 'expense' (auto-tag
-        // rules don't match income), so the rewrite is sound.
-        const newExpenseAccount = expenseAccount(answer.category);
-        const newEntries: EntryDraft[] = outcome.transaction.entries.map((e) =>
-          e.side === 'debit' && e.account.startsWith('Expense:')
-            ? { account: newExpenseAccount, side: e.side, amount: e.amount }
-            : { account: e.account, side: e.side, amount: e.amount },
-        );
-        const newTxResult = Transaction.create({
-          id: outcome.transaction.id,
-          occurredAt: outcome.transaction.occurredAt,
-          description: outcome.transaction.description,
-          entries: newEntries,
-        });
-        if (!newTxResult.isSuccess) {
-          // Practically unreachable: rewriting one entry's account without changing amounts
-          // can't violate the double-entry balance. But guarding the failure path keeps the
-          // remembered-rule buffer in sync with what was actually persisted to the DB —
-          // skip the rest of this iteration so we don't buffer a rule for a category the
+        const updated = applyCategoryChange(outcome, answer.category);
+        if (updated === null) {
+          // Skip the rest of this iteration so we don't buffer a rule for a category the
           // outcome wasn't tagged with. Phase-4 review surfaced the unguarded fall-through.
           writeln(
             stderr,
@@ -298,12 +357,7 @@ async function runInteractiveLoop(
           );
           continue;
         }
-        resolved[idx] = {
-          ...outcome,
-          category: answer.category,
-          confidence: 'high',
-          transaction: newTxResult.value,
-        };
+        resolved[idx] = updated;
       }
       if (!categories.includes(answer.category)) {
         categories.push(answer.category);

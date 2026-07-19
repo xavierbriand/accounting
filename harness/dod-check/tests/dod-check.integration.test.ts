@@ -41,6 +41,12 @@ function writePlan(tmpDir: string, storyId: string, planBody: string): void {
   fs.writeFileSync(path.join(plansDir, `story-${storyId}.md`), planBody, 'utf8');
 }
 
+function writeRetro(tmpDir: string, storyId: string, retroBody: string): void {
+  const retroDir = path.join(tmpDir, 'docs', 'retrospectives');
+  fs.mkdirSync(retroDir, { recursive: true });
+  fs.writeFileSync(path.join(retroDir, `story-${storyId}.md`), retroBody, 'utf8');
+}
+
 const TEMP_DIRS: string[] = [];
 
 afterEach(() => {
@@ -785,10 +791,11 @@ describe('dod-check integration — --json covers every DodFinding kind (F6, R8)
   // union — guards R8 mock-diversity across this fixture's finding-kind set
   // (missing-story-id, commit-envelope, todo-comment, pr-tbd,
   // unmapped-scenario, orphan-step, merge-checklist-unticked,
-  // phase-evidence-missing, loop-csv-stale). The two remaining kinds are
+  // phase-evidence-missing, loop-csv-stale). The three remaining kinds are
   // covered elsewhere: `weight-ratio-heavy`'s --json shape is asserted by the
-  // S3 "large-plan/tiny-diff" test below, and `story-id-unresolved`'s shape
-  // by the dedicated describe block further down — together the three
+  // S3 "large-plan/tiny-diff" test below, `try-unfunneled`'s by the dedicated
+  // Try-funnel describe block (Story h13), and `story-id-unresolved`'s shape
+  // by the dedicated describe block further down — together the four
   // blocks cover the full DodFinding union.
   it('emits every non-story-id-unresolved DodFinding kind with its documented shape', () => {
     const result = runDodCheck(tmpDir, ['--json'], {
@@ -918,6 +925,93 @@ describe('dod-check integration — weight-ratio-heavy advisory finding (S3/S4)'
     const result = runDodCheck(tmpDir, ['--check', 'weight-ratio'], { DOD_PR_DRAFT: 'false' });
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('weight-ratio-heavy');
+  });
+});
+
+describe('dod-check integration — try-unfunneled advisory finding (Story h13, Gherkin scenario 3)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = initTempRepo();
+    TEMP_DIRS.push(tmpDir);
+    git(tmpDir, ['checkout', '-q', '-b', 'story-zz']);
+  });
+
+  const MIXED_TRY_RETRO = [
+    '# Story zz retro',
+    '',
+    '## Try',
+    '',
+    '- Filed as #164 for the next maintenance sub-loop.',
+    '- See `docs/templates/maintenance-sub-loop.md` for the drain-step wording.',
+    '- This bullet has neither a file citation nor an issue number.',
+    '',
+    '## Loop metrics',
+    '',
+    'nothing relevant',
+  ].join('\n');
+
+  // fails if: the citation-form recognition (backtick path, markdown link,
+  // `#N`) is too narrow and false-positives the two funneled bullets, or the
+  // check never fires at all — guards the check end to end via the real CLI.
+  it('flags exactly the un-funneled bullet, advisory (exit 0) regardless of draft state', () => {
+    writeRetro(tmpDir, 'zz', MIXED_TRY_RETRO);
+    git(tmpDir, ['add', 'docs/retrospectives/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): retro fixture — failing [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'try-funnel'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('try-unfunneled');
+    expect(result.stderr).toContain('neither a file citation nor an issue number');
+    expect(result.stderr).not.toContain('Filed as #164');
+    expect(result.stderr).not.toContain('maintenance-sub-loop.md" for the drain');
+    expect(result.stderr).toContain('(advisory)');
+  });
+
+  // fails if: the "No new § 8 rule minted" close-out exemption regresses —
+  // this story's own retro must not flag its own close-out line once merged.
+  it('exempts the "No new § 8 rule minted" close-out phrase', () => {
+    writeRetro(
+      tmpDir,
+      'zz',
+      ['# Story zz retro', '', '## Try', '', '- No new § 8 rule minted this retro.', ''].join('\n'),
+    );
+    git(tmpDir, ['add', 'docs/retrospectives/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): retro fixture — failing [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'try-funnel'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('try-unfunneled');
+  });
+
+  // fails if: the check throws or misfires when the story's own retro file
+  // doesn't exist yet (the common case while a story is still in flight) —
+  // guards the "never crash" degrade-gracefully contract the sibling checks
+  // already honour (findPlanFile / getLoopCsvStoryIds).
+  it('degrades gracefully (no finding, no throw) when the retro file does not exist yet', () => {
+    fs.writeFileSync(path.join(tmpDir, 'x.txt'), 'x\n');
+    git(tmpDir, ['add', 'x.txt']);
+    git(tmpDir, ['commit', '-q', '-m', 'chore: no retro yet [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'try-funnel'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('try-unfunneled');
+  });
+
+  // fails if: the --json shape for try-unfunneled deviates from the
+  // documented discriminated union ({ kind, bullet }) — this is the --json
+  // coverage the "every kind" fixture above defers to this dedicated block.
+  it('emits try-unfunneled with its documented shape via --json', () => {
+    writeRetro(tmpDir, 'zz', MIXED_TRY_RETRO);
+    git(tmpDir, ['add', 'docs/retrospectives/story-zz.md']);
+    git(tmpDir, ['commit', '-q', '-m', 'test(harness): retro fixture — failing [story-zz]']);
+
+    const result = runDodCheck(tmpDir, ['--check', 'try-funnel', '--json'], { DOD_PR_DRAFT: 'false' });
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { findings: Array<Record<string, unknown>> };
+    const finding = parsed.findings.find((f) => f['kind'] === 'try-unfunneled');
+    expect(finding).toBeDefined();
+    expect(typeof finding?.['bullet']).toBe('string');
   });
 });
 

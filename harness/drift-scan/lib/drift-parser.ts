@@ -96,15 +96,25 @@ export type ComposeDriftResult = {
 
 const R_TAG_PATTERN = /\bR\d+\b/g;
 
-export function extractSectionEightTags(claudeMd: string): Set<string> {
+type SectionEightBounds = { start: number; end: number };
+
+function findSectionEightBounds(claudeMd: string): SectionEightBounds | null {
   const sectionStart = claudeMd.indexOf('\n## 8. Rule provenance');
   if (sectionStart === -1) {
-    return new Set();
+    return null;
   }
   const afterHeading = sectionStart + 1;
   const nextSection = claudeMd.indexOf('\n## ', afterHeading + 10);
-  const region =
-    nextSection === -1 ? claudeMd.slice(afterHeading) : claudeMd.slice(afterHeading, nextSection);
+  const end = nextSection === -1 ? claudeMd.length : nextSection;
+  return { start: sectionStart, end };
+}
+
+export function extractSectionEightTags(claudeMd: string): Set<string> {
+  const bounds = findSectionEightBounds(claudeMd);
+  if (bounds === null) {
+    return new Set();
+  }
+  const region = claudeMd.slice(bounds.start, bounds.end);
 
   const tableRowPattern = /^\|\s*(R\d+)\s*\|/gm;
   const tags = new Set<string>();
@@ -115,7 +125,63 @@ export function extractSectionEightTags(claudeMd: string): Set<string> {
   return tags;
 }
 
-const PENDING_MARKER_SUFFIX = /\s*(?:\*\(pending\)\*|_\(pending\)_|\(pending\))/i;
+// Excludes § 8 from a Check-G scan of CLAUDE.md itself. § 8's own rows (R21
+// in particular) document the pending/hole marker *format* using literal
+// example text (`*(pending)*`, `*(hole)*`) — scanning § 8 for live markers
+// would treat that documentation as an applied marker forever (Story h13).
+export function stripSectionEightRegion(claudeMd: string): string {
+  const bounds = findSectionEightBounds(claudeMd);
+  if (bounds === null) {
+    return claudeMd;
+  }
+  return claudeMd.slice(0, bounds.start) + claudeMd.slice(bounds.end);
+}
+
+export type SectionEightRow = {
+  tag: string;
+  ruleCell: string;
+  tombstoned: boolean;
+};
+
+const TOMBSTONE_STRUCK_PREFIX = /^~~/;
+const TOMBSTONE_NEVER_MINTED_PREFIX = /^\*Never minted/i;
+
+function isTombstoneRuleCell(ruleCell: string): boolean {
+  return TOMBSTONE_STRUCK_PREFIX.test(ruleCell) || TOMBSTONE_NEVER_MINTED_PREFIX.test(ruleCell);
+}
+
+// A tombstoned row (struck `~~...~~`, or the R22-style permanent
+// "*Never minted*" tombstone) carries its retirement rationale in-row plus
+// the linked walk — Check A's retro-reference requirement doesn't apply to
+// it (Story h13, resolving the table-only:R22 finding).
+export function extractSectionEightRows(claudeMd: string): SectionEightRow[] {
+  const bounds = findSectionEightBounds(claudeMd);
+  if (bounds === null) {
+    return [];
+  }
+  const region = claudeMd.slice(bounds.start, bounds.end);
+  const rowLinePattern = /^\|\s*(R\d+)\s*\|/;
+  const rows: SectionEightRow[] = [];
+  for (const line of region.split('\n')) {
+    if (!rowLinePattern.test(line)) {
+      continue;
+    }
+    const cells = line.split('|').map((cell) => cell.trim());
+    const tag = cells[1];
+    const ruleCell = cells[2] ?? '';
+    rows.push({ tag, ruleCell, tombstoned: isTombstoneRuleCell(ruleCell) });
+  }
+  return rows;
+}
+
+// The asterisk form also tolerates Story h13's stamped variant
+// (`*(pending — story-<id>, YYYY-MM-DD)*`, hyphen tolerated for the dash) —
+// the underscore/bare-paren forms stay bare-only (legacy, not part of the
+// stamped convention). Without this, a marker starts hard-failing Check A
+// the moment it gains its expiry stamp, defeating Check G's advisory grace
+// period.
+const PENDING_MARKER_SUFFIX =
+  /\s*(?:\*\(pending(?:\s*[—-]\s*story-[^,)]+,\s*\d{4}-\d{2}-\d{2})?\)\*|_\(pending\)_|\(pending\))/i;
 
 export function extractRetroTags(retroContent: string): Set<string> {
   const pendingTags = new Set<string>();
@@ -202,7 +268,9 @@ export function extractEnumeratedRuleRanges(content: string): string[] {
   return ranges;
 }
 
-const HOLE_MARKER_SUFFIX = /\s*(?:\*\(hole\)\*|_\(hole\)_|\(hole\))/i;
+// See PENDING_MARKER_SUFFIX above for why the asterisk form tolerates a stamp.
+const HOLE_MARKER_SUFFIX =
+  /\s*(?:\*\(hole(?:\s*[—-]\s*story-[^,)]+,\s*\d{4}-\d{2}-\d{2})?\)\*|_\(hole\)_|\(hole\))/i;
 
 export function extractClaudeTagRefs(content: string): Set<string> {
   const holeTags = new Set<string>();

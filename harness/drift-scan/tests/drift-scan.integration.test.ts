@@ -58,6 +58,13 @@ function tempClaudeAgentPath(name: string): string {
   return path.join(REPO_ROOT, '.claude', 'agents', name);
 }
 
+// docs/templates/ is scanned by Check G but by no other check (Check F only
+// scans .claude/agents + .claude/commands) — the clean injection point for
+// isolated Check G fixtures that don't also trip unrelated Check F noise.
+function tempTemplatePath(name: string): string {
+  return path.join(REPO_ROOT, 'docs', 'templates', name);
+}
+
 const TEMP_RETRO_FILES: string[] = [];
 let CLAUDE_MD_SNAPSHOT: string | null = null;
 
@@ -563,9 +570,9 @@ describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', ()
   // the advisory tier wrongly gates the exit code (Gherkin scenario 2, first
   // fixture leg; Story h13 slice 3: advisory-exit subprocess proof).
   it('reports pending-unstamped (advisory) and exits 0 for an unstamped marker', () => {
-    const specFile = tempClaudeAgentPath('story-test-g-unstamped.md');
-    TEMP_FILES.push(specFile);
-    fs.writeFileSync(specFile, '# Test agent\n\nSee R95 *(hole)* pending review.\n');
+    const templateFile = tempTemplatePath('story-test-g-unstamped.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending)* still open.\n');
 
     const result = runScanner();
     expect(result.status).toBe(0);
@@ -578,9 +585,9 @@ describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', ()
   // CLI, or if an expired advisory finding wrongly gates the exit code
   // (Gherkin scenario 2, third fixture leg).
   it('reports pending-expired (advisory) and exits 0 for a long-stamped marker', () => {
-    const specFile = tempClaudeAgentPath('story-test-g-expired.md');
-    TEMP_FILES.push(specFile);
-    fs.writeFileSync(specFile, '# Test agent\n\nSee R95 *(hole — story-h1, 2026-01-01)* still open.\n');
+    const templateFile = tempTemplatePath('story-test-g-expired.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h1, 2026-01-01)* still open.\n');
 
     const result = runScanner();
     expect(result.status).toBe(0);
@@ -592,9 +599,9 @@ describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', ()
   // fails if a fresh stamp is misclassified as expired (Gherkin scenario 2,
   // second fixture leg — "nothing for the second").
   it('reports nothing for a fresh stamped marker', () => {
-    const specFile = tempClaudeAgentPath('story-test-g-fresh.md');
-    TEMP_FILES.push(specFile);
-    fs.writeFileSync(specFile, '# Test agent\n\nSee R95 *(hole — story-h13, 2026-07-19)* still open.\n');
+    const templateFile = tempTemplatePath('story-test-g-fresh.md');
+    TEMP_FILES.push(templateFile);
+    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h13, 2026-07-19)* still open.\n');
 
     const result = runScanner();
     expect(result.stderr).not.toContain('Check G');

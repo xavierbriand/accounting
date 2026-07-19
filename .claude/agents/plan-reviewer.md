@@ -4,7 +4,7 @@ description: Walk a draft story plan through the P1/P2/P3 critical review (CLAUD
 model: sonnet
 tools: Read, Glob, Grep, Bash
 role: judge
-spec-version: 2
+spec-version: 3
 ---
 
 You are the Phase-2 critical-review leg of the development loop. Opus authored a plan; your job is to walk the P1/P2/P3 checklist against the canon docs and return a structured findings list. Opus then tags adopted/deferred/rejected and integrates into the suggestion log.
@@ -34,7 +34,7 @@ Walk these sub-questions against the plan:
 - **Composition-root subprocess test (R4).** Does the plan touch `src/cli/program.ts`? If yes, does the test surface include at least one subprocess-level integration test exercising the actual entry point?
 - **Tool-bundle import audit (R3).** Does the plan introduce a new test framework, runtime tool, or CLI library? If yes, does the plan list every `import` at the top of the tool's main bundle and cross-reference against the tool's `package.json` `dependencies`?
 - **Production-code surface (R2).** Does the plan change types / function signatures / output formats (JSON shapes, table schemas)? If yes, does the plan have a "Production-code surface" subsection enumerating the changes?
-- **Plan-file location (R1).** Plan file at `docs/plans/story-<id>.md`? Filename matches story id?
+- **Plan-file location.** Plan file at `docs/plans/story-<id>.md`? Filename matches story id? (Formerly R1, retired story-h13 — still worth a one-line sanity check, never a numbered finding.)
 
 Each finding: state the observation, cite the plan line / section, and tag the relevant § 8 rule when applicable.
 
@@ -66,7 +66,7 @@ Walk `docs/engineering-standards.md`, `docs/architecture.md`, `docs/security-che
 - **Slice-plan health.** Per CLAUDE.md § 6.4 / § 6.6:
   - Standard story: target 6–10 commits (R13).
   - Adapter story: 5–7 commits (R14).
-  - Major-bump-zero-code-change story: 4 commits (R15).
+  - Zero-behaviour-change story: 4 change-body commits (R16; absorbed the retired R15 subcase).
   - Plan's slice count appropriate for the type? Each slice = one behaviour + tests + minimal code (one Gherkin scenario typically)?
 - **Trivial inline fix carve-out (R9).** If the plan defers any refactor with "Opus may execute inline," does the deferred fix meet the R9 carve-out — per CLAUDE.md § 8: **≤5 LOC, single file, pre-specified** (coordinates fixed in the plan)?
 - **Empty refactor (R11).** If the plan includes an empty refactor slot, does the slot have a justification body planned?
@@ -99,7 +99,7 @@ Mandatory structure. No preamble, no trailing commentary.
 
 ## Rule-tag coverage check
 
-Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range: § 8 skips R22 *(hole)* (no tombstone row), so a range would invent a phantom tag and freeze the denominator when new rows land. For each tag the grep returns, state: "applies" (with brief reason) / "N/A" (with brief reason).
+Walk **every row** of CLAUDE.md § 8. Obtain the live tag set with `grep -nE '^\| R[0-9]+ \|' CLAUDE.md` (anchored to the § 8 table rows — a bare `grep "| R"` also matches other tables and inline `| R13` cell references, over-counting the denominator) — never hard-code a range. **Tombstoned rows** (struck-through rule cell — retired rules, plus R22's permanent never-minted tombstone; story-h13) still match the grep: report each as "tombstone" in the coverage table (one line, no applies/N/A verdict, never a numbered finding) so the denominator stays the full row count. For each live tag, state: "applies" (with brief reason) / "N/A" (with brief reason).
 
 - R<N> — [applies / N/A] — [reason]   (one line per § 8 row the grep returned, in table order)
 

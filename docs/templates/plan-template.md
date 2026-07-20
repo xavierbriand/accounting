@@ -55,6 +55,10 @@ program.ts is touched (R4).
 One slice = one behaviour (R13: 6–10 commits; R14 adapter: 5–7; R16
 zero-behaviour-change: 4 change-body). Subjects follow § 6.4 with the story
 id in every subject (R12: summary verbs).
+Quote subjects in their final, matcher-satisfying form: every subject must
+match `buildStoryIdRegExp` (harness/lib/story-id-matcher.ts), i.e. contain
+`story-<id>` — bare ids, superseded ids, and paraphrased prep subjects all
+fail dod-check's hard missing-story-id gate at CI (story-maint-28/-29).
 -->
 
 ## Risks & deferred items

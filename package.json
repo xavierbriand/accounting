@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:quiet": "vitest run --reporter=dot",
+    "test:coverage": "vitest run --coverage",
     "test:perf": "vitest run tests/perf/",
     "lint": "eslint .",
     "build": "tsc && tsc-alias && tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json && cp -R src/infra/db/migrations dist/infra/db/",
@@ -55,6 +56,7 @@
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
     "fast-check": "^4.9.0",
     "pixelmatch": "^6.0.0",

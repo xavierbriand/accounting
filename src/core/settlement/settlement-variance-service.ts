@@ -117,6 +117,7 @@ function buildFollowThrough(
   }
 
   const totalDeltaResult = thisMonth.totalRequired.subtract(contributions.totalActual);
+  /* v8 ignore next -- unreachable: the currency check above already guarantees a shared currency */
   if (totalDeltaResult.isFailure) return Result.fail(totalDeltaResult.error);
 
   const perPartnerResult = buildPerPartnerFollowThrough(thisMonth, contributions, zero);
@@ -143,6 +144,7 @@ export function explainSettlementVariance(
   }
 
   const zeroResult = Money.fromCents(0, currency);
+  /* v8 ignore next -- unreachable: currency is read from an already-valid Money's .currency getter, and 0 is always an integer */
   if (zeroResult.isFailure) return Result.fail(zeroResult.error);
   const zero = zeroResult.value;
 
@@ -163,6 +165,7 @@ export function explainSettlementVariance(
   lines.sort((a, b) => a.key.compare(b.key));
 
   const totalDeltaResult = thisMonth.totalRequired.subtract(lastMonth.totalRequired);
+  /* v8 ignore next -- unreachable: the top-level currency check above already guarantees a shared currency */
   if (totalDeltaResult.isFailure) return Result.fail(totalDeltaResult.error);
 
   const perPartnerDeltaResult = buildPerPartnerDelta(thisMonth.perPartner, lastMonth.perPartner, zero);

@@ -69,9 +69,11 @@ function buildBufferTopupLineItems(
   }
 
   const shortfallResult = state.target.subtract(state.balance);
+  /* v8 ignore next -- unreachable: a successful BufferStateService.getStateAsOf() (the only source of `state`) already proves target and balance share a currency */
   if (shortfallResult.isFailure) return Result.fail(shortfallResult.error);
 
   const monthlyFillsResult = shortfallResult.value.allocate(Array(monthsRemaining).fill(1));
+  /* v8 ignore next -- unreachable: the fill ratios are a literal array of 1s (monthsRemaining > 0 per the guard above), never negative */
   if (monthlyFillsResult.isFailure) return Result.fail(monthlyFillsResult.error);
   const monthlyFills = monthlyFillsResult.value;
 
@@ -173,6 +175,7 @@ export class SafeTransferCalculator {
       for (const [partner, share] of item.perPartnerSplit) {
         const current = perPartner.get(partner) ?? zero;
         const addPartner = current.add(share);
+        /* v8 ignore next -- unreachable: share always shares item.gross's currency (both come from the same allocate() call), and the addTotal guard above already proved item.gross matches the running total's currency */
         if (addPartner.isFailure) return Result.fail(addPartner.error);
         perPartner.set(partner, addPartner.value);
       }

@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import testSmellRules from "./eslint-rules/test-smells/index.js";
+import boundaryConfig from "./eslint-rules/boundary/index.js";
 
 export default tseslint.config(
   js.configs.recommended,
@@ -56,5 +57,9 @@ export default tseslint.config(
     rules: {
       "local/no-mystery-guest-db": "error",
     },
-  }
+  },
+  // Layer-boundary lint (story-maint-29, #241/#228) — mechanizes CLAUDE.md § 2's
+  // dependency rule via no-restricted-imports instead of grep. See
+  // eslint-rules/boundary/index.js for the dynamic blocklist.
+  ...boundaryConfig
 );

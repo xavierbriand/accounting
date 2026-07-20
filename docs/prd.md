@@ -303,8 +303,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 
 ### Security & Privacy
 
-- **Network Isolation:** The core application logic must make **zero (0) outgoing network requests** automatically.
-    - *Exception:* Network access is permitted ONLY when the user explicitly runs `accounting update --check`.
+- **Network Isolation:** The core application logic must make **zero (0) outgoing network requests**. No exceptions as shipped. *(Reconciled 2026-07-21, [#245](https://github.com/xavierbriand/accounting/issues/245): an earlier draft permitted exactly one user-invoked network call, `accounting update --check`; that command was never implemented and the sanction is struck — a future update-check feature must re-enter via a PRD amendment.)*
 - **Log Redaction:** Debug logs must automatically detect and redact patterns matching IBANs, Credit Card Numbers, and Bank Account Numbers.
 - **File Permissions:** Created database and configuration files must default to `600` (User Read/Write Only) permissions on Unix-like systems.
 

@@ -143,6 +143,8 @@ accounting/
 - **Infra** depends on **Core** (via Ports).
 - **Core** depends on **nothing** (pure TypeScript + Dinero).
 
+Mechanically enforced by `no-restricted-imports` (`eslint.config.js` / `eslint-rules/boundary/`), not just grep — story-maint-29.
+
 ### Data boundaries
 
 - **SQL boundary:** `Infra/Repositories` map SQL rows (snake_case) to domain entities (camelCase).

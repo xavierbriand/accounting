@@ -57,9 +57,12 @@ Every new external input, file path, SQL statement, or dependency is scrutinized
 
 ## Coverage
 
-- **100% branch coverage** on everything under `src/core/`. Non-negotiable.
-- Infra and CLI lower, but every branch (happy path, error path) is still exercised with intent. No "covered by accident" lines.
-- Coverage reports are advisory; the review looks at *which branches aren't covered*, not just the percentage.
+- **100% branch coverage** on everything under `src/core/`. Non-negotiable — CI-gated
+  via `@vitest/coverage-v8` (`npm run test:coverage`; `vitest.config.ts`
+  `coverage.thresholds['src/core/**'].branches`) since story-maint-29. A regression
+  now fails the build instead of drifting silently.
+- Infra and CLI lower, but every branch (happy path, error path) is still exercised with intent. No "covered by accident" lines. Infra/CLI are measured (not thresholded) by the same run — see #242 for the planned ratchet.
+- Coverage reports are advisory for *which branches* a human reviews — the CI gate gives a hard percentage floor for `src/core/`, but "why is this branch uncovered" and "is this test honest" remain a Phase-4 code-review judgment call, not a mechanical one.
 
 ## TDD rhythm
 

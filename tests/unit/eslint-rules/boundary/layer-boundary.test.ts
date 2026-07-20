@@ -32,6 +32,11 @@ describe('layer boundary — src/core/ forbids everything but dinero.js', () => 
     expect(messages.some((m) => m.ruleId === 'no-restricted-imports')).toBe(true);
   });
 
+  it('rejects a core file importing fast-check (devDependency half of the blocklist)', () => {
+    const messages = lintVirtualFile("import fc from 'fast-check';", 'src/core/example.ts');
+    expect(messages.some((m) => m.ruleId === 'no-restricted-imports')).toBe(true);
+  });
+
   it('rejects a core file importing a src/infra path', () => {
     const messages = lintVirtualFile(
       "import { Database } from '../../infra/db/database.js';",
@@ -57,6 +62,14 @@ describe('layer boundary — src/infra/ forbids src/cli/', () => {
       'src/infra/example.ts',
     );
     expect(messages.some((m) => m.ruleId === 'no-restricted-imports')).toBe(true);
+  });
+
+  it('allows an infra file importing a core path (block does not over-restrict)', () => {
+    const messages = lintVirtualFile(
+      "import { Money } from '../core/shared/money.js';",
+      'src/infra/example.ts',
+    );
+    expect(messages.filter((m) => m.ruleId === 'no-restricted-imports')).toHaveLength(0);
   });
 });
 

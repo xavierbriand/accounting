@@ -61,5 +61,5 @@ export default tseslint.config(
   // Layer-boundary lint (story-maint-29, #241/#228) — mechanizes CLAUDE.md § 2's
   // dependency rule via no-restricted-imports instead of grep. See
   // eslint-rules/boundary/index.js for the dynamic blocklist.
-  ...boundaryConfig
+  ...boundaryConfig,
 );

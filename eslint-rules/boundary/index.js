@@ -10,9 +10,13 @@ import packageJson from '../../package.json' with { type: 'json' };
 const CORE_ALLOWED_DEPENDENCY = 'dinero.js';
 
 function forbiddenRuntimeDependencies() {
-  return Object.keys(packageJson.dependencies ?? {}).filter(
-    (name) => name !== CORE_ALLOWED_DEPENDENCY,
-  );
+  // devDependencies too (Phase-4 P3-1): test/tooling packages (fast-check,
+  // vitest, ...) are just as installed and importable from core as runtime
+  // deps, and equally forbidden there.
+  return [
+    ...Object.keys(packageJson.dependencies ?? {}),
+    ...Object.keys(packageJson.devDependencies ?? {}),
+  ].filter((name) => name !== CORE_ALLOWED_DEPENDENCY);
 }
 
 function forbiddenBuiltinModules() {

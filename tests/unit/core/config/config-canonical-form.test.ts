@@ -117,6 +117,15 @@ describe('canonicalConfigForm — optional fields (coverage completion)', () => 
     const config = baseConfig({ settlement: { accounts: [{ account: 'joint-account', partner: 'Alice' }] } });
     expect(canonicalConfigForm(config)).toContain('"settlement":{"accounts":[{"account":"joint-account","partner":"Alice"}]}');
   });
+
+  it('a tied sort key (byKey comparator returns 0) does not crash and preserves both entries', () => {
+    // fails if byKey()'s equal-keys branch is removed and array.sort throws or drops an entry
+    const config = baseConfig({
+      buffers: [makeBuffer('Vacation', 1000), makeBuffer('Vacation', 2000)],
+    });
+    const form = canonicalConfigForm(config);
+    expect(form.match(/"name":"Vacation"/g)).toHaveLength(2);
+  });
 });
 
 describe('canonicalConfigForm — array reorder stability (property)', () => {

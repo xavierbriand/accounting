@@ -240,6 +240,142 @@ describe('explainSettlementVariance — follow-through assembly', () => {
   });
 });
 
+// ─── Defensive currency-mismatch propagation (coverage completion, story-maint-29) ────────
+//
+// The top-level currency guards (this vs last month's totalRequired; contributions vs this
+// month's currency) only validate the AGGREGATE totals. SafeTransferCalculation and LineItem
+// are plain data shapes with independently-settable fields, so a per-item gross or a
+// per-partner share can carry a currency that disagrees with the aggregate it sits beside —
+// a data anomaly that should never occur from a well-behaved SafeTransferCalculator, but the
+// internal Money.subtract() guards defend against it anyway. Each fixture below isolates one
+// such anomaly to drive one specific propagation branch.
+
+describe('explainSettlementVariance — defensive currency-mismatch propagation', () => {
+  it('propagates a "both" line\'s gross-currency mismatch (buildVarianceLine totalDelta guard)', () => {
+    // fails if the totalDelta subtract-failure guard (line 55) stops propagating
+    const thisMonth: SafeTransferCalculation = {
+      totalRequired: eur(100000),
+      perPartner: new Map([['Alex', eur(50000)], ['Sam', eur(50000)]]),
+      lineItems: [item({ description: 'Rent', gross: eur(100000) })],
+    };
+    const lastMonth: SafeTransferCalculation = {
+      totalRequired: eur(90000),
+      perPartner: new Map([['Alex', eur(45000)], ['Sam', eur(45000)]]),
+      lineItems: [item({ description: 'Rent', gross: usd(90000) })],
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a "both" line\'s per-partner-share mismatch (buildPerPartnerDelta guard)', () => {
+    // fails if the perPartnerDelta subtract-failure guard (line 57, via buildPerPartnerDelta
+    // line 40) stops propagating
+    const thisMonth: SafeTransferCalculation = {
+      totalRequired: eur(100000),
+      perPartner: new Map([['Alex', eur(50000)], ['Sam', eur(50000)]]),
+      lineItems: [
+        item({ description: 'Rent', gross: eur(100000), perPartnerSplit: new Map([['Alex', eur(50000)], ['Sam', eur(50000)]]) }),
+      ],
+    };
+    const lastMonth: SafeTransferCalculation = {
+      totalRequired: eur(90000),
+      perPartner: new Map([['Alex', eur(45000)], ['Sam', eur(45000)]]),
+      lineItems: [
+        item({ description: 'Rent', gross: eur(90000), perPartnerSplit: new Map([['Alex', usd(45000)], ['Sam', eur(45000)]]) }),
+      ],
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a "this-only" line\'s per-partner-share mismatch against the zero fallback', () => {
+    // fails if the this-only perPartnerDelta guard (line 68, via buildPerPartnerDelta line 40)
+    // stops propagating
+    const thisMonth: SafeTransferCalculation = {
+      totalRequired: eur(20000),
+      perPartner: new Map([['Alex', eur(10000)], ['Sam', eur(10000)]]),
+      lineItems: [
+        item({ description: 'Insurance', category: 'Insurance', gross: eur(20000), perPartnerSplit: new Map([['Alex', usd(10000)], ['Sam', eur(10000)]]) }),
+      ],
+    };
+    const lastMonth: SafeTransferCalculation = { totalRequired: eur(0), perPartner: new Map(), lineItems: [] };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a "last-only" line\'s gross-currency mismatch against the zero fallback', () => {
+    // fails if the last-only totalDelta guard (line 78) stops propagating
+    const thisMonth: SafeTransferCalculation = { totalRequired: eur(0), perPartner: new Map(), lineItems: [] };
+    const lastMonth: SafeTransferCalculation = {
+      totalRequired: eur(120000),
+      perPartner: new Map([['Alex', eur(60000)], ['Sam', eur(60000)]]),
+      lineItems: [
+        item({ description: 'One-off top-up', kind: 'buffer-topup', category: 'Vacation', gross: usd(120000), perPartnerSplit: new Map([['Alex', eur(60000)], ['Sam', eur(60000)]]) }),
+      ],
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a "last-only" line\'s per-partner-share mismatch against the zero fallback', () => {
+    // fails if the last-only perPartnerDelta guard (line 80, via buildPerPartnerDelta line 40)
+    // stops propagating
+    const thisMonth: SafeTransferCalculation = { totalRequired: eur(0), perPartner: new Map(), lineItems: [] };
+    const lastMonth: SafeTransferCalculation = {
+      totalRequired: eur(120000),
+      perPartner: new Map([['Alex', eur(60000)], ['Sam', eur(60000)]]),
+      lineItems: [
+        item({ description: 'One-off top-up', kind: 'buffer-topup', category: 'Vacation', gross: eur(120000), perPartnerSplit: new Map([['Alex', usd(60000)], ['Sam', eur(60000)]]) }),
+      ],
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a per-partner-delta mismatch at the report level (thisMonth.perPartner vs lastMonth.perPartner)', () => {
+    // fails if the report-level perPartnerDelta guard (line 169, via buildPerPartnerDelta
+    // line 40) stops propagating
+    const thisMonth: SafeTransferCalculation = {
+      totalRequired: eur(0),
+      perPartner: new Map([['Alex', eur(10000)], ['Sam', eur(10000)]]),
+      lineItems: [],
+    };
+    const lastMonth: SafeTransferCalculation = {
+      totalRequired: eur(0),
+      perPartner: new Map([['Alex', usd(10000)], ['Sam', eur(10000)]]),
+      lineItems: [],
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('returns Result.fail when the same key appears twice within last month\'s window', () => {
+    // fails if the indexByKey duplicate-key guard (line 152) stops rejecting a dup in the
+    // LAST-month window specifically (the sibling this-month case is covered above)
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([
+      item({ description: 'Rent', gross: eur(50000) }),
+      item({ description: 'Rent', gross: eur(40000) }),
+    ]);
+    const result = explainSettlementVariance(thisMonth, lastMonth, noContributions);
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a per-partner follow-through mismatch (buildPerPartnerFollowThrough guard)', () => {
+    // fails if the follow-through perPartner guard (lines 101 and 123) stops propagating —
+    // totalActual matches this month's currency (passing the line-113 guard) but one
+    // partner's individual attributed contribution does not
+    const thisMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const lastMonth = calc([item({ description: 'Rent', gross: eur(100000) })]);
+    const contributions: ContributionsInWindow = {
+      attributed: [{ partner: 'Alex', amount: usd(48000) }, { partner: 'Sam', amount: eur(46000) }],
+      totalActual: eur(94000),
+    };
+    const result = explainSettlementVariance(thisMonth, lastMonth, contributions);
+    expect(result.isFailure).toBe(true);
+  });
+});
+
 // ─── Property tests ───────────────────────────────────────────────────────────
 // Invariants 1-5 and 10 of the signed-off model note (docs/domain/model-notes/story-4.3.md).
 // Each generated "line" is index-keyed (Cat{i}/Item{i}, alternating kind), guaranteeing

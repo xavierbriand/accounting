@@ -47,7 +47,7 @@
     *   **Dynamic Equity Splits:** Support for time-series split rules (e.g., changing from 50/50 to 60/40 on a specific date).
 *   **Interface:** CLI / Text-Based Interface.
     *   **"Conversational CFO":** Generates human-readable explanations for transfer amounts.
-    *   **Commands:** `ingest`, `status`, `explain`, `settle`, `correct` (Correction).
+    *   **Commands (as shipped):** `migrate`, `ingest`, `categorize`, `correct`, `status`, `explain`, `export`, `dissolve` — `settle` absorbed into `status`/`explain`, `config` deferred to Epic 5; see the Core Verbs reconciliation in § Command Structure Architecture.
 
 ### Growth Features (Post-MVP)
 *   **Web Interface (PWA):** Visual dashboards for "Buffer Health" and "Equity Splits."
@@ -160,12 +160,19 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 *   **Mode Separation:** Commands must explicitly handle `stdout` vs `stderr`.
     *   *Interactive Mode:* Uses `stderr` for prompts/spinners so `stdout` remains clean for piping.
     *   *Scriptable Mode:* All commands accept `--non-interactive` (or `--ci`) to fail fast on prompts.
-*   **Core Verbs:**
-    *   `accounting ingest`: Interactive tagging loop.
-    *   `accounting status`: Read-only view of buffers.
-    *   `accounting settle`: Write-only generation of transfer amounts.
-    *   `accounting config`: Manage rules/schema.
-    *   `accounting correct`: (Correction) UX command that generates a reversal + a correcting entry.
+*   **Core Verbs** *(reconciled 2026-07-21 against the shipped surface, [#245](https://github.com/xavierbriand/accounting/issues/245); the operational source of truth for the live command surface is [docs/cli-json-contract.md](cli-json-contract.md))*:
+    *   `accounting ingest`: Interactive tagging loop. *(shipped — Epic 2)*
+    *   `accounting status`: Read-only view of buffers. *(shipped — Epic 3; also carries the safe-transfer breakdown that `settle` promised)*
+    *   `accounting settle`: Write-only generation of transfer amounts. *(not shipped as a verb — **absorbed**: `status` computes the safe transfer (FR8) and `explain` reports settlement variance + follow-through (FR19); the couple reads the number and executes the transfer in their banking app. Settlement math happens on read; no write-mode settle ritual exists. A standalone verb can return if a real need appears.)*
+    *   `accounting config`: Manage rules/schema. *(not shipped in MVP — configuration is hand-edited `accounting.yaml`; the `config plan` verb family arrives with **Epic 5** (FR24–FR27))*
+    *   `accounting correct`: (Correction) UX command that generates a reversal + a correcting entry. *(shipped — Epic 4, FR14)*
+    *   Shipped beyond the original list:
+        *   `accounting migrate`: Schema lifecycle. *(Epic 1; excluded from the JSON contract by design)*
+        *   `accounting explain`: Settlement variance + follow-through report. *(Epic 4, FR19)*
+        *   `accounting export`: Portable data bundle with manifest-hash export proof. *(Epic 4, FR21 — story-4.5b)*
+        *   `accounting dissolve`: Proof-gated graceful dissolution. *(Epic 4, FR21 — story-4.5c)*
+        *   `accounting categorize`: Standalone auto-tag rule mining over a statement file. *(story-D, bug #93 — emerged post-PRD)*
+    *   Mentions of `settle` elsewhere in this document (snapshots, idempotency, dry-run defaults, write latency) date from when settlement was designed as a write verb; post-absorption those clauses govern the shipped write verbs (`ingest`, `correct`, `dissolve`).
 
 ### Output Formats
 *   **Dual Output:** Every command must support `--json`.
@@ -203,7 +210,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 *   The Emergency Tire Replacement (Buffer Check via CLI)
 
 **Must-Have Capabilities:**
-*   **CLI Engine:** `ingest`, `status`, `settle`, `config` commands.
+*   **CLI Engine:** `ingest`, `status`, `settle`, `config` commands *(as shipped: `settle` absorbed into `status`/`explain`, `config` deferred to Epic 5 — see the Core Verbs reconciliation)*.
 *   **Core Logic:** Liquidity Controller, Buffer Buckets, Dynamic Equity Splits.
 *   **Data Integrity:** Local SQLite, Append-Only Ledger, Integer Math.
 *   **UX:** Interactive Tagging Loop with Smart Defaults.

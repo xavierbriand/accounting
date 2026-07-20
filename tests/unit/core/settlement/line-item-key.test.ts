@@ -85,6 +85,13 @@ describe('LineItemKey — compare() total order', () => {
     expect(a.compare(b)).toBeLessThan(0);
   });
 
+  it('orders by description in reverse when the description is lexicographically greater', () => {
+    // fails if the description tie-breaker's greater-than arm returns the wrong sign
+    const a = LineItemKey.of(makeItem({ kind: 'forecast', category: 'Rent', description: 'Beta' }));
+    const b = LineItemKey.of(makeItem({ kind: 'forecast', category: 'Rent', description: 'Alpha' }));
+    expect(a.compare(b)).toBeGreaterThan(0);
+  });
+
   it('returns 0 for identical keys', () => {
     // fails if compare() is not reflexive for equal keys
     const a = LineItemKey.of(makeItem());

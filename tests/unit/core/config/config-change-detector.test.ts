@@ -12,7 +12,7 @@
  *   the changedSections/previousDigest/currentDigest on a real change don't match what
  *   diffConfigs/canonicalConfigForm would independently compute.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fc from 'fast-check';
 import { ConfigChangeDetector } from '../../../../src/core/config/config-change-detector.js';
 import { canonicalConfigForm } from '../../../../src/core/config/config-canonical-form.js';
@@ -57,6 +57,20 @@ describe('ConfigChangeDetector — corrupted stored state (coverage completion)'
     const result = detector.detect({ canonical: 'not-json{{', digest: 'stale-digest' }, baseConfig());
     expect(result.isFailure).toBe(true);
     expect(result.error).toContain('not valid JSON');
+  });
+
+  it('falls back to String(err) when the parse failure is not an Error instance', () => {
+    // fails if the ternary's non-Error fallback (line 30) is removed — JS allows throwing
+    // any value, not just Error instances, so JSON.parse's real SyntaxError alone can't
+    // exercise this arm.
+    const parseSpy = vi.spyOn(JSON, 'parse').mockImplementationOnce(() => {
+      throw 'a thrown string, not an Error';
+    });
+    const detector = new ConfigChangeDetector(identityHashFn);
+    const result = detector.detect({ canonical: '{}', digest: 'stale-digest' }, baseConfig());
+    expect(result.isFailure).toBe(true);
+    expect(result.error).toContain('a thrown string, not an Error');
+    parseSpy.mockRestore();
   });
 });
 

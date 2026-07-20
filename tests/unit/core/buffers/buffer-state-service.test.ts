@@ -330,15 +330,27 @@ describe('BufferStateService', () => {
     });
 
     it('returns failure when balance currency differs from cap currency (deriveStatus lteCapResult guard)', () => {
-      // Branch: lteCapResult.isFailure in deriveStatus (line 21)
-      // Similar to above — forces the above-cap comparison with a mismatched currency.
-      const buckets = [makeBucket('Car', 'assets:buffer:car', 50_00, 200_00)];
-      const usdLedger: BufferLedgerQuery = {
+      // Branch: lteCapResult.isFailure in deriveStatus (line 21). Balance and target
+      // share a currency (EUR) so the ltTarget guard at line 15 passes through — cap
+      // alone is a different currency (USD), isolating the line-21 comparison guard.
+      // (story-maint-29: the prior version of this test put balance in USD, which
+      // tripped the earlier ltTarget guard instead of this one — it never reached
+      // line 21.)
+      const buckets: BufferBucket[] = [
+        {
+          name: 'Car',
+          account: 'assets:buffer:car',
+          target: makeEur(50_00),
+          targetDate: '2099-12-31',
+          cap: Money.fromCents(200_00, 'USD').value,
+        },
+      ];
+      const eurAboveTargetLedger: BufferLedgerQuery = {
         sumEntriesByAccount(): Result<Money> {
-          return Money.fromCents(100_00, 'USD');
+          return Money.fromCents(100_00, 'EUR');
         },
       };
-      const service = new BufferStateService(buckets, 'EUR', usdLedger);
+      const service = new BufferStateService(buckets, 'EUR', eurAboveTargetLedger);
       const result = service.getStateAsOf('2026-04-26');
       expect(result.isFailure).toBe(true);
     });

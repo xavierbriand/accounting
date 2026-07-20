@@ -85,10 +85,12 @@ export class Transaction {
     for (const entry of entries) {
       if (entry.side === 'debit') {
         const added = debitSum.add(entry.amount);
+        /* v8 ignore next -- unreachable: the currency-uniqueness check above already guarantees a shared currency */
         if (added.isFailure) return Result.fail(added.error);
         debitSum = added.value;
       } else {
         const added = creditSum.add(entry.amount);
+        /* v8 ignore next -- unreachable: the currency-uniqueness check above already guarantees a shared currency */
         if (added.isFailure) return Result.fail(added.error);
         creditSum = added.value;
       }

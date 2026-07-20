@@ -34,7 +34,7 @@ jobs:
       run: npm run build
       
     - name: Run Tests
-      run: npm test
+      run: npm run test:coverage
 
     - name: Run Harness Tests
       run: npm run test:harness

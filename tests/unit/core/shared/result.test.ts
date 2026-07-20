@@ -175,3 +175,44 @@ describe('Result.all', () => {
     expect(r.error).toBe('first error');
   });
 });
+
+// The constructor is `private` — only reachable at runtime via a bypass cast
+// (TS `private` is compile-time-only, not a runtime `#`-field). This is the
+// idiomatic way to exercise a private invariant guard without weakening the
+// class's public API for production callers.
+type ResultConstructorBypass = new (isSuccess: boolean, error?: string, value?: unknown) => Result<unknown, string>;
+const ResultCtor = Result as unknown as ResultConstructorBypass;
+
+describe('Result — construction misuse guards', () => {
+  // fails if: the constructor stops rejecting isSuccess=true with a truthy error
+  it('throws when constructed with isSuccess=true and a truthy error', () => {
+    expect(() => new ResultCtor(true, 'boom', undefined)).toThrow(
+      'InvalidOperation: A result cannot be successful and contain an error',
+    );
+  });
+
+  // fails if: the constructor stops rejecting isSuccess=false with no error
+  it('throws when constructed with isSuccess=false and no error', () => {
+    expect(() => new ResultCtor(false, undefined, undefined)).toThrow(
+      "InvalidOperation: A failing result needs to contain an error message",
+    );
+  });
+});
+
+describe('Result — accessor misuse guards', () => {
+  // fails if: .value stops rejecting access on a failure result
+  it('.value throws when the result is a failure', () => {
+    const r = Result.fail<string>('boom');
+    expect(() => r.value).toThrow(
+      "Can't get the value of an error result. Use 'errorValue' instead.",
+    );
+  });
+
+  // fails if: .error stops rejecting access on a success result
+  it('.error throws when the result is a success', () => {
+    const r = Result.ok('fine');
+    expect(() => r.error).toThrow(
+      "Can't get the error of a success result. Use 'value' instead.",
+    );
+  });
+});

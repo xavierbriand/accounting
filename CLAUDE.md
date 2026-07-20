@@ -25,7 +25,7 @@ Current position: see [docs/status.md](docs/status.md). Refreshed by the retro o
 
 Full decisions in [docs/architecture.md](docs/architecture.md). Quick reference:
 
-- Three layers, strict dependency rule. `src/core/` depends on nothing (no Node APIs, no `better-sqlite3`, no `commander`, no `process.exit`); `src/infra/` talks to the outside world via ports in `src/core/ports/`; `src/cli/` wires them together.
+- Three layers, strict dependency rule. `src/core/` depends on nothing (no Node APIs, no `better-sqlite3`, no `commander`, no `process.exit`); `src/infra/` talks to the outside world via ports in `src/core/ports/`; `src/cli/` wires them together. Mechanically enforced by `no-restricted-imports` (`eslint.config.js` / `eslint-rules/boundary/`) — story-maint-29.
 - **Constructor DI only.** No `new SomeRepo()` inside Core.
 - **`Result<T, E>` in Core** — domain methods return `Result` values, never throw. CLI is the only place that inspects `result.isFailure`.
 - **Append-only ledger.** No `UPDATE`/`DELETE` on ledger rows — corrections are new balancing entries.
@@ -62,7 +62,7 @@ Full checklist in [docs/security-checklist.md](docs/security-checklist.md); prod
 | Property | colocated with unit | `fast-check` for financial invariants |
 | Integration | `tests/integration/` | Real SQLite/FS |
 
-- **100% branch coverage** on `src/core/`. Infra/CLI lower. Coverage targets apply to `src/`; `harness/` is exempt — the Dev Harness is its own bounded context (§ 2). Harness code is exercised by focused unit tests + one integration test per tool.
+- **100% branch coverage** on `src/core/`. Infra/CLI lower. Coverage targets apply to `src/`; `harness/` is exempt — the Dev Harness is its own bounded context (§ 2). Harness code is exercised by focused unit tests + one integration test per tool. The `src/core/` figure is CI-gated via `@vitest/coverage-v8` (`npm run test:coverage`, `vitest.config.ts` `coverage.thresholds`) — story-maint-29.
 - **TDD rhythm (outside-in):** failing acceptance → failing unit → minimal green → acceptance green → refactor. See § 6.4 for commits.
 - **Batch ingestion — two stages.** *Parse:* malformed rows skipped, reported individually; valid siblings proceed. *Commit:* valid rows in one SQL transaction — all-or-nothing. Authoritative policy in [docs/prd.md](docs/prd.md) and [docs/quality-assurance.md](docs/quality-assurance.md).
 

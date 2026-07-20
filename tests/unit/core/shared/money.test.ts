@@ -22,6 +22,13 @@ describe('Money Value Object', () => {
       expect(m.error).toMatch(/currency/i);
     });
 
+    it('Money.zero() should fail for an unknown currency code', () => {
+      // fails if zero() stops validating the currency code (test-helper factory, story-maint-29)
+      const m = Money.zero('XXX');
+      expect(m.isFailure).toBe(true);
+      expect(m.error).toMatch(/currency/i);
+    });
+
     it('should implement Bankers Rounding for decimals', () => {
       // 2.5 cents -> 2 cents (Round Half to Even)
       // Note: fromDecimal takes "Units". 0.025 units = 2.5 cents.
@@ -68,6 +75,30 @@ describe('Money Value Object', () => {
       expect(shares[1].amount).toBe(33);
       expect(shares[2].amount).toBe(33);
       expect(shares.reduce((sum, s) => sum + s.amount, 0)).toBe(100);
+    });
+
+    it('should subtract same currency', () => {
+      // fails if subtract() stops computing this - other for matching currencies
+      const m1 = Money.fromCents(150, 'EUR').value;
+      const m2 = Money.fromCents(50, 'EUR').value;
+      const result = m1.subtract(m2);
+      expect(result.isSuccess).toBe(true);
+      expect(result.value.amount).toBe(100);
+    });
+
+    it('should fail to subtract different currencies', () => {
+      // fails if subtract() silently mixes currencies instead of rejecting the pair
+      const m1 = Money.fromCents(100, 'EUR').value;
+      const m2 = Money.fromCents(50, 'USD').value;
+      const result = m1.subtract(m2);
+      expect(result.isFailure).toBe(true);
+    });
+
+    it('should fail to allocate with a negative ratio', () => {
+      // fails if allocate() stops rejecting a negative ratio before calling into dinero.js
+      const m = Money.fromCents(100, 'EUR').value;
+      const result = m.allocate([1, -1]);
+      expect(result.isFailure).toBe(true);
     });
   });
 

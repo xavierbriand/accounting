@@ -798,3 +798,192 @@ describe('SafeTransferCalculator — property tests (buffer top-up)', () => {
     );
   });
 });
+
+// ─── Coverage completion (story-maint-29) ────────────────────────────────────
+// Each test below drives one previously-uncovered guard branch: either via real,
+// structurally-valid-but-anomalous config data (a config invariant this service
+// does not itself enforce, e.g. a negative split ratio or a stale roster), or via
+// a recording/failing fake collaborator (the same `as unknown as X` idiom already
+// used by the Property #3a/#3b/#3c tests above) when the real collaborator cannot
+// be made to fail from this call site.
+
+function makeUsd(cents: number): Money {
+  return Money.fromCents(cents, 'USD').value;
+}
+
+describe('SafeTransferCalculator — port-failure and guard-branch coverage completion', () => {
+  it('propagates a roster fetch failure when asOf precedes the earliest split window', () => {
+    // fails if the top-level roster-fetch guard (line 133) stops propagating
+    const windows = [splitWindow('2026-06-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const calc = buildCalculator(windows, [], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a forecastBetween failure (line 137) via a failing forecast fake', () => {
+    // fails if the forecast-fetch guard stops propagating. The real
+    // RecurringForecastService cannot fail here — calculateForWindow already
+    // validates the same from/to preconditions forecastBetween would check — so
+    // this guard is only drivable via a fake collaborator.
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const splitsService = new SplitRulesService(windows);
+    const buffersService = new BufferStateService([], 'EUR', fakeLedger(new Map()));
+    const failingForecast = {
+      forecastBetween(): Result<readonly ForecastOccurrence[]> {
+        return Result.fail('forced forecastBetween failure (story-maint-29)');
+      },
+    };
+    const calc = new SafeTransferCalculator(
+      splitsService,
+      buffersService,
+      failingForecast as unknown as RecurringForecastService,
+      'EUR',
+    );
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a per-occurrence split lookup failure from buildForecastLineItems (lines 26 and 140)', () => {
+    // fails if the forecast-line-item build guard stops propagating. A recurring
+    // rule active since 2024 produces an occurrence dated before the split
+    // window's own validFrom, even though asOf (used for the top-level roster)
+    // is inside the window — the occurrence-level lookup fails independently.
+    const windows = [splitWindow('2026-06-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const rules = [recurringRule('Rent', 'Rent', 100000, '2024-01-01')];
+    const calc = buildCalculator(windows, [], rules);
+    const result = calc.calculateForWindow('2026-06-15', '2026-05-01', '2026-06-30');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a negative-ratio allocation failure from a forecast occurrence (line 30)', () => {
+    // fails if the forecast-occurrence allocate-failure guard stops propagating —
+    // a split window with a negative ratio is a config invariant this service
+    // does not itself validate
+    const windows = [splitWindow('2024-01-01', ['Alex', -0.2], ['Sam', 1.2])];
+    const rules = [recurringRule('Rent', 'Rent', 100000, '2024-01-01')];
+    const calc = buildCalculator(windows, [], rules);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('skips a query-window month outside the buffer\'s own fill schedule (line 83 continue)', () => {
+    // fails if the indexByMonth undefined-lookup continue is removed — a query
+    // window wider than the buffer's own [asOf, targetDate) fill schedule would
+    // otherwise read past the fill-slot array
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 100000, 0, '2026-07-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-08-31');
+    expect(result.isSuccess).toBe(true);
+    const topups = result.value.lineItems.filter(i => i.kind === 'buffer-topup');
+    expect(topups).toHaveLength(2);
+  });
+
+  it('propagates a per-month split lookup failure inside the buffer top-up loop (line 87)', () => {
+    // fails if the buffer-topup split-lookup guard stops propagating. The real
+    // SplitRulesService cannot fail here (every topup month is >= asOf, and asOf's
+    // own roster fetch already proved the earliest window has been reached), so
+    // this guard is only drivable via a fake collaborator that fails for one
+    // specific topup month.
+    const failOnDate = '2026-06-01';
+    const recordingSplits = {
+      getSplitsAsOf(date: string): Result<readonly { partner: string; ratio: number }[]> {
+        if (date === failOnDate) return Result.fail('forced topup split-lookup failure (story-maint-29)');
+        return Result.ok([{ partner: 'Alex', ratio: 0.5 }, { partner: 'Sam', ratio: 0.5 }]);
+      },
+    };
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 100000, 0, '2026-08-01');
+    const buffersService = new BufferStateService([bucket], 'EUR', fakeLedger(new Map([[bucket.account, balance]])));
+    const forecastService = new RecurringForecastService([]);
+    const calc = new SafeTransferCalculator(
+      recordingSplits as unknown as SplitRulesService,
+      buffersService,
+      forecastService,
+      'EUR',
+    );
+    const result = calc.calculateForWindow('2026-05-28', '2026-06-01', '2026-07-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a negative-ratio allocation failure from a buffer top-up month (line 91)', () => {
+    // fails if the buffer-topup allocate-failure guard stops propagating
+    const windows = [splitWindow('2024-01-01', ['Alex', -0.3], ['Sam', 1.3])];
+    const { bucket, balance } = makeBucket('Vacation', 'assets:buffer:vacation', 100000, 0, '2026-07-01');
+    const calc = buildCalculator(windows, [{ bucket, balance }], []);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a buffer-state fetch failure (line 145) when a bucket\'s target currency mismatches the ledger', () => {
+    // fails if the top-level buffer-state-fetch guard stops propagating
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const splitsService = new SplitRulesService(windows);
+    const mismatchedBucket: BufferBucket = {
+      name: 'Car',
+      account: 'assets:buffer:car',
+      target: makeUsd(100000),
+      targetDate: '2026-12-01',
+    };
+    const buffersService = new BufferStateService([mismatchedBucket], 'EUR', fakeLedger(new Map()));
+    const forecastService = new RecurringForecastService([]);
+    const calc = new SafeTransferCalculator(splitsService, buffersService, forecastService, 'EUR');
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('returns Result.fail when defaultCurrency is not a valid ISO 4217 code (line 162)', () => {
+    // fails if the zero-Money construction guard stops propagating
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const splitsService = new SplitRulesService(windows);
+    const buffersService = new BufferStateService([], 'XXX', fakeLedger(new Map()));
+    const forecastService = new RecurringForecastService([]);
+    const calc = new SafeTransferCalculator(splitsService, buffersService, forecastService, 'XXX');
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('propagates a totalRequired-accumulation currency mismatch (line 170) when a rule\'s amount currency differs from defaultCurrency', () => {
+    // fails if the totalRequired accumulation guard stops propagating — a
+    // recurring rule's amount currency disagreeing with defaultCurrency is a
+    // config invariant this service does not itself validate
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const rules: RecurringRule[] = [
+      { name: 'Rent', category: 'Rent', cadence: 'monthly', amount: makeUsd(100000), validFrom: '2024-01-01', amendments: [] },
+    ];
+    const calc = buildCalculator(windows, [], rules);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isFailure).toBe(true);
+  });
+
+  it('falls back to zero for a partner outside the asOf roster (line 174) when a later split window introduces a new partner', () => {
+    // fails if the per-partner zero-fallback (?? zero) is removed — a partner who
+    // only appears in a LATER split window (not in the asOf roster) would
+    // otherwise throw on an undefined map lookup instead of defaulting to zero
+    const windows = [
+      splitWindow('2024-01-01', ['Alex', 1.0]),
+      splitWindow('2026-06-01', ['Alex', 0.5], ['Sam', 0.5]),
+    ];
+    const rules = [recurringRule('Rent', 'Rent', 100000, '2024-01-01')];
+    const calc = buildCalculator(windows, [], rules);
+    // asOf is in window 1 (Alex-only roster); the query window spans into window 2,
+    // where a "Sam" occurrence line item is produced.
+    const result = calc.calculateForWindow('2026-04-28', '2026-06-01', '2026-06-30');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.perPartner.get('Sam')!.amount).toBeGreaterThan(0);
+  });
+
+  it('breaks a tied sort key without crashing and preserves both line items (line 158)', () => {
+    // fails if the lineItemSortKey comparator's tie branch (ka === kb -> 0) is
+    // removed and array.sort throws or drops an entry — two identical rules
+    // produce two line items with an identical sort key on the same date
+    const windows = [splitWindow('2024-01-01', ['Alex', 0.5], ['Sam', 0.5])];
+    const rules = [
+      recurringRule('Rent', 'Housing', 100000, '2024-01-01'),
+      recurringRule('Rent', 'Housing', 100000, '2024-01-01'),
+    ];
+    const calc = buildCalculator(windows, [], rules);
+    const result = calc.calculateForWindow('2026-04-28', '2026-05-01', '2026-05-31');
+    expect(result.isSuccess).toBe(true);
+    expect(result.value.lineItems).toHaveLength(2);
+  });
+});

@@ -8,7 +8,7 @@
 
 ## How to use this doc
 
-Read Part A (audit) and Part B (mental model) once, in order. Then pick a module from Part C and ship it as its own PR closing its sub-issue. Don't try to do all six in a session — the curriculum is sequenced cheapest-first so each module gives early signal.
+Read Part A (audit) and Part B (mental model) once, in order. Then pick a module from Part C and ship it as its own PR closing its sub-issue. Don't try to do all six in a session — the curriculum is sequenced cheapest-first so each module gives early signal. Part D collects the field chapters written after the modules shipped (2026-05 → 2026-07) — read it as the sequel to Part A.
 
 Scope guardrail: **Anthropic-native primitives only** — Claude Code (the harness) and the Claude Agent SDK (the kit for building harnesses). LangChain / LangGraph / agent-framework are explicitly out at this scale. The two distinctions to internalize:
 
@@ -21,7 +21,7 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 ## Part A — Audit verdict (this repo as of 2026-04-29)
 
-> **Superseded audit.** This snapshot predates drift-scan (h1/h2), the primitives round (h3), metrics (h4), the context diet (h5), dod-check + enforcement tiers (h6/h7), and DDD adoption (ddd-1). The current audit is [harness-health-check-2026-07-03.md](harness-health-check-2026-07-03.md); read Part A as the historical baseline it measures against.
+> **Superseded audit.** This snapshot predates drift-scan (h1/h2), the primitives round (h3), metrics (h4), the context diet (h5), dod-check + enforcement tiers (h6/h7), and DDD adoption (ddd-1). The current audit is [harness-health-check-2026-07-03.md](harness-health-check-2026-07-03.md); read Part A as the historical baseline it measures against. Inline **Closed by** annotations track each audit item to the story that closed it; [Part D](#part-d--field-chapters-2026-05--2026-07) carries what the interval taught.
 
 ### Doing well (these are not common; lead with them when teaching)
 
@@ -35,24 +35,24 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 ### Doing OK but under-leveraging
 
 - **Settings/permissions** — only an allowlist of bash/git/gh patterns. Functional but minimal.
-- **Sequential agents only.** Phase 2 then Phase 4. Independent checks (security walkthrough, Gherkin-mapping audit, doc-drift scan) could parallelize.
-- **No story dashboard.** Plans, retros, status fragments all exist; no single index that joins them.
+- **Sequential agents only.** Phase 2 then Phase 4. Independent checks (security walkthrough, Gherkin-mapping audit, doc-drift scan) could parallelize. — **Closed by story-h3**: Phase 2 runs plan-reviewer + sibling-overlap in parallel (single-message dispatch, now mandated by CLAUDE.md § 6.1); Phase 4 pairs code-reviewer with ddd-modeler Mode B the same way.
+- **No story dashboard.** Plans, retros, status fragments all exist; no single index that joins them. — **Partially closed by story-h3**: `/story-status` joins them on demand; no persistent dashboard, by choice.
 
 ### Doing wrong / risk areas
 
 - **Process cost ≫ story value for tiny stories.** maint-01 = 21 type errors fixed via a 276-line plan + full 5-phase gate + 7 commits. R16 collapses commits but the *gates* still run. No formal ratio guard. — **Closed by story-h8** (risk-based Full/Reduced/Light lanes, R26): the gate itself now right-sizes by risk surface.
-- **DoD item 10 is hand-policed.** [docs/retrospectives/README.md](../retrospectives/README.md) mentions a drift-scan that doesn't exist. Story-2.5 added a shim rule to sonnet-implementer.md and not to § 8 — exactly the drift the rule was meant to prevent. — **Closed by story-h1/h2** (drift-scan ships, enforcing § 8 ↔ retro consistency at write/CI time, R21); **story-h10b** extends it over `.claude/` agent specs.
+- **DoD item 10 is hand-policed.** [docs/retrospectives/README.md](../retrospectives/README.md) mentioned a drift-scan that, at audit time, didn't exist. Story-2.5 added a shim rule to sonnet-implementer.md and not to § 8 — exactly the drift the rule was meant to prevent. — **Closed by story-h1/h2** (drift-scan shipped 2026-05-01, enforcing § 8 ↔ retro consistency at write/CI time, R21); **story-h10b** extends it over `.claude/` specs. It lives at [harness/drift-scan/drift-scan.ts](../../harness/drift-scan/drift-scan.ts) and now runs Checks A/B/D/F/G.
 - **"Deviations" boundary in sonnet-implementer is fuzzy.** "Judgment-call vs structural" lacks worked examples; a Sonnet executor will guess differently than a human would.
 - **Rule R4 (composition-root subprocess test) has no template.** A one-line invocation of a concept that needs a worked example to be teachable.
 
-### Missing (the eval/measurement gap)
+### Missing (the eval/measurement gap) — every item below closed by 2026-07
 
-- **No prompt versioning.** Agent .md files mutate without a changelog.
-- **No quantitative retro signal.** Loop metrics live as raw text in 16+ retros and are never aggregated.
-- **No agent-output evals.** Zero golden tests for plan-reviewer / code-reviewer.
-- **No cost/token telemetry.** No statusline metric, no JSONL session log parsing, no per-story budget.
-- **No CI gate on agent-spec changes.** Editing `code-reviewer.md` triggers nothing.
-- **No sibling-overlap detection at plan time.** R19 says "check open PRs/issues" — manually. — **Closed by story-h3** (the `sibling-overlap` agent now runs at Phase 2, automated).
+- **No prompt versioning.** Agent .md files mutate without a changelog. — **Closed by story-h12**: `spec-version` frontmatter on every agent spec, presence enforced by drift-scan Check F.
+- **No quantitative retro signal.** Loop metrics live as raw text in 16+ retros and are never aggregated. — **Closed by story-h4/h12**: `docs/metrics/loop.csv` (weight ratios, deterministic from git) and [docs/metrics/dispositions.md](../metrics/dispositions.md) (688 findings across 55 suggestion logs, per-rule disposition rates).
+- **No agent-output evals.** Zero golden tests for plan-reviewer / code-reviewer. — **Closed (re-scoped) by story-h12**: evals-lite measures disposition rates over every historical suggestion log instead of golden fixtures — Module 4c's contrarian beat, vindicated (the data demoted four checklist rules — R1/R9/R10/R11 — to table-only and fed the h13 rule walk).
+- **No cost/token telemetry.** No statusline metric, no JSONL session log parsing, no per-story budget. — **Closed by story-h4**: [harness/metrics/](../../harness/metrics/) (`usage-reader.ts` + `loop-metrics.ts`), per-story token attribution as a retro Cost section.
+- **No CI gate on agent-spec changes.** Editing `code-reviewer.md` triggers nothing. — **Closed by story-h10b + ddd-2 (R27)**: drift-scan walks `.claude/` specs in CI — rule-tag currency (Check D) and role/tool discipline + spec-version (Check F).
+- **No sibling-overlap detection at plan time.** R19 said "check open PRs/issues" — manually. — **Closed by story-h3** (the `sibling-overlap` agent now runs at Phase 2, automated); R19 itself was later tombstoned as fully absorbed ([rule walk 2026-07](rule-walk-2026-07.md)).
 
 ---
 
@@ -70,9 +70,9 @@ The end-state evaluation isn't "I shipped six modules." It's **a colleague forks
 
 5. **Reversibility dictates autonomy.** Reading: free. Editing: cheap (git). Pushing: medium. `gh pr merge`: irreversible. Permission gates and approval points should mirror the blast-radius gradient.
 
-6. **Specs are code; agents are functions.** A `sonnet-implementer.md` change is a deploy. It deserves a changelog, a test, and CI. Today this repo has none of those — this is the core gap.
+6. **Specs are code; agents are functions.** A `sonnet-implementer.md` change is a deploy. It deserves a changelog, a test, and CI. When first written (2026-04) this repo had none of the three — it was the core gap. All three exist now: `spec-version` headers as the changelog (h12), disposition-rate evals over real review output as the test (h12), and drift-scan Checks D/F gating `.claude/` spec edits in CI (h10b, ddd-2). The principle held; only the word "today" dated.
 
-7. **Rules crystallize the *current model's* failure modes.** R8 (mock diversity) fixes a class of mistakes Sonnet 4.5 made. Sonnet 4.6 may not. Without periodic *rule-expiry review*, the workflow accretes cargo-cult overhead. **Action: every 6 months, walk every § 8 row and ask "is this still load-bearing?"** Retire what isn't. This is harder than adding rules and twice as important.
+7. **Rules crystallize the *current model's* failure modes.** R8 (mock diversity) fixes a class of mistakes Sonnet 4.5 made. Sonnet 4.6 may not. Without periodic *rule-expiry review*, the workflow accretes cargo-cult overhead. **Action: every 6 months, walk every § 8 row and ask "is this still load-bearing?"** Retire what isn't. This is harder than adding rules and twice as important. *The first walk ran 2026-07-18 ([story-h13](rule-walk-2026-07.md)): 31 rows against pre-committed criteria and disposition data → 6 tombstoned, 24 keeps each with a citation, 1 unverified with a recorded watch. It took a health check naming the never-performed walk as the root-cause defect (F1) to make it fire — why intention alone never did is [chapter D5](#d5--subtraction-story-h13-an-agentic-loop-will-manufacture-process-for-itself-subtraction-must-be-tooled-not-intended).*
 
 8. **Evals are not optional once the harness gates production.** If `code-reviewer` decides whether refactors land, a silent prompt regression silently regresses the codebase. The eval suite for agents *is* the test suite for the test suite.
 
@@ -101,7 +101,16 @@ These are the silent-degradation patterns to teach a colleague to recognize. Eac
 | **Shim creep** | Optional parameter or fallback added "to make tests pass," now permanent production behaviour | R-pending shim rule (story-2.5 retro action B) |
 | **Over-eager generalization** | One concrete need triggers a configurable framework | hits in maint-* retros — easier to spot in diffs than in summaries |
 | **Plan-execution drift** | Agent solves a different (often simpler) problem than the plan named, then writes a plausible report | R5 Gherkin-to-test mapping audit catches this class |
-| **Cargo-cult guard** | A rule survives long after its model-version trigger is gone | Principle 7 above; no current detector |
+| **Cargo-cult guard** | A rule survives long after its model-version trigger is gone | Principle 7 above; detector shipped 2026-07 — disposition rates (h12) + last-real-exercise greps retired six rules ([rule walk](rule-walk-2026-07.md)) |
+
+The eight above live in *agent output*. The 2026-07 retros surfaced a second family one level up — in the coordinator loop that dispatches the agents. No sub-agent produces them, so the review layer never sees them; that is what makes them dangerous ([health check F4](harness-health-check-2026-07-03.md)).
+
+| Signature | What it looks like | Where it was caught |
+| --- | --- | --- |
+| **Gate self-certification** | Coordinator substitutes a lighter inline action for a required sub-agent, then marks the gate complete; the real run later contradicts it | story-h5 retro (Change) — the re-run plan-reviewer surfaced six findings the inline substitution had missed |
+| **Citing the messenger** | Coordinator quotes a sub-agent's in-flight numbers instead of re-reading the committed artifact; the prose ships stale | story-h12 retro — slice-6 rates drafted from the implementer's pre-final-run report, not `dispositions.md` |
+| **Stale-flag override** | Coordinator treats its own unblocked tool calls as proof a harness mode cleared; the spawned agent's refusal was the authoritative signal | story-maint-26 — stuck plan-mode flag, codified as R32 |
+| **Push-ownership drift** | A sub-agent pushes because the handoff prompt implied it; branch ownership must be a hard rule, not an inference | story-4.4b push violation — codified as the #217 hard rule in sonnet-implementer's spec |
 
 A talk on agentic engineering that names these by signature is a much better talk than one that lists tools.
 
@@ -115,8 +124,10 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 
 ### Module 1 — Drift-scan automation *(cheapest, highest-ROI, builds early momentum)*
 
+> **Shipped** as story-h1/h2, extended over `.claude/` by h10b. Lives at [harness/drift-scan/drift-scan.ts](../../harness/drift-scan/drift-scan.ts) with Checks A/B/D/F/G — the shipped tool exceeded the brief below (plan ↔ source Check B, agent-spec Checks D/F, advisory pending-marker expiry Check G).
+
 - **Concept:** the difference between a *rule* and an *enforcement*. Static analysis on docs.
-- **Exercise:** build `scripts/drift-scan.ts` (run via `tsx`) that:
+- **Exercise:** build a drift-scan script (run via `tsx`) that:
   1. Greps `docs/retrospectives/*.md` for `\bR[0-9]+\b`.
   2. Greps `CLAUDE.md` § 8 for the same.
   3. Reports rules referenced in retros but not in the table (and vice versa).
@@ -124,6 +135,8 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 - **Teach-back:** "the drift you can grep for is drift you should never write down twice." Paired with the diff that catches the story-2.5 missing § 8 row retroactively.
 
 ### Module 2 — Claude Code primitives, by niche
+
+> **Shipped** as story-h3 (the primitives round). One deviation worth teaching: the read-only GitHub MCP server was later *removed* (story-maint-20) — the `gh` CLI proved the least-privileged, more stable tool, vindicated the same session story-h9's spec chose it (h9 retro). The niche table's "external system" row stands; the example didn't.
 
 - **Concept:** every primitive has a niche — when does each *and only it* solve the problem?
 
@@ -149,11 +162,15 @@ Each module: **goal · concepts · exercise in this repo · teach-back checkpoin
 
 ### Module 3 — Right-sizing the gate
 
+> **Shipped** as story-h8 (risk-based Full/Reduced/Light lanes, R26 — risk surface replaced the ≤20-LOC size basis proposed below) and story-h13 (the teach-back's rule walk, executed for real: [rule-walk-2026-07.md](rule-walk-2026-07.md)).
+
 - **Concept:** load-bearing weight ratio (Principle § Heuristic). Ceremony tax.
 - **Exercise:** propose a CLAUDE.md amendment introducing a **trivial-story lane** (≤20 LOC, single file, no Core/DB/Infra touch): plan-doc-in-PR-template, skip plan-reviewer, code-reviewer only, target 3 commits. Add as the next R-tag with a **retroactive maint-01 comparison** showing the savings. Pair with a sibling-overlap detector that runs at plan time (greps in-flight stories from `docs/status.d/`).
 - **Teach-back:** "every gate has a cost — and rules expire" (Principle 7). Walk every § 8 row and tag each as *load-bearing now / candidate for retirement / unverified*.
 
 ### Module 4 — Eval-driven agent engineering + prompt engineering *(centerpiece)*
+
+> **Shipped in reduced form** as evals-lite (story-h12): the 4c contrarian beat won. Instead of golden fixtures, disposition-rate measurement over 688 real findings across 55 suggestion logs ([docs/metrics/dispositions.md](../metrics/dispositions.md)) — which demoted four checklist rules (R1/R9/R10/R11) to table-only and became the evidence base for the h13 rule walk. Golden fixtures remain unbuilt; 4a's spec-versioning shipped with h12.
 
 This is the largest module and the one most worth studying carefully. It also has the most ways to do badly.
 
@@ -211,7 +228,7 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 - **The real evaluation:** *a colleague forks the starter template and ships their first story without me intervening.* That is the end-state test. A talk and a glossary serve it.
 - **Starter-repo template (the load-bearing artefact).** Strip this repo to a teachable seed. **What's removed is more interesting than what stays:**
   - Removed: domain code (couples-expense), 16 retros, 28 plans, the § 8 rule table, the canon docs.
-  - Kept: `.claude/agents/` (3 specs, generic-ified), CLAUDE.md skeleton with placeholder sections, `scripts/drift-scan.ts`, `evals/` with one fixture, a `PR_TEMPLATE` with the 10 DoD items, a `docs/templates/` for plan + retro + status fragment.
+  - Kept: `.claude/agents/` (3 specs, generic-ified), CLAUDE.md skeleton with placeholder sections, `harness/drift-scan/`, `evals/` with one fixture, a `PR_TEMPLATE` with the 10 DoD items, a `docs/templates/` for plan + retro + status fragment.
   - Added: a `STARTER.md` with the *first three steps* a colleague takes after forking. Not "read these 12 docs."
 - **Talk outline (45 min).** Six sections, each grounded in *one* repo file as evidence:
   1. Harness ≠ model · agent epistemic position. *(Evidence: CLAUDE.md size discipline.)*
@@ -224,7 +241,47 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 
 ---
 
-## Part D — Critical files / artefacts
+## Part D — Field chapters (2026-05 → 2026-07)
+
+Part A froze the baseline; the [2026-07-03 health check](harness-health-check-2026-07-03.md) re-audited against it. These chapters are what the interval taught — each a thesis claim with the evidence that earned it, written after the code shipped. They are the sequel to Part A and the raw material for the talk's strongest sections.
+
+### D1 — The context diet (story-h5): bounded context is the difference between an agent that finishes and one that stalls
+
+Principle 4 says context is a budget. What h4's telemetry added: the budget is dominated by *reloads* — cache reads were ~97–99% of all tokens on every measured story, because each sub-agent re-reads the canon per invocation. The diet that followed (h5) cut at the source: scoped agent-spec reads (grep the § 8 table, read canon sections at walk entry instead of wholesale), a quiet test reporter, bounded `gh` output. The functional diff was net −5 LOC — the story *shrank* the prompts.
+
+The dogfood moment is the teachable: plan-reviewer stalled twice at the 600s watchdog on a full-context brief, then completed on a lean, pre-loaded one — and returned 19 findings, six of which the coordinator's inline substitution had missed. When a review agent stalls, cut its input before retrying. The health check ranks this insight among the loop's best transferables.
+
+### D2 — Enforcement tiers (stories h6/h7): a rule and its enforcement are different artifacts, and the tier is a per-finding design decision
+
+Module 1 taught rule-vs-enforcement. h6/h7 taught the next distinction: enforcement has *tiers*, and each finding needs one chosen deliberately. h6 shipped [harness/dod-check](../../harness/dod-check/README.md) (commit envelope, TODO/TBD, Gherkin ↔ step mapping) with two tiers — hard, and draft-aware (advisory while the PR is a draft, strict at ready-for-review). The first non-story PR to hit CI — a routine loop.csv regen — hard-failed, exposing the missing third tier: **always-advisory** (h7). Check G and `try-unfunneled` (h13) landed advisory-first on the same ladder.
+
+Three durable lessons. Enumerate each finding's tier up front, not at the first false positive. Test a gate against a non-story, Dependabot-shaped PR before merging — h6's tests only exercised story-shaped repos, which is why the gap reached main. And a gate tool must run reflexively against its own branch: h6's reflexive run caught two of its own bugs pre-merge; h7's validated the fix live. The health check calls the h6→h7 arc "the mature end-state for gates": deterministic checks migrate out of reviewer prompts into software, then get tiered.
+
+### D3 — Phase 0 (story-ddd-1): model first, then forward
+
+The upstream gap SPDD named ([spdd-comparison.md § 4.6](spdd-comparison.md)) closed as something better than a template slot: a phase. Stories touching Core concepts now start with a modeling dialogue — the `model-session` skill runs it interactively in the main session, the `ddd-modeler` agent generates candidate shapes (Mode A) and later scans the diff for conformance (Mode B), and the user signs the model note before the plan exists (R24/R25). The glossary and context map are user-owned; agents propose deltas, never rewrite.
+
+Adoption was zero-retrofit: naming the latent model (Money as value object, Transaction as aggregate root, canonicalization as anti-corruption layer) cost one docs story and no code churn. The load test came with Epic 4, where Phase-0 dialogues settled product decisions — dissolution receipt remnants, PII-safe-by-construction over a redaction allowlist — before any code existed. The division of labor rhymes with the whole harness: interactive judgment in the main loop, non-interactive scan/generate in restricted agents, ownership with the user.
+
+### D4 — Tracker decay (health-check F8 → story-h9): coordination state outside git rots fastest
+
+Principle 3's explicit-state rule has a blind spot: the issue tracker is explicit state that *isn't in git*, and it decayed faster than any doc — stale umbrella checkboxes, deferrals missing their label, a queue frozen 66 days, and tripwires mis-armed against events that had already fired. The tripwire failure is the structural insight: #111 watched a *channel* (a code-reviewer finding) that drift-scan had pre-empted, and #98's was circular — it waited to observe a silent regression that only the unbuilt eval could observe. **Arm tripwires on conditions, not channels.**
+
+The fix shape is as reusable as the finding: `backlog-refiner`, a propose-only agent — it reads and proposes, the user tags, the main session writes. Any agent touching shared mutable state gets that split. And its acceptance was pre-committed: nine known decay items the first run had to surface independently (it found all nine, plus the § 8 numbering hole). Writing the acceptance inventory before the agent exists turns "the agent seems good" into pass/fail.
+
+### D5 — Subtraction (story-h13): an agentic loop will manufacture process for itself; subtraction must be tooled, not intended
+
+The health check's root-cause finding (F1) was structural, and Part A's own history predicted it: **every growth mechanism was tooled; every shrink mechanism was an intention — and no intention ever fired.** Drift-scan enforced rule *presence*; dod-check enforced envelope *compliance*; retros minted rules. Meanwhile Principle 7's "every 6 months" walk went unperformed for 30 stories, ≥14 of 25 sampled Try items silently dropped, and the deferral queue closed nothing in 65 days. 24 rules, zero retirements. As the health check put it, the loop inherited the ledger's append-only discipline without the balancing-entry mechanism.
+
+Why intention fails here: adding a rule is the natural end of a retro — evidence in hand, prose ready, a table row away. Retiring one has no natural moment, no evidence artifact, and an asymmetric risk profile: keeping a stale rule costs invisible tokens; deleting a load-bearing one costs a visible incident. An agentic loop under those gradients will manufacture process indefinitely.
+
+What made subtraction finally fire (h13) was tooling every half of it. A pre-committed retirement bar (mechanical absorption, 100% acknowledge-only at n≥5 plus dormancy, or supersession). An evidence base that already existed as a byproduct (h12's disposition rates, last-real-exercise greps). A reversible artifact — tombstone rows stay in the table, struck, with rationale; re-minting is un-striking with a new citation — which lowered the activation energy of every retirement. And standing detectors so the next walk isn't heroic: Check G expires stamped `*(pending)*` markers on a clock, and dod-check's `try-unfunneled` makes "we'll codify it later" a checkable claim. Result: 31 rows walked → 6 tombstoned, the two-month R22 deadlock closed, one open issue resolved *by a retirement*.
+
+The design rule this earns: **for every append mechanism you tool, tool the balancing entry in the same breath** — expiry stamps at marker creation, disposition rates as a standing byproduct, reversibility as the default shape of removal. Append-only is a virtue in a ledger and a pathology in a process.
+
+---
+
+## Part E — Critical files / artefacts
 
 - [.claude/agents/plan-reviewer.md](../../.claude/agents/plan-reviewer.md) — Module 4a refactor target, 4b first eval target.
 - [.claude/agents/code-reviewer.md](../../.claude/agents/code-reviewer.md) — Module 4 second eval target.
@@ -232,6 +289,9 @@ Live-demo: edit `plan-reviewer.md` to introduce a deliberate regression (drop th
 - [CLAUDE.md](../../CLAUDE.md) — Modules 1 & 3 amendment targets (drift-scan rule, trivial-story lane).
 - [docs/retrospectives/](../retrospectives/) — Module 5 raw signal source; failure-signature mining ground.
 - [harness/metrics/](../../harness/metrics/) — Module 5 shipped tooling (`loop-metrics.ts`, `usage-reader.ts`) and the telemetry-source spike decision record.
+- [harness/dod-check/](../../harness/dod-check/README.md) — the enforcement-tier ladder in code (chapter D2); its README documents the hard / draft-aware / advisory tiers.
+- [docs/metrics/dispositions.md](../metrics/dispositions.md) — the evals-lite artifact (Module 4 as shipped); per-rule disposition rates over every suggestion log.
+- [rule-walk-2026-07.md](rule-walk-2026-07.md) — the first executed rule-expiry walk (chapter D5); the verdict table is the worked example of Principle 7.
 - [docs/plans/](../plans/) — Module 4d fixture quarry (real plans → known-good eval inputs).
 - [.claude/settings.json](../../.claude/settings.json) — Module 2 hook + permission edits.
 
@@ -250,11 +310,11 @@ Skip until later: agent-framework / LangChain / LangGraph / CrewAI. Out of scope
 
 ---
 
-## Part E — Verification (how to know you've levelled up)
+## Part F — Verification (how to know you've levelled up)
 
 The first five are intermediate; **the sixth is the actual evaluation.**
 
-- ✅ Module 1: `scripts/drift-scan.ts` green; vitest unit on the parser; CI step enforced; PostToolUse hook in `.claude/settings.json`; one intentional broken rule reference catches in CI.
+- ✅ Module 1: `harness/drift-scan/drift-scan.ts` green; vitest unit on the parser; CI step enforced; PostToolUse hook in `.claude/settings.json`; one intentional broken rule reference catches in CI.
 - ✅ Module 2: each primitive added with a one-sentence niche justification in its commit message; the niche table from Part C populated from your own work.
 - ✅ Module 3: merged PR adding the trivial-story lane to CLAUDE.md, with retroactive maint-01 savings comparison; sibling-overlap detector running at plan time.
 - ✅ Module 4: `evals/plan-reviewer.test.ts` green on 3 fixtures; one deliberate prompt regression detected by the suite; the 90-second live demo (4e) rehearsed.

@@ -25,14 +25,14 @@ The interesting question for this comparison is **not** "which is right *here*" 
 | Test ordering | After Canvas + code (`/spdd-api-test`) | Outside-in TDD before code (failing acceptance → unit → green) |
 | Governance source | Per-Canvas Norms + Safeguards (story-local) | Cumulative R-tag table in [CLAUDE.md § 8](../../CLAUDE.md) (cross-story) |
 | Agent topology | Single AI agent driven by user-typed commands | Three role-specialised sub-agents with restricted tool lists ([plan-reviewer](../../.claude/agents/plan-reviewer.md), [code-reviewer](../../.claude/agents/code-reviewer.md), [sonnet-implementer](../../.claude/agents/sonnet-implementer.md)) |
-| Eval discipline | Implicit ("~99% intent alignment" claimed without baseline) | Explicit eval-driven harness engineering planned ([Module 4](harness-engineering.md#module-4--eval-driven-agent-engineering--prompt-engineering-centerpiece)) |
+| Eval discipline | Implicit ("~99% intent alignment" claimed without baseline) | Shipped in reduced form: disposition-rate evals over real review output (evals-lite, story-h12 — [Module 4](harness-engineering.md#module-4--eval-driven-agent-engineering--prompt-engineering-centerpiece)'s own § 4c contrarian scope) |
 | Author scale stance | 5★ team / compliance · 1–2★ solo · acknowledges "high bar on abstraction and modelling" | Single-author today; curriculum end-state is team |
 
 ## § 3. Where they agree
 
 Six shared first principles. These are not novel to either side — they're the load-bearing premises both methodologies inherit and would be visible in any serious AI-augmented dev loop.
 
-1. **Specs as first-class.** SPDD's "first-class delivery artefact" maps directly onto R1 (*plan file alongside code*) and the plan-as-contract rule that drives Phase-4 retro-checks here.
+1. **Specs as first-class.** SPDD's "first-class delivery artefact" maps directly onto the plan-as-contract discipline here — the plan file rides the canonical prep commit (R30; formerly R1, tombstoned 2026-07 once the machinery made it structural) and drives the Phase-4 retro-checks.
 2. **Phased pipeline with named human gates.** Both linear; both put humans at named decision points; both refine in-loop rather than one-shot.
 3. **Slash commands as workflow primitives.** SPDD's six commands are the visible interface. This loop *plans* to add them in [Module 2](harness-engineering.md#module-2--claude-code-primitives-by-niche).
 4. **Spec as normative source.** Both treat the artefact (Canvas / plan) as governing; both audit against it post-implementation.
@@ -49,7 +49,7 @@ SPDD: tests follow Canvas + code (`/spdd-api-test` after `/spdd-generate`). This
 
 ### 4.2. Static rigid template vs. evolving plan
 
-SPDD: 7-slot REASONS Canvas, fixed schema. Current loop: recurring plan sections (Production-code surface, Gherkin scenarios, slice plan) without enforced shape. **Steel-man for SPDD:** at team scale, *consistency cost dominates contortion cost*. A colleague reading 30 plans in 30 different shapes wastes more time than a fixed schema's friction costs. The article's choice is *correct* for its target regime, not a flaw. **Scale-up verdict:** the current loop's freeform plans optimise for the experienced solo author; they degrade fast under multiple authors. *Borrow more than just an Entities slot — also Safeguards.*
+SPDD: 7-slot REASONS Canvas, fixed schema. Current loop: recurring plan sections (Production-code surface, Gherkin scenarios, slice plan) without enforced shape. **Steel-man for SPDD:** at team scale, *consistency cost dominates contortion cost*. A colleague reading 30 plans in 30 different shapes wastes more time than a fixed schema's friction costs. The article's choice is *correct* for its target regime, not a flaw. **Scale-up verdict:** the current loop's freeform plans optimise for the experienced solo author; they degrade fast under multiple authors. *Borrow more than just an Entities slot — also Safeguards. (The Entities half shipped as Phase 0, story-ddd-1 — see § 4.6; the Safeguards slot remains open.)*
 
 ### 4.3. Prompt-first sync rule
 
@@ -61,11 +61,11 @@ SPDD: one agent driven by user-typed commands. This loop: three specialised sub-
 
 ### 4.5. Rule provenance — cumulative R-tags vs. per-Canvas Norms
 
-SPDD encodes governance inside each Canvas (Norms + Safeguards sections). This loop accumulates rules in CLAUDE.md § 8 (R1–R19), each tagged to its originating retro. **Steel-man for SPDD:** under multiple curators, R-tables fork — different curators add different rules from similar incidents, and merging is non-trivial. Per-story Norms avoid the merge problem because each Canvas captures governance for *its* story only. **Scale-up verdict:** the current loop wins on *cumulative learning* — R8 (mock diversity) transfers across all future stories without re-derivation. SPDD wins on *multi-curator coordination*. The right answer at scale is probably **both layers** — a global R-table for cross-story rules, per-plan Safeguards for story-specific ones. The current loop has the global layer; it's missing the per-plan one.
+SPDD encodes governance inside each Canvas (Norms + Safeguards sections). This loop accumulates rules in CLAUDE.md § 8 (R1–R32 as of 2026-07: 25 live — 24 cited keeps + R32 on watch — after the [rule-expiry walk](rule-walk-2026-07.md) tombstoned six and closed the never-minted R22 slot), each tagged to its originating retro. **Steel-man for SPDD:** under multiple curators, R-tables fork — different curators add different rules from similar incidents, and merging is non-trivial. Per-story Norms avoid the merge problem because each Canvas captures governance for *its* story only. **Scale-up verdict:** the current loop wins on *cumulative learning* — R8 (mock diversity) transfers across all future stories without re-derivation. SPDD wins on *multi-curator coordination*. The right answer at scale is probably **both layers** — a global R-table for cross-story rules, per-plan Safeguards for story-specific ones. The current loop has the global layer; it's missing the per-plan one.
 
 ### 4.6. Domain modelling explicitness
 
-SPDD: explicit Entities section in every Canvas, frequently rendered as Mermaid diagrams in the openspdd templates. This loop: DDD discipline lives in [CLAUDE.md § 2](../../CLAUDE.md) and [docs/architecture.md](../architecture.md), but plans don't consistently foreground entity modelling. **Scale-up verdict:** SPDD ahead. For stories touching new Core concepts, an Entities slot in the plan template is cheap, high-signal, and onboard-friendly. *Adopt.*
+SPDD: explicit Entities section in every Canvas, frequently rendered as Mermaid diagrams in the openspdd templates. This loop: DDD discipline lives in [CLAUDE.md § 2](../../CLAUDE.md) and [docs/architecture.md](../architecture.md), but plans don't consistently foreground entity modelling. **Scale-up verdict:** SPDD ahead *at the time of writing*. **Adopted — and exceeded — via story-ddd-1 (R24/R25):** not a template slot but a phase. Core-touching stories now open with Phase 0 — a user-signed model note at `docs/domain/model-notes/`, from which the plan's `## Domain model` section derives — and Phase 4 gained a model-conformance review against a user-owned glossary. Epic 4 load-tested the machinery end-to-end ([chapter D3](harness-engineering.md#d3--phase-0-story-ddd-1-model-first-then-forward)). The residual SPDD lead is the Safeguards slot (§ 6.2), still open.
 
 ### 4.7. Bidirectional governance
 
@@ -92,11 +92,11 @@ Three, with steel-man arguments for each:
 
 1. **Bidirectional plan-code sync.** The Canvas-as-living-doc rule (`/spdd-sync` after refactor) is more rigorous than retro-driven rule capture. At team scale, plans rot as fast as they're authored; sync mechanisms (drift-detect, plan-update commands) become load-bearing. The retrospective fires too coarsely to fix this — it captures *learning*, not *artefact freshness*.
 
-2. **REASONS Canvas template structure.** Not just an "Entities slot" — *Safeguards* is also weak in current plans (a story that touches the ledger should explicitly enumerate the invariants the diff must not violate, in the plan, before code). The full 7-slot rigid template is the *correct* answer when consistency cost dominates contortion cost (see § 4.2 steel-man). Current plans are more like essays with recurring section headers; Canvas is a form.
+2. **REASONS Canvas template structure.** The Entities half of this closed with Phase 0 (story-ddd-1, § 4.6) — but *Safeguards* is still weak in current plans (a story that touches the ledger should explicitly enumerate the invariants the diff must not violate, in the plan, before code). The full 7-slot rigid template is the *correct* answer when consistency cost dominates contortion cost (see § 4.2 steel-man). Current plans are more like essays with recurring section headers; Canvas is a form.
 
 3. **Slash-command vocabulary as a teaching primitive.** Six typed commands beats a 165-line CLAUDE.md for onboarding. A colleague who learns six commands has internalised the *workflow shape*; one who reads CLAUDE.md has internalised prose. Vocabulary transfers more reliably than narrative — it survives translation, summarisation, and partial recall in ways prose doesn't.
 
-**Tradeoff to engage explicitly (re: Module 4):** SPDD's claim is that the Canvas reduces hallucination *upstream* so downstream evals matter less. This loop is strong downstream (Module 4's planned eval suite) and weak upstream (no Canvas-style intent capture before code). Both layers are needed. The honest framing isn't "we evaluate harder than SPDD" — it's "we cover different parts of the funnel, and the upstream gap is real." Adopting the Canvas slots from § 6.2 closes the upstream side.
+**Tradeoff to engage explicitly (re: Module 4):** SPDD's claim is that the Canvas reduces hallucination *upstream* so downstream evals matter less. This loop is strong downstream (Module 4's eval suite, shipped in reduced form as evals-lite — story-h12), and its upstream intent capture — absent when this was written — is now half-closed by Phase 0 (story-ddd-1, § 4.6). Both layers are needed. The honest framing isn't "we evaluate harder than SPDD" — it's "we cover different parts of the funnel." The remaining upstream gap is the Safeguards slot from § 6.2.
 
 ## § 7. Curriculum delta
 

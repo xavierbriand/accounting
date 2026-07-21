@@ -121,7 +121,7 @@
 
 ### Risk Mitigations
 *   **Data Corruption Risk:**
-    *   *Mitigation:* Automatic "Snapshot" backups of the SQLite DB before every `ingest` or `settle` command.
+    *   *Mitigation:* Automatic "Snapshot" backups of the SQLite DB before every `ingest` or `settle` command. *(As shipped, the write verbs are `ingest`/`correct`/`dissolve` — `settle` was absorbed into the read-side; see the Core Verbs reconciliation.)*
 *   **Settlement Drift:**
     *   *Mitigation:* The "Invariant Test" (Total In = Total Out) must run after every write operation. If the invariant breaks, the transaction rolls back immediately.
 
@@ -172,7 +172,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
         *   `accounting export`: Portable data bundle with manifest-hash export proof. *(Epic 4, FR21 — story-4.5b)*
         *   `accounting dissolve`: Proof-gated graceful dissolution. *(Epic 4, FR21 — story-4.5c)*
         *   `accounting categorize`: Standalone auto-tag rule mining over a statement file. *(story-D, bug #93 — emerged post-PRD)*
-    *   Mentions of `settle` elsewhere in this document (snapshots, idempotency, dry-run defaults, write latency) date from when settlement was designed as a write verb; post-absorption those clauses govern the shipped write verbs (`ingest`, `correct`, `dissolve`).
+    *   Mentions of `settle` elsewhere in this document date from when settlement was designed as a write verb. Post-absorption those clauses govern the shipped write verbs (`ingest`, `correct`, `dissolve`) — except FR22's determinism requirement, which governs re-running the settlement *calculation* on the read side. Each such site carries its own inline note, so no site depends on a reader having reached this paragraph: Risk Mitigations (snapshots), Scripting Support (idempotency), UX Ergonomics (dry-run defaults), FR17 (snapshot backup), FR22 (determinism), Write Latency, Snapshot Reliability.
 
 ### Output Formats
 *   **Dual Output:** Every command must support `--json`.
@@ -188,11 +188,11 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 
 ### Scripting Support
 *   **Exit Codes:** Strict adherence to POSIX exit codes (0 = Success, 1 = Error, 2 = Invalid Input).
-*   **Idempotency:** `ingest` and `settle` commands must be idempotent where possible (re-running `ingest` on the same file should skip duplicates without error).
+*   **Idempotency:** `ingest` and `settle` commands must be idempotent where possible (re-running `ingest` on the same file should skip duplicates without error). *(Shipped write verbs: `ingest`/`correct`/`dissolve` — see the Core Verbs reconciliation.)*
 
 ### UX Ergonomics (The "Delightful" CLI)
 *   **Smart Ingest Loop:** The `ingest` command should pre-process and auto-tag transactions where possible, only asking the user for confirmation on low-confidence items ("Found 50 items. Auto-tagged 45. Review remaining 5?").
-*   **Transactional Safety:** Critical operations (ingest, settle) default to a "Staging/Dry-Run" mode, requiring an explicit confirmation ("Commit these 50 transactions? [Y/n]") to prevent accidental data corruption.
+*   **Transactional Safety:** Critical operations (ingest, settle) default to a "Staging/Dry-Run" mode, requiring an explicit confirmation ("Commit these 50 transactions? [Y/n]") to prevent accidental data corruption. *(Shipped write verbs: `ingest`/`correct`/`dissolve` — see the Core Verbs reconciliation.)*
 *   **"Conversational CFO" Persona:** Output messages should be phrased as a helpful, neutral assistant ("I noticed a large expense..." rather than "Error: Limit Exceeded").
 
 ## Project Scoping & Phased Development
@@ -260,7 +260,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 - FR10: **System** can manage **Buffer Levels**, automatically filling or draining buckets based on expense flow and target rules.
 - FR11: **System** can predict recurring **Fixed Costs** (subscriptions, rent) to reserve liquidity in advance.
 - FR12: **System** can apply **Dynamic Equity Splits** based on transaction dates relative to "Effective Date" rules (e.g., change split from 50/50 to 60/40 on March 1st).
-- FR22: **System** can perform **Deterministic Temporal Calculations**, ensuring that re-running a settlement for a past month yields the exact same result regardless of the current system date.
+- FR22: **System** can perform **Deterministic Temporal Calculations**, ensuring that re-running a settlement for a past month yields the exact same result regardless of the current system date. *(Post-absorption this governs re-running the settlement **calculation** — the read-side `status`/`explain` commands — not a write verb.)*
 
 ### Transaction Management (Ledger)
 
@@ -268,7 +268,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 - FR14: **User** can **correct** a past transaction via the **Correction** command (`correct`), which triggers a Reversal and a Correcting entry.
 - FR15: **System** can enforce **Double-Entry Consistency**, ensuring every debit has a matching credit within the ledger.
 - FR16: **System** can store monetary values with their associated **Currency Code** (ISO 4217) to support future multi-currency features.
-- FR17: **System** can create a **Snapshot Backup** of the database before any write operation (ingest/settle).
+- FR17: **System** can create a **Snapshot Backup** of the database before any write operation (ingest/settle). *(Shipped write operations: `ingest`, `correct`, `dissolve` — `settle` never writes; see the Core Verbs reconciliation.)*
 - FR21: **User** can perform a **Graceful Dissolution** (Data Wipe), exporting all personal data to portable formats and securely resetting the application state.
 
 ### Reporting & Output
@@ -290,7 +290,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 ### Performance
 
 - **Read Latency (Status/Help):** Read-only commands must execute in **< 500ms** to ensure the tool feels "instant" for quick checks.
-- **Write Latency (Ingest/Settle):** Write operations are permitted up to **2000ms** to accommodate mandatory ACID transaction locking and snapshot generation.
+- **Write Latency (Ingest/Settle):** Write operations are permitted up to **2000ms** to accommodate mandatory ACID transaction locking and snapshot generation. *(Shipped write verbs: `ingest`, `correct`, `dissolve`.)*
 - **Ingestion Throughput:** The system must be able to parse, deduplicate, and dry-run **1,000 transactions in < 2 seconds** on standard hardware (M1/M2/Intel i5).
 
 ### Data Integrity & Safety
@@ -299,7 +299,7 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 - **Penny Allocation Protocol:** To handle indivisible splits (e.g., 100 / 3), the system must use a deterministic algorithm (e.g., "Largest Remainder Method") to assign the residual penny, ensuring `Sum(Shares) == Total` strictly holds.
 - **Settlement Invariant:** The system must enforce that `Sum(Credits) + Sum(Debits) = 0` for every transaction group. If this invariant fails, the write operation must be rejected automatically.
 - **ACID Compliance:** The SQLite configuration must be set to `WAL` mode with `synchronous = NORMAL` or higher to ensure database integrity.
-- **Snapshot Reliability:** The system must successfully create a `.bak` copy of the database before every write operation (`ingest`, `settle`) with **100% reliability**.
+- **Snapshot Reliability:** The system must successfully create a `.bak` copy of the database before every write operation (`ingest`, `settle`) with **100% reliability**. *(Shipped write operations: `ingest`, `correct`, `dissolve`.)*
 
 ### Security & Privacy
 

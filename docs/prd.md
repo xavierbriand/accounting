@@ -98,6 +98,12 @@
 *   **Climax:** When settling March expenses, the system checks every transaction date. A grocery run on March 10th is split 50/50. A utility bill on March 20th is split 80/20.
 *   **Resolution:** The final transfer amount respects the precise timing of the life event. Sam feels supported, not indebted.
 
+**7. Journey: "The Annual Planning Conversation" (The Couple + The Agent)**
+*   **Opening:** Late December. Alex and Sam used to spend a tense evening arguing over an Excel forecast for next year's budget.
+*   **Rising Action:** They open an agent session instead. The agent runs `accounting config plan --review --json` and opens with last year's plan-vs-actual: *"You set the Car buffer to €900 expecting the timing-belt job; actual spend was €1,140."*
+*   **Climax:** Over a few rounds the agent edits the plan file to match their answers — a kitchen-renovation life event, 3% inflation — re-running `--revise` each time. The engine's warnings surface honestly (*"your override is below last year's worst month"*). Both partners react to deltas and evidence, not to each other.
+*   **Resolution:** They agree. The agent shows the config diff; a human confirms the apply. The plan file — decisions plus *why* — is kept, and next December's review opens with it. The negotiation happened with the numbers, not across the table.
+
 ## Domain-Specific Requirements
 
 ### Compliance & Data Privacy
@@ -273,10 +279,11 @@ A dual-mode CLI tool designed for "Personal Finance Engineering." It balances hi
 
 ### Annual Planning
 
-- FR24: **Alex (CFO)** can run a **Year-in-Review Analyzer** that proposes candidate buffer buckets, target sizes (90th-percentile model with worst-case shown alongside), fill cadence, and `firstExpectedOccurrence` from a trailing ledger window — classifying past depletion events as **Model Failure** vs **User Spending** in Conversational-CFO voice. Read-only on ledger and live config; emits a scratch `plan-<year>.yaml` for revision.
-- FR25: **Alex** can iterate via a **Plan-File Loop** with overrides, life-event multipliers, inflation knobs (global or per-bucket), and one-off decisions — recomputing and validating against floor/ceiling rules over multiple rounds without touching the ledger or live config. Validation surfaces warnings, never blocks.
+- FR24: **The couple (via their agent)** can run a **Year-in-Review Analyzer** that proposes candidate buffer buckets, target sizes (90th-percentile model with worst-case shown alongside), fill cadence, and `firstExpectedOccurrence` from a trailing ledger window — classifying past depletion events as **Model Failure** vs **User Spending** in Conversational-CFO voice. The ledger is assumed to hold the full household history (bootstrap = normal ingest); below 12 months the analyzer states the window and widens caveats — it degrades, never refuses. When a prior year's plan file exists, the report opens with **plan-vs-actual** against its recorded intents. Read-only on ledger and live config; emits a `plan-<year>.yaml` for revision.
+- FR25: **The couple** can iterate via a **Plan-File Loop** with overrides, life-event multipliers, inflation knobs (global or per-bucket), and one-off decisions — recomputing and validating against floor/ceiling rules over multiple rounds without touching the ledger or live config. Validation surfaces warnings, never blocks. The plan file is simultaneously the loop's working state and the year's **durable record of intent**: every decision can carry a free-text *why*, and the applied plan is kept for the next year's FR24 run to open against.
 - FR26: **System** can challenge existing **Recurring Rules** against the ledger — proposing **Amend** / **Remove** / **Add** with confidence scores and inline evidence — directly serving the Fixed Cost Prediction < 5% variance success criterion. Coverage matcher reuses the FR7 idempotency hash.
-- FR27: **Alex** can apply the converged plan to `accounting.yaml` via a **previewed, snapshotted, audit-trailed diff** scoped to `buffers:` and `recurring:` sections only — comment-preserving round-trip patching, immutable timestamped snapshots (`accounting.yaml.bak.<ISO-timestamp>`), post-write re-validation with restore-on-failure. Emits an audit-trail entry via FR23.
+- FR27: **The couple** (a human confirms at the gate) can apply the converged plan to `accounting.yaml` via a **previewed, snapshotted, audit-trailed diff** scoped to `buffers:` and `recurring:` sections only — comment-preserving round-trip patching, immutable timestamped snapshots (`accounting.yaml.bak.<ISO-timestamp>`), post-write re-validation with restore-on-failure. Emits an audit-trail entry via FR23 (`ConfigChanged`, origin `applied` — the second arm of the 4.5a discriminator); the applied plan file is preserved as the year's intent record.
+- FR28: **An LLM agent** (e.g. Claude) can drive the full annual ritual — review → discuss → revise rounds → human-confirmed apply — from in-repo guidance: a documented plan-loop flow in the CLI JSON contract plus a ritual playbook. The CLI stays the deterministic engine; the agent converses and narrates evidence; config mutation always gates on explicit human confirmation.
 
 ## Non-Functional Requirements
 

@@ -8,10 +8,10 @@ import Database from 'better-sqlite3';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { Transaction } from '../../../src/core/ledger/transaction.js';
-import { Money } from '../../../src/core/shared/money.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { unwrapError, unwrapSuccess } from '../../_helpers/json-envelope.js';
+import { makeEur } from '../../_helpers/money-fixtures.js';
 
 interface DissolveWorld {
   tmpDir?: string;
@@ -44,9 +44,6 @@ function makeTmpDir(): string {
   return fs.realpathSync(dir);
 }
 
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 // Each fixture helper opens, writes, and closes its own connection immediately
 // (unlike export.steps.ts's shared-teardown pattern) — a lingering open

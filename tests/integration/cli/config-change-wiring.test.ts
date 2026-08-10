@@ -22,26 +22,18 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
 
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-config-change-wiring-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('accounting-config-change-wiring-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
-  }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
 });
 

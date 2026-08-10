@@ -119,6 +119,7 @@ Full agent spec: [.claude/agents/sonnet-implementer.md](.claude/agents/sonnet-im
 ### 6.4.1 Push protocol (parallel-safe)
 
 - **One agent per branch.** Don't open a second session against a branch with an active session.
+- **Don't operate on a shared worktree while a background agent is active in it (R33).** A background subagent (Agent tool, no `isolation` param) runs in the *same* working directory as the main session. Running `git rebase`/`push`/`checkout` there while it's still mid-task races its uncommitted state. Wait for its completion notification before touching branch state, or dispatch it with `isolation: "worktree"` if concurrent main-loop git work is genuinely needed.
 - **All work on a branch — never on `main`.** Story worktrees never push `main`. Main advances only via `gh pr merge`, gated by the user.
 - **Before every push:**
   1. `git fetch origin`
@@ -195,3 +196,4 @@ New retro rules MUST add a row here in the same PR; prose references the tag. Dr
 | R30 | Story-id docs commits use the countSlices-**exempt** canonical subjects — prep `chore(docs): story-<id> plan + P1/P2/P3 review` and `chore(retro)…` — any other story-id-bearing commit counts toward the envelope; DoR/PR-link edits fold into the prep commit, Phase-4/5 doc updates into the retro commit | [story-4.3a](docs/retrospectives/story-4.3a.md) |
 | R31 | Any PR changing a `--json` output shape, error code, or exit-code mapping updates [docs/cli-json-contract.md](docs/cli-json-contract.md) in the same PR — the contract doc is the agent-facing product surface and must never trail the code | [story-4.4b](docs/retrospectives/story-4.4b.md) |
 | R32 | A transport-errored `ExitPlanMode` call can leave a session-wide plan-mode flag stuck even though the main loop's own subsequent tool calls proceed; a spawned subagent's refusal to write code citing "plan mode active" is authoritative — re-run `ExitPlanMode` for real and confirm the harness's clearance message, don't override via another agent's text message | [story-maint-26](docs/retrospectives/story-maint-26.md) |
+| R33 | Background subagents share the spawning session's worktree unless `isolation: "worktree"` is requested; the main session must not run branch-mutating git (rebase/push/checkout) there while a spawned agent is still active — wait for its completion notification, or dispatch it isolated if concurrent git work is needed | [story-maint-31](docs/retrospectives/story-maint-31.md) |

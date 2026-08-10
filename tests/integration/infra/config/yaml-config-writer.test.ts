@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { YamlConfigWriter } from '../../../../src/infra/config/yaml-config-writer.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
 // fails if doc round-tripping loses comments (guards the parseDocument round-trip claim)
 // fails if the new group is inserted elsewhere in the document (guards append-position invariant)
@@ -11,19 +11,7 @@ import { YamlConfigWriter } from '../../../../src/infra/config/yaml-config-write
 // fails if the writer appends a duplicate (guards Q5-a)
 // fails if the file is written in-place without rename or if a tmp sibling remains (guards atomicity invariant)
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-config-writer-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('yaml-config-writer-');
 
 function writeYaml(tmpDir: string, content: string): { yamlPath: string; mtimeNs: bigint } {
   const yamlPath = path.join(tmpDir, 'accounting.yaml');

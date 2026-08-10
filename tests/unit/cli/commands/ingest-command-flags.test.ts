@@ -7,11 +7,8 @@ import type { IngestCommandDeps } from '../../../../src/cli/commands/ingest-comm
 import { Result } from '@core/shared/result.js';
 import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
-import type { SnapshotService } from '@core/ports/snapshot-service.js';
-import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import { Money } from '@core/shared/money.js';
-import type { ConfigWriter } from '@core/ports/config-writer.js';
-import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
+import { makeNoOpTransactionRepo, makeNoOpConfigWriter, makeNoOpSnapshotService, makeNoOpDomainEventRecorder } from '../../../_helpers/fakes.js';
 
 // fails if: --non-interactive falsely flags high-confidence as needing review,
 //           or the command hangs waiting for a prompt in CI mode (timeout guards this),
@@ -59,28 +56,6 @@ function makeLowOutcome(description: string, category: string): BuildOutcome {
 
 const TEST_DB_PATH = '/tmp/test-ingest-flags.db';
 
-function makeNoOpSnapshotService(): SnapshotService {
-  return {
-    create: vi.fn().mockResolvedValue(Result.ok()),
-    restore: vi.fn().mockResolvedValue(Result.ok()),
-    remove: vi.fn().mockResolvedValue(Result.ok()),
-  };
-}
-
-function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
-  return {
-    saveBatch: vi.fn().mockReturnValue(Result.ok({ written: 0 })),
-  };
-}
-
-function makeNoOpConfigWriterStub(): ConfigWriter {
-  return { appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()) };
-}
-
-function makeNoOpDomainEventRecorder(): DomainEventRecorder {
-  return { record: vi.fn().mockReturnValue(Result.ok()) };
-}
-
 const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
 
 function makeStreams(): { stdout: Writable & { captured: string }; stderr: Writable & { captured: string } } {
@@ -109,7 +84,7 @@ describe('--non-interactive mode', () => {
       transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -143,7 +118,7 @@ describe('--non-interactive mode', () => {
       transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -180,7 +155,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -233,7 +208,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionRepository,
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -273,7 +248,7 @@ describe('--json mode (story-4.4b: enveloped, camelCase, Money.toString() conven
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -308,7 +283,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -340,7 +315,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -372,7 +347,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -404,7 +379,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -437,7 +412,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -471,7 +446,7 @@ describe('--json mode: remaining failure envelopes (story-4.4b)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 

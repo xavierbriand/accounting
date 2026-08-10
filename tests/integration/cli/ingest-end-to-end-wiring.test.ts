@@ -14,32 +14,20 @@
  *   The exit-code assertion (2, not 0) anchors both regressions: 0 rows built ⇒ 0 low-confidence
  *   ⇒ exit 0; or wrong tagging ⇒ a different low-confidence count ⇒ assertion drift.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const FIXTURE_CSV = path.join(__dirname, '../../fixtures/csv/bpce-valid.csv');
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-e2e-wiring-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-e2e-wiring-');
 
 describe('ingest end-to-end wiring against real BPCE CSV', () => {
   it('exits 2, stderr contains "Found 5 new transactions", no "Build failed" lines', () => {

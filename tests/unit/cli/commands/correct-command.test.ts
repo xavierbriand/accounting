@@ -14,13 +14,9 @@ import type { CorrectCommandDeps } from '../../../../src/cli/commands/correct-co
 import type { CorrectCommandOptions } from '../../../../src/cli/commands/correct-command-options.js';
 import { Result } from '@core/shared/result.js';
 import { Transaction } from '@core/ledger/transaction.js';
-import { Money } from '@core/shared/money.js';
 import type { TransactionRepository } from '@core/ports/transaction-repository.js';
 import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 function makeOriginal(): Transaction {
   return Transaction.create({

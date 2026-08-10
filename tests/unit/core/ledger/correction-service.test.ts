@@ -14,10 +14,7 @@ import fc from 'fast-check';
 import { Transaction, type Entry } from '@core/ledger/transaction.js';
 import { Money } from '@core/shared/money.js';
 import { CorrectionService } from '@core/ledger/correction-service.js';
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 function makeOriginal(): Transaction {
   return Transaction.create({

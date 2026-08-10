@@ -16,7 +16,6 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { parse as csvParse } from 'csv-parse/sync';
 import Database from 'better-sqlite3';
@@ -24,30 +23,19 @@ import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { Transaction } from '../../../../src/core/ledger/transaction.js';
-import { Money } from '../../../../src/core/shared/money.js';
 import { FsDataExporter } from '../../../../src/infra/export/fs-data-exporter.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDir = useTmpDirs('fs-data-exporter-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-data-exporter-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function setUpDb(): { db: Database.Database; dbPath: string } {
   const tmpDir = makeTmpDir();

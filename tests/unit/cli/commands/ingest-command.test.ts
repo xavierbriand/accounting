@@ -13,6 +13,7 @@ import type { TransactionRepository } from '@core/ports/transaction-repository.j
 import { Money } from '@core/shared/money.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
 import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
+import { makeNoOpTransactionRepo, makeNoOpConfigWriter, makeNoOpSnapshotService, makeNoOpDomainEventRecorder } from '../../../_helpers/fakes.js';
 
 // fails if: the summary table is not written to stdout,
 //           or the interactive loop is skipped for low-confidence items,
@@ -64,30 +65,6 @@ function makeStderr(): Writable & { captured: string } {
   return makeStdout();
 }
 
-function makeNoOpSnapshotService(): SnapshotService {
-  return {
-    create: vi.fn().mockResolvedValue(Result.ok()),
-    restore: vi.fn().mockResolvedValue(Result.ok()),
-    remove: vi.fn().mockResolvedValue(Result.ok()),
-  };
-}
-
-function makeNoOpTransactionRepo(): Pick<TransactionRepository, 'saveBatch'> {
-  return {
-    saveBatch: vi.fn().mockReturnValue(Result.ok({ written: 0 })),
-  };
-}
-
-function makeNoOpConfigWriterStub(): ConfigWriter {
-  return {
-    appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
-  };
-}
-
-function makeNoOpDomainEventRecorder(): DomainEventRecorder {
-  return { record: vi.fn().mockReturnValue(Result.ok()) };
-}
-
 // No-op InteractivePrompter stub that satisfies the updated interface.
 // Used in tests that don't exercise confirmRememberRule.
 const noOpConfirmRememberRule = vi.fn().mockResolvedValue({ action: 'skip' as const });
@@ -132,7 +109,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -184,7 +161,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -222,7 +199,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -260,7 +237,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -290,7 +267,7 @@ describe('runIngestCommand — happy path (interactive)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -346,7 +323,7 @@ describe('runIngestCommand — interactive re-categorisation preserves idempoten
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -411,7 +388,7 @@ describe('runIngestCommand — commitBatch flow (Story 2.5)', () => {
       transactionRepository: makeNoOpTransactionRepo(),
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
       ...overrides,
     };
@@ -649,7 +626,7 @@ describe('runIngestCommand — new category propagates to subsequent prompts (St
       transactionRepository: { saveBatch: saveBatchMock },
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -896,7 +873,7 @@ describe('runIngestCommand — same-run auto-tag from remembered rules (Story E)
       transactionRepository: { saveBatch: saveBatchMock },
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 
@@ -957,7 +934,7 @@ describe('runIngestCommand — same-run auto-tag edge semantics (Story E)', () =
       transactionRepository: { saveBatch: saveBatchMock },
       snapshotService: makeNoOpSnapshotService(),
       dbPath: TEST_DB_PATH,
-      configWriter: makeNoOpConfigWriterStub(),
+      configWriter: makeNoOpConfigWriter(),
       domainEventRecorder: makeNoOpDomainEventRecorder(),
     };
 

@@ -8,13 +8,10 @@ import type { BufferLedgerQuery } from '@core/ports/buffer-ledger-query.js';
 import type { BufferBucket } from '@core/config/app-config.js';
 import { Money } from '@core/shared/money.js';
 import { Result } from '@core/shared/result.js';
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function makeBucket(
   name: string,

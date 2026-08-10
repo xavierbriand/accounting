@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import type { AccountConfig } from '@core/config/app-config.js';
 
 export interface AutoTagRuleOverride {
   readonly category: string;
@@ -16,6 +17,8 @@ export interface InlineConfigOverrides {
   readonly partner1?: string;
   readonly partner2?: string;
   readonly autoTagRules?: readonly AutoTagRuleOverride[];
+  readonly additionalAccounts?: readonly AccountConfig[];
+  readonly additionalAutoTagRules?: readonly AutoTagRuleOverride[];
 }
 
 /**
@@ -24,6 +27,11 @@ export interface InlineConfigOverrides {
  * bank account matching "bpce-valid_" prefix, two-partner 50/50 split, no buffers.
  * Partner names use fictional non-PII values ("Alice" and "Bob").
  * Pass autoTagRules to emit a YAML autoTagRules section; omit for empty rules (default []).
+ * Pass additionalAccounts to append extra account entries after the primary one
+ * (e.g. a second bank account matching a different filenamePrefix).
+ * Pass additionalAutoTagRules to append extra rules on top of autoTagRules, rather
+ * than replacing the list — useful when a caller wants to layer scenario-specific
+ * rules onto a shared base set.
  */
 export function writeStubYaml(tmpDir: string, overrides?: InlineConfigOverrides): void {
   const cfg = {
@@ -37,10 +45,12 @@ export function writeStubYaml(tmpDir: string, overrides?: InlineConfigOverrides)
     partner2: overrides?.partner2 ?? 'Bob',
   };
 
+  const allAutoTagRules = [...(overrides?.autoTagRules ?? []), ...(overrides?.additionalAutoTagRules ?? [])];
+
   let autoTagRulesYaml = '';
-  if (overrides?.autoTagRules !== undefined && overrides.autoTagRules.length > 0) {
+  if (allAutoTagRules.length > 0) {
     const lines = ['autoTagRules:'];
-    for (const rule of overrides.autoTagRules) {
+    for (const rule of allAutoTagRules) {
       lines.push(`  - category: ${rule.category}`);
       lines.push('    patterns:');
       for (const pattern of rule.patterns) {
@@ -48,6 +58,20 @@ export function writeStubYaml(tmpDir: string, overrides?: InlineConfigOverrides)
       }
     }
     autoTagRulesYaml = '\n' + lines.join('\n') + '\n';
+  }
+
+  let additionalAccountsYaml = '';
+  if (overrides?.additionalAccounts !== undefined && overrides.additionalAccounts.length > 0) {
+    const lines: string[] = [];
+    for (const account of overrides.additionalAccounts) {
+      lines.push(`  - id: ${account.id}`);
+      lines.push(`    type: ${account.type}`);
+      lines.push(`    filenamePrefix: "${account.filenamePrefix}"`);
+      if (account.cardSuffix !== undefined) {
+        lines.push(`    cardSuffix: "${account.cardSuffix}"`);
+      }
+    }
+    additionalAccountsYaml = lines.join('\n') + '\n';
   }
 
   const yaml = `\
@@ -58,7 +82,7 @@ accounts:
   - id: ${cfg.accountId}
     type: bank
     filenamePrefix: "${cfg.filenamePrefix}"
-splits:
+${additionalAccountsYaml}splits:
   - validFrom: "${cfg.splitValidFrom}"
     rules:
       - { partner: ${cfg.partner1}, ratio: 0.5 }

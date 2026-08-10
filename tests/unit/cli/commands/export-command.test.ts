@@ -14,9 +14,8 @@
  *   QUERY_FAILURE envelope under --json, or the bundleName handed to record()
  *   and writeBundle() ever diverge.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
@@ -27,20 +26,9 @@ import type { ExportCommandOptions } from '../../../../src/cli/commands/export-c
 import { Result } from '@core/shared/result.js';
 import type { DataExporter } from '@core/ports/data-exporter.js';
 import type { DomainEventRecorder } from '@core/ports/domain-event-recorder.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'export-command-unit-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('export-command-unit-');
 
 function baseOptions(overrides: Partial<ExportCommandOptions> = {}): ExportCommandOptions {
   return { json: false, ...overrides };

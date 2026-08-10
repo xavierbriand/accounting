@@ -13,14 +13,14 @@
  *   after success, snapshot removed after failure, raw SQL UNIQUE error leaked to stderr,
  *   or idempotency dedup misses on re-ingest (FR8 regression).
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { unwrapSuccess } from '../../_helpers/json-envelope.js';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 import { runIngestCommand } from '../../../src/cli/commands/ingest-command.js';
 import type { IngestCommandDeps } from '../../../src/cli/commands/ingest-command.js';
 import { runMigrations } from '../../../src/infra/db/migrator.js';
@@ -52,19 +52,7 @@ const FIXTURE_CSV = path.join(
   '../../fixtures/csv/bpce-valid.csv',
 );
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-ingest-commit-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-ingest-commit-');
 
 function makeRealDeps(
   db: Database.Database,

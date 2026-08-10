@@ -16,14 +16,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { NodeSqliteSnapshotService } from '../../../../src/infra/db/node-sqlite-snapshot-service.js';
-
-function makeTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-snap-test-'));
-}
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
 function makeSeedDb(dbPath: string): Database.Database {
   const db = new Database(dbPath);
@@ -42,18 +38,7 @@ function writeTwoTxns(db: Database.Database): void {
   );
 }
 
-const tmpDirs: string[] = [];
-
-function tracked(dir: string): string {
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-snap-test-');
 
 describe('NodeSqliteSnapshotService — round-trip', () => {
   let tmpDir: string;
@@ -63,7 +48,7 @@ describe('NodeSqliteSnapshotService — round-trip', () => {
   let service: NodeSqliteSnapshotService;
 
   beforeEach(() => {
-    tmpDir = tracked(makeTmpDir());
+    tmpDir = makeTmpDir();
     dbPath = path.join(tmpDir, 'test.db');
     snapshotPath = path.join(tmpDir, 'test.db.bak');
     db = makeSeedDb(dbPath);
@@ -142,7 +127,7 @@ describe('NodeSqliteSnapshotService — symlink safety (TOCTOU guard)', () => {
       // the two syscalls lets an attacker swap in a symlink after the check). The atomic-
       // rename-from-randomised-tmp pattern must unlink the pre-planted symlink *by name*
       // (not by following it). (P3 finding #3 lock-in)
-      const tmpDir = tracked(makeTmpDir());
+      const tmpDir = makeTmpDir();
       const dbPath = path.join(tmpDir, 'live.db');
       const snapshotPath = path.join(tmpDir, 'live.db.bak');
 
@@ -187,7 +172,7 @@ describe('NodeSqliteSnapshotService — overwrite existing snapshot', () => {
     // fails if: create refuses when .bak already exists (would brick every retry after a failure)
     // documents the overwrite behaviour — the .bak is single-slot, not a history
     // (Plan-agent Decision 4 lock-in)
-    const tmpDir = tracked(makeTmpDir());
+    const tmpDir = makeTmpDir();
     const dbPath = path.join(tmpDir, 'live2.db');
     const snapshotPath = path.join(tmpDir, 'live2.db.bak');
 
@@ -217,7 +202,7 @@ describe('NodeSqliteSnapshotService — tmp cleanup on failure', () => {
   it('no tmp files remain after a backup failure', async () => {
     // fails if: the adapter leaks ${snapshotPath}.tmp.* files on rejection
     // We force a failure by providing a snapshotPath under a non-existent parent directory.
-    const tmpDir = tracked(makeTmpDir());
+    const tmpDir = makeTmpDir();
     const dbPath = path.join(tmpDir, 'live3.db');
     const badSnapshotPath = path.join(tmpDir, 'nonexistent-subdir', 'live3.db.bak');
 

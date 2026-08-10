@@ -13,15 +13,12 @@ import type { BufferBucket, SplitWindow, RecurringRule } from '@core/config/app-
 import type { BufferLedgerQuery } from '@core/ports/buffer-ledger-query.js';
 import type { ForecastOccurrence } from '@core/recurring/forecast-occurrence.js';
 import type { BufferState } from '@core/buffers/buffer-state.js';
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function splitWindow(validFrom: string, ...partners: Array<[string, number]>): SplitWindow {
   return {

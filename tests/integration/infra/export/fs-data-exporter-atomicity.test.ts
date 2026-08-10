@@ -15,29 +15,21 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { FsDataExporter } from '../../../../src/infra/export/fs-data-exporter.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDir = useTmpDirs('fs-data-exporter-atomicity-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-data-exporter-atomicity-'));
-  tmpDirs.push(dir);
-  return dir;
-}
 
 function setUpDb(): { db: Database.Database; tmpDir: string } {
   const tmpDir = makeTmpDir();

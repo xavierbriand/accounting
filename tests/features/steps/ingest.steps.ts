@@ -1,7 +1,6 @@
-import { expect, afterEach } from 'vitest';
+import { expect } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PassThrough } from 'stream';
@@ -23,6 +22,7 @@ import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { Result } from '../../../src/core/shared/result.js';
 import { payloadFrom, unwrapError } from '../../_helpers/json-envelope.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,19 +37,7 @@ interface IngestWorld {
   lastResult?: { status: number; stdout: string; stderr: string };
 }
 
-const tmpDirs: string[] = [];
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-bdd-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('accounting-bdd-');
 
 Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: IngestWorld) {
   const tmpDir = makeTmpDir();
@@ -59,6 +47,8 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
   // autoTagRules: minimal set that matches the bpce-valid fixture (mutuelle→Insurance,
   // abonnement→Subscriptions) so the auto-tagging BDD scenario sees autoTagged=2.
   // metro and virement-fictif rules cover the bpce-in-batch-dups fixture (story-maint-17).
+  // additionalAccounts: second account for the same fixture — prefix matches filenames
+  // starting with "bpce-in-batch-" so pickSourceAccount resolves correctly (#117 part 1).
   writeStubYaml(tmpDir, {
     autoTagRules: [
       { category: 'Insurance', patterns: ['mutuelle'] },
@@ -66,14 +56,10 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
       { category: 'Transit', patterns: ['metro fictif'] },
       { category: 'Transfers', patterns: ['virement fictif'] },
     ],
+    additionalAccounts: [
+      { id: 'bpce-batch-account', type: 'bank', filenamePrefix: 'bpce-in-batch-' },
+    ],
   });
-  // Second account for bpce-in-batch-dups fixture (story-maint-17): prefix matches
-  // filenames starting with "bpce-in-batch-" so pickSourceAccount resolves correctly.
-  const yamlPath = path.join(tmpDir, 'accounting.yaml');
-  const yamlContent = fs.readFileSync(yamlPath, 'utf8');
-  const secondAccount = '  - id: bpce-batch-account\n    type: bank\n    filenamePrefix: "bpce-in-batch-"\n';
-  const updatedYaml = yamlContent.replace('splits:', `${secondAccount}splits:`);
-  fs.writeFileSync(yamlPath, updatedYaml, 'utf8');
   // YAML-authoritative: no --db-path flag after #65 (story-maint-11)
   spawnCli(['migrate'], { cwd: tmpDir });
 });

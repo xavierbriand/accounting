@@ -1,10 +1,10 @@
 import { expect, afterEach } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 interface ConfigChangeWorld {
   tmpDir?: string;
@@ -13,22 +13,14 @@ interface ConfigChangeWorld {
 }
 
 const dbs: Database.Database[] = [];
-const tmpDirs: string[] = [];
+
+const makeTmpDir = useTmpDirs('accounting-config-change-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-config-change-'));
-  tmpDirs.push(dir);
-  return dir;
-}
 
 // Regular (non-cosmetic) layout: buffer target is the only value this suite varies.
 function writeYaml(tmpDir: string, bufferTarget: number): void {

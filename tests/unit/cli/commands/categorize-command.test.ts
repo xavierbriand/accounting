@@ -9,6 +9,7 @@ import { Result } from '@core/shared/result.js';
 import type { AppConfig, AccountConfig } from '@core/config/app-config.js';
 import type { ConfigWriter } from '@core/ports/config-writer.js';
 import { Money } from '@core/shared/money.js';
+import { makeNoOpConfigWriter } from '../../../_helpers/fakes.js';
 
 // fails if: --non-interactive bail exits 0 when groups exist (guards CI mode invariant),
 //   --json shape regresses (guards machine contract), abort path doesn't flush partial buffer,
@@ -44,12 +45,6 @@ function makeCsvContent(rows: Array<{ description: string; count: number }>): st
     }
   }
   return [CSV_HEADER, ...dataRows].join('\n') + '\n';
-}
-
-function makeNoOpConfigWriter(): ConfigWriter {
-  return {
-    appendAutoTagRules: vi.fn().mockResolvedValue(Result.ok()),
-  };
 }
 
 function makeBaseDeps(overrides: Partial<CategorizeCommandDeps> = {}): {

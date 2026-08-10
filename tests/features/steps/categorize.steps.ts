@@ -1,11 +1,11 @@
-import { expect, afterEach } from 'vitest';
+import { expect } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { unwrapSuccess, unwrapError } from '../../_helpers/json-envelope.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 interface CategorizeWorld {
   tmpDir?: string;
@@ -15,19 +15,7 @@ interface CategorizeWorld {
   originalYamlContent?: string;
 }
 
-const tmpDirs: string[] = [];
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-categorize-bdd-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('accounting-categorize-bdd-');
 
 const CSV_HEADER = 'Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation';
 

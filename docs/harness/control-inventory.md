@@ -64,7 +64,7 @@ Gaps).
 | ddd-modeler | `.claude/agents/ddd-modeler.md` | sensor (Mode B) / guide (Mode A, generates candidate shapes before the fact) | inferential | judge (Mode A is advisor-shaped — recorded in the description field, not a second role value; see model note § Rejected alternatives) | user + main-session dialogue converges Mode A; Opus disposes Mode B findings | The one spec with a mode-dependent kind |
 | backlog-refiner | `.claude/agents/backlog-refiner.md` | sensor | inferential | advisor | user tags its proposed-actions table | Propose-only; never mutates the tracker |
 
-## Commands (`.claude/commands/*.md`, 4 files) — playbooks, no role
+## Commands (`.claude/commands/*.md`, 5 files) — playbooks, no role
 
 | Control | Where | Kind | Mechanism | Role | Paired counterpart | Notes/Gap |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -72,6 +72,7 @@ Gaps).
 | new-story-preflight | `.claude/commands/new-story-preflight.md` | guide (playbook) | inferential | — | maintenance-sub-loop template (step 1) | — |
 | refine-backlog | `.claude/commands/refine-backlog.md` | guide (playbook) | inferential | — | invokes backlog-refiner | — |
 | story-status | `.claude/commands/story-status.md` | guide (playbook) | inferential | — | none | Reads `docs/status.d/` + open PRs |
+| rebase-conflict-protocol | `.claude/commands/rebase-conflict-protocol.md` | guide (playbook) | inferential | — | CLAUDE.md § 6.4.1 push protocol | Loaded on demand during a rebase conflict; relocated out of always-loaded CLAUDE.md (story-maint-34) |
 
 ## drift-scan Checks (computational sensors)
 

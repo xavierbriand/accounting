@@ -1,7 +1,5 @@
 import { expect, afterEach } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
-import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { Writable } from 'stream';
 import Database from 'better-sqlite3';
@@ -10,12 +8,13 @@ import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/
 import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { runCorrectCommand } from '../../../src/cli/commands/correct-command.js';
 import { Transaction } from '../../../src/core/ledger/transaction.js';
-import { Money } from '../../../src/core/shared/money.js';
 import { Result } from '../../../src/core/shared/result.js';
 import type { TransactionRepository } from '../../../src/core/ports/transaction-repository.js';
 import type { DomainEventRecorder } from '../../../src/core/ports/domain-event-recorder.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
+import { makeEur } from '../../_helpers/money-fixtures.js';
 
 interface CorrectWorld {
   tmpDir?: string;
@@ -33,25 +32,18 @@ interface CorrectWorld {
   lastResult?: { status: number; stdout: string; stderr: string };
 }
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDir = useTmpDirs('accounting-correct-bdd-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
-
 function makeTmpDb(): { tmpDir: string; dbPath: string; db: Database.Database } {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-correct-bdd-'));
-  tmpDirs.push(tmpDir);
+  const tmpDir = makeTmpDir();
   const dbPath = path.join(tmpDir, 'correct-test.db');
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');

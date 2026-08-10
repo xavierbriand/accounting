@@ -16,7 +16,6 @@
 import { expect, afterEach } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
@@ -33,6 +32,7 @@ import { spawnCli } from '../../_helpers/spawn-cli.js';
 import type { Result } from '../../../src/core/shared/result.js';
 import type { BufferLedgerQuery } from '../../../src/core/ports/buffer-ledger-query.js';
 import type { ContributionQuery } from '../../../src/core/ports/contribution-query.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,22 +83,20 @@ interface ExplainWorld {
   subprocessRowCountsBefore?: { transactions: number; entries: number };
 }
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDirBdd = useTmpDirs('accounting-explain-bdd-');
+const makeTmpDirR4 = useTmpDirs('accounting-explain-r4-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
 function ensureDb(state: ExplainWorld): Database.Database {
   if (!state.db) {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-explain-bdd-'));
-    tmpDirs.push(tmpDir);
+    const tmpDir = makeTmpDirBdd();
     const dbPath = path.join(tmpDir, 'explain-test.db');
     const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
@@ -340,8 +338,7 @@ settlement:
 }
 
 Given('a fresh temp dir with a migrated DB and accounting.yaml configured for settlement', function (state: ExplainWorld) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-explain-r4-'));
-  tmpDirs.push(tmpDir);
+  const tmpDir = makeTmpDirR4();
   state.subprocessTmpDir = tmpDir;
   writeSettlementYaml(tmpDir);
   const migrateResult = spawnCli(['migrate'], { cwd: tmpDir });

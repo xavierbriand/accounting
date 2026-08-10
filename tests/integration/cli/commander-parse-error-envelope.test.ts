@@ -19,25 +19,11 @@
  * translation tests (ingest/status/correct/categorize below); the passthrough,
  * scoping, and regression-guard tests each carry their own inline `fails if`.
  */
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-parse-error-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-parse-error-');
 
 describe('Commander parse-time errors — --json envelope (story-maint-26)', () => {
   it('ingest --json with -f omitted exits 2 and envelopes INVALID_ARGUMENT as the final stderr line', () => {

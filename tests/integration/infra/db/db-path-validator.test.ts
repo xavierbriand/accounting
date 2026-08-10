@@ -15,23 +15,14 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { validateDbPath } from '../../../../src/infra/db/db-path-validator.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-dbpath-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('accounting-dbpath-');
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
 describe('validateDbPath', () => {

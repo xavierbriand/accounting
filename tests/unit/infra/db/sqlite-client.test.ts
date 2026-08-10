@@ -1,26 +1,20 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
 // fails if: busy_timeout pragma is not set in getDb — default is 0 (immediate error
 // on contention). The 5000ms value is the standard busy-timeout for SQLite-backed CLIs
 // and prevents spurious SQLITE_BUSY during snapshot+commit concurrency (Story 2.5).
 
-const tmpDirs: string[] = [];
+const makeTmpDir = useTmpDirs('accounting-sqlite-client-test-');
 
 function makeTmpDb(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-sqlite-client-test-'));
-  tmpDirs.push(dir);
-  return path.join(dir, 'test.db');
+  return path.join(makeTmpDir(), 'test.db');
 }
 
 afterEach(() => {
   closeDb();
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
 describe('getDb — pragma configuration', () => {

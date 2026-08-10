@@ -15,25 +15,13 @@
  * error under `dissolve --json` would then bypass the failure envelope
  * entirely).
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-dissolve-wiring-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-dissolve-wiring-');
 
 function writeYaml(tmpDir: string): void {
   const yaml = `\

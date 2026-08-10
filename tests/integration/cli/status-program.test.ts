@@ -8,25 +8,13 @@
  * fails if (a) the `status` subcommand is not registered in program.ts, (b) the JSON
  * output is malformed, or (c) any required top-level key is missing from the document.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-status-r4-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-status-r4-');
 
 function writeStatusYaml(tmpDir: string): void {
   const yaml = `\

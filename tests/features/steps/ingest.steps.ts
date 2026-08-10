@@ -47,6 +47,8 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
   // autoTagRules: minimal set that matches the bpce-valid fixture (mutuelle→Insurance,
   // abonnement→Subscriptions) so the auto-tagging BDD scenario sees autoTagged=2.
   // metro and virement-fictif rules cover the bpce-in-batch-dups fixture (story-maint-17).
+  // additionalAccounts: second account for the same fixture — prefix matches filenames
+  // starting with "bpce-in-batch-" so pickSourceAccount resolves correctly (#117 part 1).
   writeStubYaml(tmpDir, {
     autoTagRules: [
       { category: 'Insurance', patterns: ['mutuelle'] },
@@ -54,14 +56,10 @@ Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: 
       { category: 'Transit', patterns: ['metro fictif'] },
       { category: 'Transfers', patterns: ['virement fictif'] },
     ],
+    additionalAccounts: [
+      { id: 'bpce-batch-account', type: 'bank', filenamePrefix: 'bpce-in-batch-' },
+    ],
   });
-  // Second account for bpce-in-batch-dups fixture (story-maint-17): prefix matches
-  // filenames starting with "bpce-in-batch-" so pickSourceAccount resolves correctly.
-  const yamlPath = path.join(tmpDir, 'accounting.yaml');
-  const yamlContent = fs.readFileSync(yamlPath, 'utf8');
-  const secondAccount = '  - id: bpce-batch-account\n    type: bank\n    filenamePrefix: "bpce-in-batch-"\n';
-  const updatedYaml = yamlContent.replace('splits:', `${secondAccount}splits:`);
-  fs.writeFileSync(yamlPath, updatedYaml, 'utf8');
   // YAML-authoritative: no --db-path flag after #65 (story-maint-11)
   spawnCli(['migrate'], { cwd: tmpDir });
 });

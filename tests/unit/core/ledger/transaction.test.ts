@@ -2,10 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { Transaction } from '@core/ledger/transaction.js';
 import { Money } from '@core/shared/money.js';
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 function makeUsd(cents: number): Money {
   return Money.fromCents(cents, 'USD').value;

@@ -8,11 +8,11 @@ import Database from 'better-sqlite3';
 import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { Transaction } from '../../../src/core/ledger/transaction.js';
-import { Money } from '../../../src/core/shared/money.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { unwrapError, unwrapSuccess } from '../../_helpers/json-envelope.js';
 import { useTmpDirs } from '../../_helpers/tempdir.js';
+import { makeEur } from '../../_helpers/money-fixtures.js';
 
 interface ExportWorld {
   tmpDir?: string;
@@ -31,10 +31,6 @@ afterEach(() => {
     if (db.open) db.close();
   }
 });
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function insertTransaction(db: Database.Database, id: string, description: string): void {
   const repo = new SqliteTransactionRepository(db);

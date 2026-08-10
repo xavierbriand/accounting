@@ -8,13 +8,9 @@ import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { getDb, closeDb } from '../../../../src/infra/db/sqlite-client.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { Transaction } from '@core/ledger/transaction.js';
-import { Money } from '@core/shared/money.js';
 import { CorrectionService } from '@core/ledger/correction-service.js';
 import type { BuildOutcome } from '@core/ingest/types.js';
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 function makeBalancedTx(id: string): Transaction {
   return Transaction.create({

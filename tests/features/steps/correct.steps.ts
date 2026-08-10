@@ -8,13 +8,13 @@ import { SqliteTransactionRepository } from '../../../src/infra/db/repositories/
 import { SqliteDomainEventRecorder } from '../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { runCorrectCommand } from '../../../src/cli/commands/correct-command.js';
 import { Transaction } from '../../../src/core/ledger/transaction.js';
-import { Money } from '../../../src/core/shared/money.js';
 import { Result } from '../../../src/core/shared/result.js';
 import type { TransactionRepository } from '../../../src/core/ports/transaction-repository.js';
 import type { DomainEventRecorder } from '../../../src/core/ports/domain-event-recorder.js';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { makeCapturingStream as makeCapture } from '../../_helpers/streams.js';
 import { useTmpDirs } from '../../_helpers/tempdir.js';
+import { makeEur } from '../../_helpers/money-fixtures.js';
 
 interface CorrectWorld {
   tmpDir?: string;
@@ -41,10 +41,6 @@ afterEach(() => {
     if (db.open) db.close();
   }
 });
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function makeTmpDb(): { tmpDir: string; dbPath: string; db: Database.Database } {
   const tmpDir = makeTmpDir();

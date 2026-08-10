@@ -23,9 +23,9 @@ import { runMigrations } from '../../../../src/infra/db/migrator.js';
 import { SqliteTransactionRepository } from '../../../../src/infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../../../../src/infra/db/repositories/sqlite-domain-event-recorder.js';
 import { Transaction } from '../../../../src/core/ledger/transaction.js';
-import { Money } from '../../../../src/core/shared/money.js';
 import { FsDataExporter } from '../../../../src/infra/export/fs-data-exporter.js';
 import { useTmpDirs } from '../../../_helpers/tempdir.js';
+import { makeEur } from '../../../_helpers/money-fixtures.js';
 
 const dbs: Database.Database[] = [];
 
@@ -36,10 +36,6 @@ afterEach(() => {
     if (db.open) db.close();
   }
 });
-
-function makeEur(cents: number): Money {
-  return Money.fromCents(cents, 'EUR').value;
-}
 
 function setUpDb(): { db: Database.Database; dbPath: string } {
   const tmpDir = makeTmpDir();

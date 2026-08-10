@@ -44,6 +44,7 @@ import { FsDataExporter } from '../infra/export/fs-data-exporter.js';
 import { writeJsonErrorIf } from './utils/json-envelope.js';
 import type { AppConfig } from '../core/config/app-config.js';
 import { Result } from '../core/shared/result.js';
+import { openLedgerCommand } from './ledger-command.js';
 
 interface DbPathError {
   code: number;
@@ -133,20 +134,7 @@ program
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .option('--scripted-prompts <json>', '(test only) JSON array of canned prompt answers; gated by NODE_ENV=test')
   .action(async (options: { file: string; nonInteractive: boolean; json: boolean; dbPathOverride?: string; scriptedPrompts?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath: resolvedDb, configService } = result.value;
-    const db = getDb(resolvedDb);
-
-    const migrationCheck = assertMigrated(db, resolvedDb);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
-    observeConfigChangeFor(db, config, process.stderr);
+    const { config, resolvedDbPath: resolvedDb, configService, db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const configPath = configService.getResolvedConfigPath();
 
@@ -222,20 +210,7 @@ program
     transactionId: string,
     options: { amount?: string; category?: string; date?: string; description?: string; reason: string; json: boolean; dbPathOverride?: string },
   ) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath } = result.value;
-    const db = getDb(resolvedDbPath);
-
-    const migrationCheck = assertMigrated(db, resolvedDbPath);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
-    observeConfigChangeFor(db, config, process.stderr);
+    const { db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const transactionRepository = new SqliteTransactionRepository(db);
     const domainEventRecorder = new SqliteDomainEventRecorder(db);

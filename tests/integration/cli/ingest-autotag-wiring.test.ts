@@ -13,26 +13,14 @@
  *
  * Uses spawnCli (dist build) + writeStubYaml with autoTagRules override.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-autotag-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-autotag-');
 
 const ONE_ROW_CSV = `Date de comptabilisation;Libelle simplifie;Libelle operation;Reference;Informations complementaires;Type operation;Categorie;Sous categorie;Debit;Credit;Date operation;Date de valeur;Pointage operation
 22/04/2026;UBER TRIP 2026;PAIEMENT CB UBER TRIP 2026;REF001;;Carte;Transport;Transports en commun;-15,00;;22/04/2026;23/04/2026;0

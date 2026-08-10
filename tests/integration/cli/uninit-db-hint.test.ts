@@ -18,32 +18,20 @@
  *   blocks are textually identical as of this commit, so this pin lands green against
  *   the still-inline blocks and then guards the ledger-command.ts extraction.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const FIXTURE_CSV = path.join(__dirname, '../../fixtures/csv/bpce-valid.csv');
 
-const tmpDirs: string[] = [];
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-uninit-'));
-  tmpDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
+const makeTmpDir = useTmpDirs('accounting-uninit-');
 
 describe('ingest against uninitialised DB', () => {
   it('exits 2, stderr contains friendly hint, no SqliteError or stack trace', () => {

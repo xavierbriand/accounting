@@ -45,7 +45,7 @@ A failure of any item at P3-retro is a **merge blocker**, not a deferred suggest
 
 ## Error handling
 
-- [ ] Core returns `Result<T, E>`; no thrown exceptions inside Core.
+- [ ] Core returns `Result<T, E>`; inside Core, **domain failures** never throw. Carve-out: invariant/programmer-error guards throw deliberately — contract misuse is a bug to surface loudly, not a domain outcome to model (e.g. `src/core/shared/result.ts` throws on Result misuse: accessing `.value` of a failure, constructing a success that carries an error). Tests may assert these throws directly; they are not checklist violations.
 - [ ] Infra catches only exceptions it can translate to `Result.fail`; others propagate.
 - [ ] No bare `catch` blocks that swallow errors.
 - [ ] CLI boundary converts `Result.fail` to a human-readable message plus a non-zero exit code.

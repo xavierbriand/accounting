@@ -277,4 +277,4 @@ dropped). 9 findings:
 - [x] Phase 0 (Model): `No model impact` declared above (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — sibling-overlap; Reduced lane): findings triaged above.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled ([#255](https://github.com/xavierbriand/accounting/pull/255)).

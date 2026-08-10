@@ -17,11 +17,11 @@ import path from 'path';
 import { FsStoreReset, planWipeTargets } from '../../../../src/infra/db/fs-store-reset.js';
 import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
+const makeTmpDir = useTmpDirs('fs-store-reset-');
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-const makeTmpDir = useTmpDirs('fs-store-reset-');
 
 describe('planWipeTargets', () => {
   it('returns only the paths that currently exist, aux-first then dbPath last', () => {

@@ -90,10 +90,13 @@ comment), not a new glossary term.
   resolveLedgerConfigOrExit → `getDb` → `assertMigrated` (failure → stderr +
   `process.exit(2)`) → `observeConfigChangeFor` → return context. Adopted by the six
   ledger-opening commands.
-- `resolveDbPathForCommand`, `observeConfigChangeFor`, and the `DbPathError` /
-  `ResolvedDb` types move into the module (module-private except the two entry
-  points). The FR23 ambient-audit doc comment — including the categorize-exclusion
-  note — moves with them.
+- `resolveDbPathForCommand` and the `DbPathError` / `ResolvedDb` types move into
+  the module and stay module-private. `observeConfigChangeFor` also moves in but
+  is exported alongside the two entry points — `migrate`'s action (below) calls it
+  directly on its own fresh `getDb`, outside `openLedgerCommand`'s `assertMigrated`
+  gate, and `program.ts` cannot reach a module-private function in another module.
+  The FR23 ambient-audit doc comment — including the categorize-exclusion note —
+  moves with it.
 - `migrate` keeps its distinct shape (resolveLedgerConfigOrExit → `runMigrate` →
   `observeConfigChangeFor` on a fresh `getDb`); `categorize` uses
   resolveLedgerConfigOrExit only (no-DB invariant preserved).
@@ -151,10 +154,12 @@ Alternatives set aside:
 
 - **No JSON shape, error-code, exit-code, stdout/stderr text, or CLI flag changes**
   (R31 not triggered) — byte-identical wiring refactor.
-- New internal module `src/cli/ledger-command.ts` exporting `openLedgerCommand` +
-  `resolveLedgerConfigOrExit` (CLI-internal wiring, not a product surface);
-  `program.ts` loses the equivalent private helpers and six boilerplate blocks
-  (~560 → ~430 LOC expected).
+- New internal module `src/cli/ledger-command.ts` exporting `openLedgerCommand`,
+  `resolveLedgerConfigOrExit`, and `observeConfigChangeFor` (CLI-internal wiring,
+  not a product surface; the third export is necessary for `migrate`'s direct call
+  — see Selected solution leg 1); `program.ts` loses the equivalent private
+  helpers and six boilerplate blocks (560 → 415 LOC, better than the ~430 LOC
+  estimate).
 - `tests/_helpers/inline-config.ts`: `InlineConfigOverrides` gains two optional
   fields (test-only type, additive — no existing caller changes).
 - No `src/core`, schema, migration, or `package.json` changes; core coverage gate

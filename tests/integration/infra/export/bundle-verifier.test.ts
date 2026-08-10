@@ -16,7 +16,6 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import Database from 'better-sqlite3';
@@ -27,24 +26,17 @@ import { Transaction } from '../../../../src/core/ledger/transaction.js';
 import { Money } from '../../../../src/core/shared/money.js';
 import { FsDataExporter } from '../../../../src/infra/export/fs-data-exporter.js';
 import { verifyBundle } from '../../../../src/infra/export/bundle-verifier.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDir = useTmpDirs('bundle-verifier-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bundle-verifier-'));
-  tmpDirs.push(dir);
-  return dir;
-}
 
 function makeEur(cents: number): Money {
   return Money.fromCents(cents, 'EUR').value;

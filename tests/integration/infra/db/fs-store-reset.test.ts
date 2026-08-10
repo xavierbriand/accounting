@@ -13,24 +13,15 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { FsStoreReset, planWipeTargets } from '../../../../src/infra/db/fs-store-reset.js';
-
-const tmpDirs: string[] = [];
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-store-reset-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('fs-store-reset-');
 
 describe('planWipeTargets', () => {
   it('returns only the paths that currently exist, aux-first then dbPath last', () => {

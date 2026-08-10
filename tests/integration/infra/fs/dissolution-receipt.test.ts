@@ -13,25 +13,16 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { DissolutionPerformed } from '../../../../src/core/events/domain-event.js';
 import { writeDissolutionReceipt, type DissolutionReceipt } from '../../../../src/infra/fs/dissolution-receipt.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
+const makeTmpDir = useTmpDirs('dissolution-receipt-');
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dissolution-receipt-'));
-  tmpDirs.push(dir);
-  return dir;
-}
 
 function makeEvent(): DissolutionPerformed {
   return {

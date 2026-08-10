@@ -12,11 +12,10 @@
  */
 import { expect, afterEach } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
-import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../../src/infra/db/migrator.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 import { parseRawConfig } from '../../../src/infra/config/config-schema.js';
 import { SplitRulesService } from '../../../src/core/splits/split-rules-service.js';
 import { BufferStateService } from '../../../src/core/buffers/buffer-state-service.js';
@@ -81,22 +80,19 @@ interface World {
   configResult?: Result<unknown>;
 }
 
-const tmpDirs: string[] = [];
 const dbs: Database.Database[] = [];
+
+const makeTmpDir = useTmpDirs('accounting-settlement-bdd-');
 
 afterEach(() => {
   for (const db of dbs.splice(0)) {
     if (db.open) db.close();
   }
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
 });
 
 function ensureDb(state: World): Database.Database {
   if (!state.db) {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-settlement-bdd-'));
-    tmpDirs.push(tmpDir);
+    const tmpDir = makeTmpDir();
     const dbPath = path.join(tmpDir, 'settlement-test.db');
     const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');

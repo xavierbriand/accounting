@@ -1,7 +1,6 @@
-import { expect, afterEach } from 'vitest';
+import { expect } from 'vitest';
 import { Given, When, Then } from 'quickpickle';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PassThrough } from 'stream';
@@ -23,6 +22,7 @@ import { spawnCli } from '../../_helpers/spawn-cli.js';
 import { writeStubYaml } from '../../_helpers/inline-config.js';
 import { Result } from '../../../src/core/shared/result.js';
 import { payloadFrom, unwrapError } from '../../_helpers/json-envelope.js';
+import { useTmpDirs } from '../../_helpers/tempdir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,19 +37,7 @@ interface IngestWorld {
   lastResult?: { status: number; stdout: string; stderr: string };
 }
 
-const tmpDirs: string[] = [];
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounting-bdd-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('accounting-bdd-');
 
 Given('a fresh migrated DB and accounting.yaml at a temp dir', function (state: IngestWorld) {
   const tmpDir = makeTmpDir();

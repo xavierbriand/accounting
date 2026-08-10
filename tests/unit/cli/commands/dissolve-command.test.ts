@@ -15,9 +15,8 @@
  *   (bypass/typed-refusal/prompt-unavailable) map to the wrong exit code, or
  *   the receipt's wipedStores diverges from the pre-wipe prediction.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { Writable } from 'stream';
 import { makeCapturingStream as makeCapture } from '../../../_helpers/streams.js';
@@ -28,20 +27,9 @@ import { Result } from '@core/shared/result.js';
 import type { DataExporter } from '@core/ports/data-exporter.js';
 import type { StoreReset } from '@core/ports/store-reset.js';
 import type { VerifiedBundle } from '../../../../src/infra/export/bundle-verifier.js';
+import { useTmpDirs } from '../../../_helpers/tempdir.js';
 
-const tmpDirs: string[] = [];
-
-afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
-  }
-});
-
-function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dissolve-command-unit-'));
-  tmpDirs.push(dir);
-  return dir;
-}
+const makeTmpDir = useTmpDirs('dissolve-command-unit-');
 
 function baseOptions(overrides: Partial<DissolveCommandOptions> = {}): DissolveCommandOptions {
   return { bundle: 'the-bundle', confirm: true, json: false, ...overrides };

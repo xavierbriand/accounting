@@ -1,8 +1,6 @@
 import fs from 'fs';
-import type Database from 'better-sqlite3';
 import { Command, CommanderError } from 'commander';
 import { getDb, closeDb } from '../infra/db/sqlite-client.js';
-import { FileConfigService } from '../infra/config/config-service.js';
 import { YamlConfigWriter } from '../infra/config/yaml-config-writer.js';
 import { NodeCsvParser } from '../infra/csv/node-csv-parser.js';
 import { IdempotencyService } from '../core/ingest/idempotency-service.js';
@@ -10,8 +8,6 @@ import { TransactionBuilder } from '../core/ingest/transaction-builder.js';
 import { SqliteHashRepository } from '../infra/db/repositories/sqlite-hash-repository.js';
 import { SqliteTransactionRepository } from '../infra/db/repositories/sqlite-transaction-repo.js';
 import { SqliteDomainEventRecorder } from '../infra/db/repositories/sqlite-domain-event-recorder.js';
-import { SqliteConfigStateStore } from '../infra/db/repositories/sqlite-config-state-store.js';
-import { observeConfigChange } from './utils/observe-config-change.js';
 import { NodeSqliteSnapshotService } from '../infra/db/node-sqlite-snapshot-service.js';
 import { nodeHashFn } from '../infra/crypto/node-hash-fn.js';
 import { nodeUuidGen } from '../infra/crypto/node-uuid-gen.js';
@@ -27,8 +23,6 @@ import { runExplainCommand } from './commands/explain-command.js';
 import { runExportCommand } from './commands/export-command.js';
 import { runDissolveCommand } from './commands/dissolve-command.js';
 import { runMigrate } from './migrate.js';
-import { assertMigrated } from '../infra/db/migration-check.js';
-import { validateDbPath } from '../infra/db/db-path-validator.js';
 import { verifyBundle } from '../infra/export/bundle-verifier.js';
 import { writeDissolutionReceipt } from '../infra/fs/dissolution-receipt.js';
 import { FsStoreReset, planWipeTargets } from '../infra/db/fs-store-reset.js';
@@ -42,60 +36,7 @@ import { nodeClock } from './utils/node-clock.js';
 import { nodeTimestampClock } from './utils/node-timestamp-clock.js';
 import { FsDataExporter } from '../infra/export/fs-data-exporter.js';
 import { writeJsonErrorIf } from './utils/json-envelope.js';
-import type { AppConfig } from '../core/config/app-config.js';
-import { Result } from '../core/shared/result.js';
-import { openLedgerCommand } from './ledger-command.js';
-
-interface DbPathError {
-  code: number;
-  message: string;
-}
-
-interface ResolvedDb {
-  config: AppConfig;
-  resolvedDbPath: string;
-  configService: FileConfigService;
-}
-
-function resolveDbPathForCommand(
-  options: { dbPathOverride?: string },
-  projectDir: string,
-  stderr: NodeJS.WritableStream,
-): Result<ResolvedDb, DbPathError> {
-  const configService = new FileConfigService({ projectDir });
-  const configResult = configService.load();
-  if (configResult.isFailure) {
-    return Result.fail({ code: 1, message: configResult.error });
-  }
-  const config = configResult.value;
-
-  if (options.dbPathOverride !== undefined) {
-    stderr.write('[warning] --db-path-override is set; YAML dbPath ignored. Use only for recovery.\n');
-  }
-  const effectiveDbPath = options.dbPathOverride ?? config.dbPath;
-
-  const validation = validateDbPath(effectiveDbPath);
-  if (validation.isFailure) {
-    return Result.fail({ code: 2, message: validation.error });
-  }
-
-  return Result.ok({ config, resolvedDbPath: validation.value, configService });
-}
-
-// Ambient audit observation (FR23, story-4.5a): one shared call per ledger-opening command,
-// right after assertMigrated (or, for `migrate`, after a successful migration). Best-effort —
-// never blocks the command it's wired into (see observeConfigChange's own doc comment).
-// `categorize` is deliberately excluded: it never opens the DB (story-D no-DB invariant,
-// enforced by tests/integration/cli/categorize-end-to-end-wiring.test.ts).
-function observeConfigChangeFor(db: Database.Database, config: AppConfig, stderr: NodeJS.WritableStream): void {
-  observeConfigChange({
-    config,
-    configStateStore: new SqliteConfigStateStore(db),
-    domainEventRecorder: new SqliteDomainEventRecorder(db),
-    hashFn: nodeHashFn,
-    stderr,
-  });
-}
+import { openLedgerCommand, resolveLedgerConfigOrExit, observeConfigChangeFor } from './ledger-command.js';
 
 const program = new Command();
 
@@ -115,12 +56,7 @@ program
   .description('Run database migrations')
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action((options: { dbPathOverride?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath } = result.value;
+    const { config, resolvedDbPath } = resolveLedgerConfigOrExit(options, process.cwd(), process.stderr);
     runMigrate(resolvedDbPath);
     observeConfigChangeFor(getDb(resolvedDbPath), config, process.stderr);
   });
@@ -245,20 +181,7 @@ program
   .option('--json', 'Output JSON instead of human-readable tables', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action(async (options: { asOf?: string; from?: string; to?: string; json: boolean; dbPathOverride?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath } = result.value;
-    const db = getDb(resolvedDbPath);
-
-    const migrationCheck = assertMigrated(db, resolvedDbPath);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
-    observeConfigChangeFor(db, config, process.stderr);
+    const { config, db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const ledger = new SqliteBufferLedgerQuery(db);
     const splitsService = new SplitRulesService(config.splits);
@@ -288,20 +211,7 @@ program
   .option('--json', 'Output JSON instead of human-readable tables', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action(async (options: { asOf?: string; json: boolean; dbPathOverride?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath } = result.value;
-    const db = getDb(resolvedDbPath);
-
-    const migrationCheck = assertMigrated(db, resolvedDbPath);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
-    observeConfigChangeFor(db, config, process.stderr);
+    const { config, db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const ledger = new SqliteBufferLedgerQuery(db);
     const splitsService = new SplitRulesService(config.splits);
@@ -332,20 +242,7 @@ program
   .option('--json', 'Output JSON instead of human-readable text', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action(async (options: { out?: string; json: boolean; dbPathOverride?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath, configService } = result.value;
-    const db = getDb(resolvedDbPath);
-
-    const migrationCheck = assertMigrated(db, resolvedDbPath);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
-    observeConfigChangeFor(db, config, process.stderr);
+    const { config, configService, db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const dataExporter = new FsDataExporter(db, configService.getResolvedConfigPath());
     const domainEventRecorder = new SqliteDomainEventRecorder(db);
@@ -372,24 +269,12 @@ program
   .option('--json', 'Output JSON instead of human-readable text', false)
   .option('--db-path-override <path>', 'Override the YAML dbPath (for recovery only; emits a warning)')
   .action(async (options: { bundle: string; confirm: boolean; json: boolean; dbPathOverride?: string }) => {
-    const result = resolveDbPathForCommand(options, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, resolvedDbPath, configService } = result.value;
-    const db = getDb(resolvedDbPath);
-
-    const migrationCheck = assertMigrated(db, resolvedDbPath);
-    if (migrationCheck.isFailure) {
-      process.stderr.write(`error: ${migrationCheck.error}\n`);
-      process.exit(2);
-    }
     // Dissolve is a normal ledger-opening command (Phase-2 reversal of the
     // draft's skip): an observed config change since the export correctly
     // trips the staleness gate below — the bundle's accounting.yaml copy is
-    // outdated, so the archive is incomplete.
-    observeConfigChangeFor(db, config, process.stderr);
+    // outdated, so the archive is incomplete. openLedgerCommand's
+    // observeConfigChangeFor call covers that.
+    const { resolvedDbPath, configService, db } = openLedgerCommand(options, process.cwd(), process.stderr);
 
     const dataExporter = new FsDataExporter(db, configService.getResolvedConfigPath());
     const storeReset = new FsStoreReset(resolvedDbPath);
@@ -424,12 +309,7 @@ program
   .option('--min-count <n>', 'Skip groups with fewer than N occurrences (default: 2)', (v) => Number.parseInt(v, 10), 2)
   .option('--scripted-prompts <json>', '(test only) JSON array of canned prompt answers; gated by NODE_ENV=test')
   .action(async (options: { file: string; nonInteractive: boolean; json: boolean; limit?: number; minCount: number; scriptedPrompts?: string }) => {
-    const result = resolveDbPathForCommand({}, process.cwd(), process.stderr);
-    if (result.isFailure) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      process.exit(result.error.code);
-    }
-    const { config, configService } = result.value;
+    const { config, configService } = resolveLedgerConfigOrExit({}, process.cwd(), process.stderr);
 
     const configPath = configService.getResolvedConfigPath();
 

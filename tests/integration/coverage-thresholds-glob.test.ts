@@ -40,6 +40,9 @@ describe('coverage.thresholds glob keys (story-maint-39, #277)', () => {
       const entries = fs.readdirSync(dir, { recursive: true, encoding: 'utf8' });
       const tsFiles = entries.filter((f) => f.endsWith('.ts'));
 
+      // fails if the glob matches zero .ts files — istanbul-lib-coverage's
+      // percent(covered, total) returns 100 when total === 0, so vitest would
+      // otherwise silently report 100% and gate nothing for this key (#277)
       expect(
         tsFiles.length,
         `threshold key "${glob}" matched zero .ts files under "${dir}" — coverage.thresholds would silently report 100% and gate nothing for this key`,

@@ -13,7 +13,7 @@
 // tests/integration/coverage-thresholds-glob.test.ts can validate every key against the
 // live object instead of a hand-copied list — a future key addition, rename, or typo is
 // automatically covered with zero extra wiring.
-export const coverageThresholds = {
+export const coverageThresholds: Record<string, { branches: number }> = {
   'src/core/**': {
     branches: 100,
   },

@@ -21,8 +21,12 @@ default for maint/process stories).
 - **Sibling work check:** `gh pr list --state open` → #272 (dev-dependencies group bump), #273
   (csv-parse bump) — both `package.json`/`package-lock.json` only, no overlap. `gh issue list
   --state open` grepped for coverage/threshold/277/278 → only #277 (this story's origin) and #278
-  (a related but distinct CLAUDE.md-wording issue, not a code change) and #242 (already resolved
-  by story-maint-38). No sibling story targets this surface.
+  (a related but distinct CLAUDE.md-wording issue, not a code change). No sibling story targets
+  this surface. **Correction (Phase 4):** this section originally claimed #242 was "already
+  resolved by story-maint-38" — true in substance (the thresholds landed in PR #276) but false in
+  tracker state: #242 was still open, because that PR's title referenced `#242` without a closing
+  keyword. Caught by Phase-4 `code-reviewer`; closed during this story's own Phase 4 (see
+  Suggestion log).
 - **Story-id uniqueness (R23):** `story-maint-39` confirmed free — no match in
   `git ls-tree -r origin/main -- docs/plans/ docs/retrospectives/ docs/status.d/` and no open PR
   branch name collides.
@@ -168,11 +172,16 @@ Phase 2 review is **Reduced lane** (test-tooling/config surface — CLAUDE.md §
 
 | # | Finding | Tag | Resolution |
 |---|---------|-----|------------|
-| 1 (P2, sibling-overlap) | Checked both open PRs (#272, #273 — both dependabot, manifest-only) and all 50 open issues. #277 is this story's own origin (not overlap). #278 read in full — proposes only a CLAUDE.md wording change, no code/test surface, no collision with this story's files. #242 confirmed already closed. No story-id collision. | acknowledge | No action needed — confirms the plan's own sibling-work check above. |
+| 1 (P2, sibling-overlap) | Checked both open PRs (#272, #273 — both dependabot, manifest-only) and all 50 open issues. #277 is this story's own origin (not overlap). #278 read in full — proposes only a CLAUDE.md wording change, no code/test surface, no collision with this story's files. No story-id collision. | acknowledge | No action needed — confirms the plan's own sibling-work check above. |
+| 2 (P1, code-reviewer, R6) | The test's `fails if` clause lives only in the top JSDoc block comment, not as a literal `// fails if` inline comment near the assertion — diverges from the `no-default-rules.test.ts` precedent it cites, which carries both. A mechanical grep-for-`// fails if` audit would miss it. | fix-now | Inline `// fails if …` comment added directly above the guarding assertion in `tests/integration/coverage-thresholds-glob.test.ts`. |
+| 3 (P1, code-reviewer) | Plan's own sibling-check claimed "#242 confirmed already closed" — false: #242 was still open on the live tracker (story-maint-38's PR referenced it without a closing keyword). | fix-now | #242 closed with a comment during this story's Phase 4, citing PR #276. Context section above corrected. |
+| 4 (P3, code-reviewer, soft) | `vitest.coverage-thresholds.ts`'s exported `coverageThresholds` const had no explicit type annotation — the contract the new test relies on (`Object.keys(coverageThresholds)`) wasn't self-documented at the definition site. | fix-now | Added `Record<string, { branches: number }>` annotation alongside the existing `as const`. |
+| 5 (P3, code-reviewer, soft) | Test-tier placement (`tests/integration/` vs. `tests/unit/core/`, matching the `no-default-rules.test.ts` precedent it cites) is a judgment call — not a violation, real-FS access is legitimate and the test verifies rather than assumes its dependency (R29). | acknowledge | Left in `tests/integration/` — this validates root-level build/tooling config, not a domain module under `core/`, so it doesn't fit cleanly under either existing convention; `tests/integration/` better matches its real-FS nature. |
+| 6 (P3, code-reviewer, R13/R28) | Commit envelope: `countSlices` = 2, under the R13 `min: 6` floor — always-advisory per `dod-check`, confirmed by direct inspection of its source, not just the plan's framing. | acknowledge | Already justified in the Slice plan section above (narrow single-guard scope); advisory-only, non-blocking, consistent with story-maint-38's comparably-small precedent. |
 
 ## DoR checklist
 
 - [x] Phase 0 (Model): `No model impact` declared above (R24).
 - [x] Phase 1 (Plan): complete in this document.
 - [x] Phase 2 (Critical review — sibling-overlap, Reduced lane): findings triaged above.
-- [ ] Draft PR with template sections 1–6 filled.
+- [x] Draft PR with template sections 1–6 filled.

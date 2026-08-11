@@ -18,12 +18,15 @@ export default defineConfig({
       // v8/rolldown then tries (and audibly fails) to parse SQL as JS — harmless but
       // noisy. Scoping to `*.ts` excludes it without excluding any source file.
       include: ['src/**/*.ts'],
-      // CLAUDE.md § 5: 100% branch coverage on src/core/ is non-negotiable and now
-      // CI-gated; infra/cli are measured but not yet thresholded (deferred to #242 —
-      // a ratchet from a measured CI baseline, not an arbitrary number).
+      // CLAUDE.md § 5: 100% branch coverage on src/core/ is non-negotiable and CI-gated.
+      // src/infra/** gets a ratchet floor instead (#242) — a few points below the
+      // measured 2026-08-11 CI baseline (83.23%), not an arbitrary number.
       thresholds: {
         'src/core/**': {
           branches: 100,
+        },
+        'src/infra/**': {
+          branches: 78,
         },
       },
     },

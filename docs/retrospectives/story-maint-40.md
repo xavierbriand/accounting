@@ -26,8 +26,18 @@ value") only partially addressed it — this story finally reworks the trigger t
 
 ## Change
 
-- Nothing to flag this story — small, low-risk docs-only change, Light lane worked as designed
-  (no Phase 0/2 overhead for a change that's genuinely just wording).
+- **A docs-only story tripped an unrelated CI failure via pure repo growth.** `harness/drift-scan`'s
+  Check G "fresh marker" test used a fixture hardcoded to `2026-07-19` — safe when written, but
+  the repo has since accumulated 10 real `docs/status.d/` fragments postdating it
+  (`POSTDATING_FRAGMENT_EXPIRY_THRESHOLD = 10`), and this story's own status.d fragment was the
+  10th, flipping the fixture from "fresh" to "expired" out from under the test. Nothing in this
+  story's actual diff (CLAUDE.md wording) caused the failure — the repo simply grew past a
+  hardcoded date's safe margin, and this PR's CI run happened to be the one that observed it.
+  Fixed by stamping the fixture with today's date instead of a fixed past one (permanently
+  un-postdatable). **Any test fixture whose correctness depends on "not enough time/stories have
+  passed since a hardcoded date" will eventually break as the repo grows — prefer relative/dynamic
+  dates over hardcoded ones in fixtures that interact with real growing repo state** (here,
+  `docs/status.d/`'s fragment count).
 
 ## Try
 
@@ -35,3 +45,6 @@ value") only partially addressed it — this story finally reworks the trigger t
   whether a 6th occurrence surfaces for a category it still doesn't name (e.g. `package.json`
   script changes, `.github/workflows/` CI config). If so, don't repeat the #200 pattern of a
   narrow patch — generalize the trigger wording once more instead.
+- Grep `harness/` test fixtures for other hardcoded past-date stamps that could similarly trip as
+  `docs/status.d/` keeps growing (the Check G fresh-marker fixture is fixed now, but siblings may
+  share the same fragility pattern).

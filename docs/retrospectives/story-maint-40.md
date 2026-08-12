@@ -1,6 +1,6 @@
 # Story maint-40 retrospective
 
-**PR:** pending  **Closed:** pending merge
+**PR:** [#280](https://github.com/xavierbriand/accounting/pull/280)  **Closed:** pending merge
 
 Closed [#278](https://github.com/xavierbriand/accounting/issues/278) by editing CLAUDE.md
 directly (Light lane, docs-only). Two new rules: **R34** extends the Reduced-lane trigger to

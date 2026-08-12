@@ -616,10 +616,22 @@ describe('drift-scan Check G — pending/hole marker expiry (advisory tier)', ()
 
   // fails if a fresh stamp is misclassified as expired (Gherkin scenario 2,
   // second fixture leg — "nothing for the second").
+  //
+  // Stamped with today's date, not a fixed past date: a hardcoded past stamp
+  // (e.g. 2026-07-19) eventually accumulates 10+ real docs/status.d/
+  // fragments postdating it as the repo grows, tripping
+  // POSTDATING_FRAGMENT_EXPIRY_THRESHOLD and flipping this fixture from
+  // "fresh" to "expired" out from under the test (found when story-maint-40's
+  // own status.d fragment became the 10th). Today's date can never be
+  // postdated by an existing fragment, so this stays fresh indefinitely.
   it('reports nothing for a fresh stamped marker', () => {
     const templateFile = tempTemplatePath('story-test-g-fresh.md');
     TEMP_FILES.push(templateFile);
-    fs.writeFileSync(templateFile, '# Test template\n\nSee R95 *(pending — story-h13, 2026-07-19)* still open.\n');
+    const todayStamp = new Date().toISOString().slice(0, 10);
+    fs.writeFileSync(
+      templateFile,
+      `# Test template\n\nSee R95 *(pending — story-h13, ${todayStamp})* still open.\n`,
+    );
 
     const result = runScanner();
     expect(result.stderr).not.toContain('Check G');

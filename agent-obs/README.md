@@ -7,6 +7,11 @@ production (`service.name=sluice`) and agent sessions
 It lives inside this repo because its fingerprint hashes this repo's config. A
 sibling repo would be a second thing to keep in sync for no gain.
 
+**New to this?** [doc/how-it-works.md](doc/how-it-works.md) explains the whole
+stack from first principles — OpenTelemetry vocabulary, what Docker is doing
+here, how Claude Code's built-in telemetry is wired in, and the traps that cost
+us time.
+
 ## Run
 
 ```bash

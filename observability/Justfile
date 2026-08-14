@@ -2,15 +2,15 @@ default:
     @just --list
 
 up:
-    docker compose -p sluice-agent-obs -f compose.yaml up -d
+    docker compose -p sluice-observability -f compose.yaml up -d
     @echo "Grafana  http://localhost:3000"
     @echo "Phoenix  http://localhost:6006"
 
 down:
-    docker compose -p sluice-agent-obs -f compose.yaml down
+    docker compose -p sluice-observability -f compose.yaml down
 
 logs:
-    docker compose -p sluice-agent-obs -f compose.yaml logs -f --tail=50
+    docker compose -p sluice-observability -f compose.yaml logs -f --tail=50
 
 # Sends one span through the collector to both backends. Exits non-zero if the
 # collector does not accept it.
@@ -21,7 +21,7 @@ smoke:
     now=$(python3 -c 'import time;print(int(time.time()*1e9))')
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4318/v1/traces \
       -H 'content-type: application/json' \
-      -d "{\"resourceSpans\":[{\"resource\":{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"sluice-agent\"}}]},\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id}\",\"spanId\":\"$(openssl rand -hex 8)\",\"name\":\"agent_obs.smoke\",\"kind\":1,\"startTimeUnixNano\":\"${now}\",\"endTimeUnixNano\":\"${now}\"}]}]}]}")
+      -d "{\"resourceSpans\":[{\"resource\":{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"dev-loop\"}}]},\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id}\",\"spanId\":\"$(openssl rand -hex 8)\",\"name\":\"dev_loop.smoke\",\"kind\":1,\"startTimeUnixNano\":\"${now}\",\"endTimeUnixNano\":\"${now}\"}]}]}]}")
     [ "$code" = "200" ] || { echo "collector rejected span: HTTP $code"; exit 1; }
     echo "accepted. trace_id=${trace_id}"
     echo "Grafana  http://localhost:3000/explore  (Tempo, search this trace id)"
@@ -32,7 +32,7 @@ smoke:
 smoke-offline:
     #!/usr/bin/env bash
     set -euo pipefail
-    if docker compose -p sluice-agent-obs -f compose.yaml ps --status running -q 2>/dev/null | grep -q .; then
+    if docker compose -p sluice-observability -f compose.yaml ps --status running -q 2>/dev/null | grep -q .; then
       echo "stack is UP — run 'just down' first; this test is only meaningful offline"; exit 1
     fi
     start=$(python3 -c 'import time;print(time.time())')

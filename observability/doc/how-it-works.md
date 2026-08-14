@@ -1,4 +1,4 @@
-# How agent-obs works
+# How the observability stack works
 
 What every moving part does, why it exists, and where each one bit us — from
 OpenTelemetry vocabulary through Docker to the one span this project actually
@@ -214,7 +214,7 @@ OTEL_METRICS_EXPORTER=otlp
 OTEL_LOGS_EXPORTER=otlp
 OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-OTEL_SERVICE_NAME=sluice-agent           # which workload this is
+OTEL_SERVICE_NAME=dev-loop           # which workload this is
 ```
 
 What arrives, already correctly parented:
@@ -281,14 +281,16 @@ flowchart TD
         ROOT --> TOOL
     end
 
-    OUT(["agent_obs.session_outcome<br/>the span we emit<br/>model · config hashes · tools"])
+    OUT(["dev_loop.session_outcome<br/>the span we emit<br/>model · config hashes · tools"])
 
     ROOT -. "same session.id" .-> OUT
 ```
 
-A sibling, not a child of convenience. Joined on `session.id` when queried — and
-when `TRACEPARENT` is available it lands inside the same trace, so it appears in
-the waterfall too.
+Joined on `session.id` when queried. Its position in the tree depends on what the
+hook inherits: with `TRACEPARENT` set it becomes a child of the span that was
+active and appears in the waterfall; without it, it is the root of a separate
+trace and `session.id` is the only link. Either way the fingerprint is
+queryable — the waterfall is the bonus, not the mechanism.
 
 ### How it runs
 
@@ -323,7 +325,7 @@ This is also why it posts to **4318** (HTTP/JSON) while Claude Code uses **4317*
 ## 7. Running it
 
 ```bash
-cd agent-obs
+cd observability
 just up              # start all three containers
 just smoke           # push one span end to end
 just smoke-offline   # stack DOWN: prove a dead endpoint can't stall a session

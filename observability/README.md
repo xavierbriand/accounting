@@ -1,8 +1,8 @@
-# agent-obs
+# observability
 
 Observability for two workloads through one pipeline: the product in
 production (`service.name=sluice`) and agent sessions
-(`service.name=sluice-agent`).
+(`service.name=dev-loop`).
 
 It lives inside this repo because its fingerprint hashes this repo's config. A
 sibling repo would be a second thing to keep in sync for no gain.
@@ -15,7 +15,7 @@ us time.
 ## Run
 
 ```bash
-cd agent-obs && just up   # Grafana :3000, Phoenix :6006
+cd observability && just up   # Grafana :3000, Phoenix :6006
 just smoke                # one span end-to-end
 just smoke-offline        # stack DOWN: proves a dead collector cannot stall a session
 ```
@@ -35,16 +35,18 @@ hooks/session-outcome ──http:4318──┘                └──> Phoenix
 Claude Code emits `claude_code.interaction` / `.llm_request` / `.tool` natively.
 Do not hand-roll session or tool spans.
 
-You cannot mutate a span you did not create, so the fingerprint rides a **sibling**
-span, `agent_obs.session_outcome`, joined to the session on `session.id`. When
-`TRACEPARENT` is present the sibling lands inside the session's own trace.
+You cannot mutate a span you did not create, so the fingerprint rides a span of
+its own, `dev_loop.session_outcome`, joined to the session on `session.id`. When
+`TRACEPARENT` is present it is emitted inside the session's own trace; when it is
+absent the span becomes the root of a separate trace and `session.id` is the only
+thing linking them.
 
 ## Verified (2026-08-14)
 
 Stack up, `just smoke` accepted, and the span confirmed **present in both Tempo
 and Phoenix** — the fan-out works, not just the receive.
 
-The `agent_obs.session_outcome` span reached both backends carrying all nine
+The `dev_loop.session_outcome` span reached both backends carrying all nine
 fingerprint attributes, correctly parented under `TRACEPARENT`, with the model
 read live from the transcript (`claude-opus-5`).
 

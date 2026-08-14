@@ -2,7 +2,7 @@
 # everything goes through the collector on 4317/4318 so the backends can be swapped
 # without touching any emitter.
 
-# Project name is passed as `-p sluice-agent-obs` rather than a top-level `name:`,
+# Project name is passed as `-p sluice-observability` rather than a top-level `name:`,
 # which Compose only learned in 2.3.3.
 
 services:

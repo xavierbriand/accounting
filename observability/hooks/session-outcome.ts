@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Emits agent_obs.session_outcome — a SIBLING span to Claude Code's native
+// Emits dev_loop.session_outcome — a SIBLING span to Claude Code's native
 // claude_code.interaction tree. You cannot mutate a span you did not create, so
 // the fingerprint rides its own span and is joined on session.id at query time.
 //
@@ -16,14 +16,14 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const STATE_DIR = join(REPO, 'agent-obs', '.state');
+const STATE_DIR = join(REPO, 'observability', '.state');
 const ENDPOINT = process.env.SLUICE_OTLP_HTTP_ENDPOINT ?? 'http://localhost:4318';
 const EXPORT_TIMEOUT_MS = 2000;
 
 // Files whose content defines how the agent behaves. A change to any of these is
 // a different agent, and comparing runs across such a change is comparing apples
 // to oranges — which is the entire reason the fingerprint exists.
-const FINGERPRINTED = ['CLAUDE.md', '.claude/settings.json', '.mcp.json', 'agent-obs/evals/rubric.md'];
+const FINGERPRINTED = ['CLAUDE.md', '.claude/settings.json', '.mcp.json', 'observability/evals/rubric.md'];
 
 type HookInput = {
   session_id?: string;
@@ -131,16 +131,16 @@ async function emit(input: HookInput, startedAtNs: bigint, attrs: Attr[]): Promi
   const body = {
     resourceSpans: [
       {
-        resource: { attributes: [str('service.name', process.env.OTEL_SERVICE_NAME ?? 'sluice-agent')] },
+        resource: { attributes: [str('service.name', process.env.OTEL_SERVICE_NAME ?? 'dev-loop')] },
         scopeSpans: [
           {
-            scope: { name: 'sluice.agent-obs' },
+            scope: { name: 'sluice.observability' },
             spans: [
               {
                 traceId,
                 spanId: randomBytes(8).toString('hex'),
                 ...(parentSpanId ? { parentSpanId } : {}),
-                name: 'agent_obs.session_outcome',
+                name: 'dev_loop.session_outcome',
                 kind: 1,
                 startTimeUnixNano: String(startedAtNs),
                 endTimeUnixNano: String(BigInt(Date.now()) * 1_000_000n),

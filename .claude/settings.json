@@ -7,7 +7,7 @@
     "OTEL_LOGS_EXPORTER": "otlp",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
-    "OTEL_SERVICE_NAME": "sluice-agent"
+    "OTEL_SERVICE_NAME": "dev-loop"
   },
   "hooks": {
     "SessionStart": [
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/agent-obs/hooks/session-outcome.ts\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/observability/hooks/session-outcome.ts\"",
             "timeout": 15
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/agent-obs/hooks/session-outcome.ts\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/observability/hooks/session-outcome.ts\"",
             "timeout": 15
           }
         ]

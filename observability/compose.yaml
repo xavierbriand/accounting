@@ -1,0 +1,44 @@
+# Collector fans out to two backends. Nothing else in the repo talks OTLP directly —
+# everything goes through the collector on 4317/4318 so the backends can be swapped
+# without touching any emitter.
+
+# Project name is passed as `-p sluice-observability` rather than a top-level `name:`,
+# which Compose only learned in 2.3.3.
+
+services:
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.158.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC  — Claude Code native telemetry
+      - "4318:4318" # OTLP HTTP  — session-outcome hook (no npm deps, raw JSON)
+    depends_on:
+      - lgtm
+      - phoenix
+
+  # Grafana + Tempo + Prometheus + Loki in one process. Claude Code emits traces,
+  # metrics AND logs; a bare trace backend would silently drop two of the three.
+  lgtm:
+    image: grafana/otel-lgtm:0.30.2
+    ports:
+      - "3000:3000" # Grafana UI
+    environment:
+      - ENABLE_LOGS_ALL=true
+    volumes:
+      - lgtm-data:/data
+
+  # LLM-native view: OpenInference conventions, datasets, LLM-as-judge.
+  phoenix:
+    image: arizephoenix/phoenix:20.2.0
+    ports:
+      - "6006:6006" # Phoenix UI
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+
+volumes:
+  lgtm-data:
+  phoenix-data:

@@ -2,15 +2,15 @@ default:
     @just --list
 
 up:
-    docker compose -f compose.yaml up -d
+    docker compose -p sluice-agent-obs -f compose.yaml up -d
     @echo "Grafana  http://localhost:3000"
     @echo "Phoenix  http://localhost:6006"
 
 down:
-    docker compose -f compose.yaml down
+    docker compose -p sluice-agent-obs -f compose.yaml down
 
 logs:
-    docker compose -f compose.yaml logs -f --tail=50
+    docker compose -p sluice-agent-obs -f compose.yaml logs -f --tail=50
 
 # Sends one span through the collector to both backends. Exits non-zero if the
 # collector does not accept it.
@@ -32,7 +32,7 @@ smoke:
 smoke-offline:
     #!/usr/bin/env bash
     set -euo pipefail
-    if docker compose -f compose.yaml ps --status running -q 2>/dev/null | grep -q .; then
+    if docker compose -p sluice-agent-obs -f compose.yaml ps --status running -q 2>/dev/null | grep -q .; then
       echo "stack is UP — run 'just down' first; this test is only meaningful offline"; exit 1
     fi
     start=$(python3 -c 'import time;print(time.time())')

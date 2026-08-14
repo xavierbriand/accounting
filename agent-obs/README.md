@@ -9,11 +9,14 @@ sibling repo would be a second thing to keep in sync for no gain.
 ## Run
 
 ```bash
-source agent-obs/env.sh   # then run claude from the same shell
 cd agent-obs && just up   # Grafana :3000, Phoenix :6006
 just smoke                # one span end-to-end
 just smoke-offline        # stack DOWN: proves a dead collector cannot stall a session
 ```
+
+Claude Code picks up telemetry from `env` in `.claude/settings.json` — no shell
+setup. `env.sh` is only for subprocesses (the eval runner), which do not inherit
+`OTEL_*` from the session.
 
 ## Shape
 
@@ -32,13 +35,22 @@ span, `agent_obs.session_outcome`, joined to the session on `session.id`. When
 
 ## Verified (2026-08-14)
 
-- Hook exits 0 in ~0s against a refused endpoint, ~2s against a black-holed one.
-  `AbortSignal.timeout` does **not** cut undici's connect phase — it ran to
-  undici's 10s connect timeout until a hard watchdog was added. Measured, not assumed.
-- OTLP JSON accepted by a listener; `TRACEPARENT` correctly joined; model read
-  from the live transcript.
-- **Not yet verified end-to-end** — no container runtime on this machine yet, so
-  no span has reached Grafana or Phoenix. `just up` / `just smoke` are unrun.
+Stack up, `just smoke` accepted, and the span confirmed **present in both Tempo
+and Phoenix** — the fan-out works, not just the receive.
+
+The `agent_obs.session_outcome` span reached both backends carrying all nine
+fingerprint attributes, correctly parented under `TRACEPARENT`, with the model
+read live from the transcript (`claude-opus-5`).
+
+Resilience, measured rather than assumed: the hook exits 0 in ~0s against a
+refused endpoint and ~2s against a black-holed one. `AbortSignal.timeout` does
+**not** cut undici's connect phase — the first version ran to undici's 10s connect
+timeout, stalling every session stop, until a hard watchdog was added.
+
+**Still unverified: the native `claude_code.*` waterfall.** No session has yet
+started with telemetry enabled, so nothing has emitted `claude_code.interaction`.
+The `env` block landed after this session began; the first session started *after*
+it should produce the waterfall, and that is what closes M0.
 
 ## Known gaps
 

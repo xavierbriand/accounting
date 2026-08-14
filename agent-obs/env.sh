@@ -1,4 +1,10 @@
-# source agent-obs/env.sh  — then run `claude` from the same shell.
+# For SUBPROCESSES only — the eval runner, scripts, anything not Claude Code itself.
+#
+# Claude Code sessions in this repo get these from `env` in .claude/settings.json
+# instead. That matters: Claude Code here runs inside the desktop app, launched
+# from Finder, which never sees a shell's exports — `source env.sh && claude`
+# silently does nothing. settings.json is read by Claude Code itself, so it works
+# in both the app and the standalone CLI, and it version-controls with the repo.
 #
 # Claude Code emits interaction/llm_request/tool spans natively. Do not hand-roll
 # session or tool spans; the only thing this repo emits is the sibling

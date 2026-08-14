@@ -1,37 +1,3 @@
-# Node.js
-node_modules/
-dist/
-npm-debug.log
-yarn-error.log
-
-# Database
-data/*.db
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-*.bak
-
-# Environment
-.env
-.env.local
-
-# MacOS
 .DS_Store
-
-# Editors
-.vscode/
-.idea/
 .claude/settings.local.json
 .claude/worktrees/
-
-# Testing
-coverage/
-
-# Accounting config (contains household data — copy from accounting.example.yaml)
-/accounting.yaml
-/accounting.yml
-
-# Harness runtime artifacts (written by Stop hook; not committed)
-.claude/.last-lint-result
-

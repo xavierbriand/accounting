@@ -16,9 +16,14 @@ us time.
 
 ```bash
 cd observability && just up   # Grafana :3000, Phoenix :6006
-just smoke                # one span end-to-end
-just smoke-offline        # stack DOWN: proves a dead collector cannot stall a session
+just verify                   # is the whole chain working, end to end?
+just smoke-offline            # stack DOWN: a dead collector must not stall a session
 ```
+
+`just verify` is the one to reach for. It round-trips a uniquely identifiable
+span and then confirms **that exact trace id** in both Tempo and Phoenix — a
+`200` from the collector only proves acceptance, never arrival — and then checks
+that the two real emitters, Claude Code and the session hook, have reported.
 
 Claude Code picks up telemetry from `env` in `.claude/settings.json` — no shell
 setup. `env.sh` is only for subprocesses (the eval runner), which do not inherit

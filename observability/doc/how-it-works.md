@@ -56,8 +56,13 @@ happened, in what order, how long), **metrics** (numbers over time), and **logs*
 `session.id`, the model name, a config hash.
 
 **resource** — attributes describing the *emitter* rather than the event, most
-importantly `service.name`. This is how one pipeline holds two workloads without
-confusing them.
+importantly `service.name`. It is tempting to treat this as the thing that keeps
+the two workloads apart. **It is not**, and that is worth knowing before you write
+a query against it: Claude Code stamps its own `service.name`
+(`claude-code-desktop`) on native spans whatever you configure, so only spans this
+repo emits carry a name we choose. Filtering on `service.name=dev-loop` finds the
+fingerprint spans and not the session they describe. **`session.id` is the real
+join key.**
 
 **OTLP** — OpenTelemetry Protocol, the wire format. Two transports, both used
 here: **gRPC on 4317** (compact, binary) and **HTTP on 4318** (plain JSON you can
@@ -359,6 +364,25 @@ all gated:
 
 - **C — outcomes.** The hook grows: run the tests, score the change, attach the
   result. Needs a test suite, which needs a product.
+
+  This phase is load-bearing, and it is worth being blunt about why. **Evals
+  cannot be built on the telemetry above.** What arrives is the *process* — cost,
+  duration, tool mix, error rate, how often a human was needed. None of it reports
+  whether the change was any *good*, and no flag or exporter will make it. That
+  leg has to be produced: run the suite, score the diff. Three legs, one observed:
+
+  | Leg | Source | Answers |
+  |---|---|---|
+  | Controlled variable | the fingerprint span | which agent configuration produced this |
+  | Process | traces and events | cost, duration, tools, errors, human involvement |
+  | Outcome | this phase | did it build and pass; was the diff any good |
+
+  Two consequences. Session **content** — prompts, responses, tool arguments — is
+  redacted by default and gated behind `OTEL_LOG_*` flags; the session transcript
+  is the better source, being local, complete, and free of the question of what
+  ends up in a log store once real bank exports move through tool calls. And one
+  eval signal already exists for free: `tool.blocked_on_user` records how often and
+  how long the agent needed a human.
 - **D — replay.** Re-run known tasks against pinned v0.1 commits to detect whether
   a change to the way we build helped or hurt.
 - **E — dashboards as code.** Last, because a dashboard over three sessions of

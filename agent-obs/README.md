@@ -1,7 +1,8 @@
 # agent-obs
 
-Observability for two workloads through one pipeline: P1 in production
-(`service.name=sluice`) and agent sessions (`service.name=sluice-agent`).
+Observability for two workloads through one pipeline: the product in
+production (`service.name=sluice`) and agent sessions
+(`service.name=sluice-agent`).
 
 It lives inside this repo because its fingerprint hashes this repo's config. A
 sibling repo would be a second thing to keep in sync for no gain.

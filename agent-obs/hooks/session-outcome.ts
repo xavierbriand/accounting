@@ -4,7 +4,8 @@
 // the fingerprint rides its own span and is joined on session.id at query time.
 //
 // Zero dependencies on purpose: raw OTLP/HTTP JSON over fetch. No SDK to keep in
-// step with a beta trace shape, and no npm install before the P1 stack is chosen.
+// step with a beta trace shape, and no npm install before the product's stack
+// is chosen.
 //
 // SessionStart captures the config the session began under; Stop emits.
 

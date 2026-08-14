@@ -1,0 +1,49 @@
+# One receiver, two exporters. Traces fan out to both backends; metrics and logs
+# go to LGTM only (Phoenix is traces-native and would reject them).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+  # A laptop stack cycled daily should never be the reason a session stalls.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+exporters:
+  otlp/lgtm:
+    endpoint: lgtm:4317
+    tls:
+      insecure: true
+  otlp/phoenix:
+    endpoint: phoenix:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: normal
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/lgtm, otlp/phoenix]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/lgtm]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/lgtm]

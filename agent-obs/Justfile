@@ -1,0 +1,42 @@
+default:
+    @just --list
+
+up:
+    docker compose -f compose.yaml up -d
+    @echo "Grafana  http://localhost:3000"
+    @echo "Phoenix  http://localhost:6006"
+
+down:
+    docker compose -f compose.yaml down
+
+logs:
+    docker compose -f compose.yaml logs -f --tail=50
+
+# Sends one span through the collector to both backends. Exits non-zero if the
+# collector does not accept it.
+smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trace_id=$(openssl rand -hex 16)
+    now=$(python3 -c 'import time;print(int(time.time()*1e9))')
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4318/v1/traces \
+      -H 'content-type: application/json' \
+      -d "{\"resourceSpans\":[{\"resource\":{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"sluice-agent\"}}]},\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id}\",\"spanId\":\"$(openssl rand -hex 8)\",\"name\":\"agent_obs.smoke\",\"kind\":1,\"startTimeUnixNano\":\"${now}\",\"endTimeUnixNano\":\"${now}\"}]}]}]}")
+    [ "$code" = "200" ] || { echo "collector rejected span: HTTP $code"; exit 1; }
+    echo "accepted. trace_id=${trace_id}"
+    echo "Grafana  http://localhost:3000/explore  (Tempo, search this trace id)"
+    echo "Phoenix  http://localhost:6006"
+
+# Non-negotiable in Phase A: a dead endpoint must not stall a session.
+# Run with the stack DOWN. Passes if the hook exits 0, quickly.
+smoke-offline:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if docker compose -f compose.yaml ps --status running -q 2>/dev/null | grep -q .; then
+      echo "stack is UP — run 'just down' first; this test is only meaningful offline"; exit 1
+    fi
+    start=$(python3 -c 'import time;print(time.time())')
+    echo '{"session_id":"offline-test","hook_event_name":"Stop"}' | node hooks/session-outcome.ts
+    elapsed=$(python3 -c "import time;print(round(time.time()-${start},2))")
+    echo "hook exited 0 with collector down, in ${elapsed}s"
+    python3 -c "import sys;sys.exit(0 if ${elapsed} < 10 else 1)" || { echo "TOO SLOW"; exit 1; }

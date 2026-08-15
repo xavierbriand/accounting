@@ -81,4 +81,21 @@ describe('formatEurCompact', () => {
   it('drops the cents for axis labels', () => {
     expect(plain(formatEurCompact(843434))).toBe('8 434 €');
   });
+
+  it('never renders a negative zero', () => {
+    // Rounding the signed value gives -0 for anything under half a euro, which
+    // Intl renders with a minus sign: an axis tick reading "-0 €".
+    expect(formatEurCompact(-49)).toBe('0 €');
+    expect(formatEurCompact(-1)).toBe('0 €');
+    expect(formatEurCompact(0)).toBe('0 €');
+  });
+
+  it('rounds symmetrically across zero', () => {
+    // Math.round breaks ties toward +∞, so the same half-euro rounded up in one
+    // direction and down in the other: -150 became -1 while +150 became 2.
+    expect(plain(formatEurCompact(150))).toBe('2 €');
+    expect(plain(formatEurCompact(-150))).toBe('-2 €');
+    expect(plain(formatEurCompact(50))).toBe('1 €');
+    expect(plain(formatEurCompact(-50))).toBe('-1 €');
+  });
 });

@@ -64,11 +64,17 @@ function decode(bytes: Uint8Array): string {
 }
 
 export function parseCsv(bytes: Uint8Array, filename = 'export.csv'): CsvRow[] {
+  // Blank lines are skipped but their positions are kept, because `line` is
+  // promised to be the number a human can open the file at. Filtering first and
+  // numbering afterwards made every message point one row too high per blank
+  // line above it — at a row that reads perfectly well, which sends the reader
+  // looking for a fault in the parser.
   const lines = decode(bytes)
     .split(/\r?\n/)
-    .filter((l) => l.trim().length > 0);
+    .map((text, i) => ({ text, lineNo: i + 1 }))
+    .filter((l) => l.text.trim().length > 0);
 
-  const header = lines[0];
+  const header = lines[0]?.text;
   if (header === undefined) throw new CsvFormatError(`${filename} is empty`);
 
   const columns = header.split(';');
@@ -90,9 +96,8 @@ export function parseCsv(bytes: Uint8Array, filename = 'export.csv'): CsvRow[] {
   const at = (cells: string[], name: (typeof CSV_COLUMNS)[number]) =>
     cells[CSV_COLUMNS.indexOf(name)] ?? '';
 
-  return lines.slice(1).map((line, i) => {
-    const lineNo = i + 2;
-    const cells = line.split(';');
+  return lines.slice(1).map(({ text, lineNo }) => {
+    const cells = text.split(';');
     if (cells.length !== CSV_COLUMNS.length) {
       throw new CsvFormatError(
         `${filename}:${lineNo}: ${cells.length} fields, expected ${CSV_COLUMNS.length}. ` +

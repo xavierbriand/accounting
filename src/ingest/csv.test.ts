@@ -62,6 +62,24 @@ describe('parseCsv', () => {
     expect(() => parseCsv(broken, 'export.csv')).toThrow(/export\.csv:3/);
   });
 
+  it('counts blank lines when reporting where a bad row is', () => {
+    // The line number is promised to be the one a human can open the file at.
+    // Numbering after filtering pointed at a row that reads perfectly well.
+    const text = Buffer.from(
+      csvFixture([
+        { postedOn: '01/01/2026', amount: '-1,00' },
+        { postedOn: '02/01/2026', amount: '-2,00' },
+      ]),
+    ).toString('latin1');
+    const [header = '', first = '', second = ''] = text.split('\r\n');
+    const withBlank = Buffer.from(
+      [header, first, '', second.replace('-2,00', 'oops'), ''].join('\r\n'),
+      'latin1',
+    );
+    // header=1, first row=2, blank=3, bad row=4.
+    expect(() => parseCsv(withBlank, 'export.csv')).toThrow(/export\.csv:4/);
+  });
+
   it('rejects an empty file', () => {
     expect(() => parseCsv(Buffer.from('', 'latin1'), 'export.csv')).toThrow(/is empty/);
   });

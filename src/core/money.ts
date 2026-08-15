@@ -75,8 +75,17 @@ export function formatEurSigned(cents: Cents): string {
   return EUR.format(cents / 100);
 }
 
-/** Whole euros, for chart axes where the cents are visual clutter. */
+/**
+ * Whole euros, for chart axes where the cents are visual clutter.
+ *
+ * Rounded on the magnitude and the sign reapplied, rather than on the signed
+ * value. `Math.round` breaks ties toward +∞, which is asymmetric across zero:
+ * it turns -150 into -1 while +150 becomes 2, and it yields negative zero for
+ * anything under half a euro — which `Intl` renders, unhelpfully, as "-0 €".
+ */
 export function formatEurCompact(cents: Cents): string {
-  const euros = Math.round(cents / 100);
-  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(euros) + ' €';
+  const euros = Math.round(Math.abs(cents) / 100);
+  // Negating zero produces -0, which is exactly the value being avoided.
+  const signed = cents < 0 && euros !== 0 ? -euros : euros;
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(signed) + ' €';
 }

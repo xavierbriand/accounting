@@ -86,13 +86,6 @@ export interface Transaction {
 export const SETTLEMENT_SUBCATEGORY = 'Transaction differee';
 export const INTERNAL_TRANSFER_SUBCATEGORY = 'Virement interne';
 
-/** The bank's marker for rows it could not place. These need a human decision. */
-export const UNCATEGORISED_PREFIX = 'A categoriser';
-
-export function isUncategorised(t: Transaction): boolean {
-  return t.category.startsWith(UNCATEGORISED_PREFIX);
-}
-
 function classify(row: JoinedRow): TransactionKind {
   const sub = row.csv.subCategory;
   if (sub === SETTLEMENT_SUBCATEGORY) return 'settlement';

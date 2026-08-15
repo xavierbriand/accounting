@@ -59,8 +59,19 @@ export interface ReconciliationReport {
   readonly balanceDisagreements: readonly string[];
 }
 
-/** `DEBIT DIFFERE N° ...1111` → `1111`. */
-const CARD_IN_LABEL = /(\d{4})\s*$/;
+/**
+ * `DEBIT DIFFERE N° ...1111` → `1111`.
+ *
+ * Anchored on the bank's own convention — four digits behind an ellipsis — and
+ * not on "whatever four digits come last". The loose version took the year out
+ * of a label ending in a date, filing the charge under a card that does not
+ * exist while leaving the real card's batch looking uncharged: two mismatches
+ * where the answer was one reconciled settlement.
+ *
+ * A label this does not match is reported as unattributable, which is honest.
+ * Guessing is what produced the wrong answer.
+ */
+const CARD_IN_LABEL = /\.\.\.\s*(\d{4})(?!\d)/;
 
 /**
  * Stands in for a settlement whose label does not name a card.

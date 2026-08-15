@@ -224,6 +224,24 @@ describe('reconcileSettlements', () => {
     expect(report.mismatched).toBe(1);
   });
 
+  it('does not mistake a trailing date in the label for a card number', () => {
+    const card = statementOf([buy('05/07/2026', '04/08/2026', '-180,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf(
+      [{ ...charge('04/08/2026', '-180,00', '1111'), label: 'DEBIT DIFFERE CARTE 1111 ECHEANCE 04/08/2026' }],
+      '00000000001_01012024_31122024.ofx',
+      { ...WINDOW, balance: '+100.00' },
+    );
+
+    // Taking "2026" as the card would file the charge under a card that does
+    // not exist. Saying "I cannot read this label" is the honest answer, and it
+    // still surfaces as a mismatch rather than disappearing.
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.checks.map((c) => c.cardNumber)).not.toContain('2026');
+    expect(report.checks.map((c) => c.cardNumber)).toContain(UNIDENTIFIED_CARD);
+    expect(report.mismatched).toBeGreaterThan(0);
+  });
+
   it('surfaces a settlement whose label does not name a card', () => {
     // The sub-category already proved it is a settlement. Dropping it for want
     // of a parseable label would recreate the worst failure here: an account

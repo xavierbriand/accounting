@@ -270,6 +270,36 @@ describe('reconcileSettlements', () => {
     expect(report.checks[0]?.itemised).toBe(0);
   });
 
+  it('stops excusing batches once the window can no longer explain them', () => {
+    // Pins the two-month reach from above. A batch settling two months after the
+    // export begins is bounded by dates inside it, so a shortfall there is real.
+    // Without this, the constant could be widened to three, six, twelve months
+    // and every early mismatch in the export would be waved through unnoticed.
+    const card = statementOf([buy('15/02/2025', '04/03/2025', '-100,00')],
+      'carte_3333_01012024_31122024.ofx', { from: '20250101', to: '20260815', balance: '+0.00' });
+    const account = statementOf([charge('04/03/2025', '-180,00', '3333')],
+      '00000000001_01012024_31122024.ofx', { from: '20250101', to: '20260815', balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.windowEdge).toBe(0);
+    expect(report.mismatched).toBe(1);
+  });
+
+  it('reports rather than excuses when an export starts mid-month', () => {
+    // The comparison is at month granularity, so an export starting on the 15th
+    // can clip a batch this test calls complete. That direction is deliberate —
+    // a loud mismatch beats quietly forgiving a real one — and it is pinned here
+    // so the trade-off cannot be reversed without a test noticing.
+    const card = statementOf([buy('20/01/2025', '04/03/2025', '-100,00')],
+      'carte_3333_01012024_31122024.ofx', { from: '20250115', to: '20260815', balance: '+0.00' });
+    const account = statementOf([charge('04/03/2025', '-180,00', '3333')],
+      '00000000001_01012024_31122024.ofx', { from: '20250115', to: '20260815', balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.mismatched).toBe(1);
+    expect(report.windowEdge).toBe(0);
+  });
+
   it('does not excuse a mismatch on a card that began inside the export window', () => {
     // A replacement card's first batch is bounded by dates inside the window, so
     // it is complete and a shortfall in it is a real error. Deciding this by

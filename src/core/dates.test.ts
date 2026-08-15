@@ -30,6 +30,26 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('01/13/2026')).toThrow(DateParseError);
     expect(() => parseFrenchDay('2026-08-14')).toThrow(DateParseError);
   });
+
+  it('refuses a day the month does not have', () => {
+    expect(() => parseFrenchDay('31/02/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('31/04/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('31/09/2026')).toThrow(DateParseError);
+  });
+
+  it('knows which Februaries have 29 days', () => {
+    expect(parseFrenchDay('29/02/2024')).toBe('2024-02-29');
+    expect(parseFrenchDay('29/02/2000')).toBe('2000-02-29');
+    expect(() => parseFrenchDay('29/02/2026')).toThrow(DateParseError);
+    // Divisible by 100 but not 400 — a common year despite being divisible by 4.
+    expect(() => parseFrenchDay('29/02/1900')).toThrow(DateParseError);
+  });
+
+  it('accepts the last day of every month', () => {
+    const lastDays = ['31/01', '28/02', '31/03', '30/04', '31/05', '30/06',
+                      '31/07', '31/08', '30/09', '31/10', '30/11', '31/12'];
+    for (const d of lastDays) expect(() => parseFrenchDay(`${d}/2026`)).not.toThrow();
+  });
 });
 
 describe('parseOfxDay', () => {

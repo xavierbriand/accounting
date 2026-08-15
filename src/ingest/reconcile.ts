@@ -122,13 +122,39 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
     cardExportStart.set(s.source.cardNumber, s.from);
   }
 
-  // What the account was charged, per card and settlement date.
+  // One settlement: a card, and the date it is charged. Both sides of the check
+  // are filed under it.
+  //
+  // The parts are remembered alongside the key rather than parsed back out of
+  // it. Splitting a composite key returns strings that then have to be cast
+  // back into `Day`, which launders an unvalidated value into a branded type and
+  // quietly undoes what the branding is for.
+  interface Slot {
+    readonly cardNumber: string;
+    readonly settlesOn: Day;
+  }
+  const slots = new Map<string, Slot>();
+  const slotKey = (cardNumber: string, settlesOn: Day): string => {
+    const key = `${cardNumber}|${settlesOn}`;
+    if (!slots.has(key)) slots.set(key, { cardNumber, settlesOn });
+    return key;
+  };
+
+  // What the account was charged.
+  //
+  // Filed by *value* date, the same date the card rows use. The posting date can
+  // differ, and keying the two sides on different dates would split one
+  // reconciled settlement into an orphan charge and a phantom pending batch —
+  // the same money reported wrong twice, in opposite directions.
   const charges = new Map<string, Cents>();
   for (const t of ledger.transactions) {
-    if (t.kind !== 'settlement') continue;
+    // A settlement is something the *account* is charged. The same sub-category
+    // appearing on a card export is not a second charge, and counting it on both
+    // sides would let two errors cancel into a clean reconciliation.
+    if (t.kind !== 'settlement' || t.source.kind !== 'account') continue;
     // The sub-category already proved this is a settlement; a label that does
     // not name a card makes it unattributable, not absent.
-    const key = `${cardNumberOf(t)}|${t.occurredOn}`;
+    const key = slotKey(cardNumberOf(t), t.settlesOn);
     charges.set(key, (charges.get(key) ?? 0) + t.amount);
   }
 
@@ -136,22 +162,19 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   const batches = new Map<string, Transaction[]>();
   for (const t of ledger.transactions) {
     if (t.source.kind !== 'card') continue;
-    const key = `${t.source.cardNumber}|${t.settlesOn}`;
+    const key = slotKey(t.source.cardNumber, t.settlesOn);
     let batch = batches.get(key);
     if (batch === undefined) batches.set(key, (batch = []));
     batch.push(t);
   }
 
-  // Both sides, not just the card side. A charge the account paid for which no
-  // card rows exist is the most dangerous case available here: iterating only
-  // the batches would emit no check at all for it, and a ledger missing an
-  // entire card export would then be reported as perfectly reconciled.
-  const keys = new Set([...batches.keys(), ...charges.keys()]);
-
+  // Every slot, not just the ones with card rows. A charge the account paid for
+  // which no card rows exist is the most dangerous case available here:
+  // iterating only the batches would emit no check at all for it, and a ledger
+  // missing an entire card export would then be reported as perfectly
+  // reconciled.
   const checks: SettlementCheck[] = [];
-  for (const key of keys) {
-    const [cardNumber = '', settlesOnRaw = ''] = key.split('|');
-    const settlesOn = settlesOnRaw as Day;
+  for (const [key, { cardNumber, settlesOn }] of slots) {
     const rows = batches.get(key) ?? [];
     const itemised = sum(rows.map((r) => r.amount));
     const charged = charges.get(key) ?? null;
@@ -170,7 +193,16 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
         hasAccount && dataCurrentTo !== null && settlesOn > dataCurrentTo ? 'in-flight' : 'mismatch';
     } else if (difference === 0) {
       status = 'reconciled';
-    } else if (exportStart !== undefined && clippedByWindow(settlesOn, exportStart)) {
+    } else if (
+      exportStart !== undefined &&
+      // Clipping can only ever *remove* rows, so it can only make the itemised
+      // total smaller than the charge. A card whose rows come to more than the
+      // account was charged — duplicated rows, or another card's landing in the
+      // batch — is a real error that no window explains, and excusing it on the
+      // date alone files the one thing worth catching as benign.
+      difference < 0 &&
+      clippedByWindow(settlesOn, exportStart)
+    ) {
       status = 'window-edge';
     } else {
       // Includes the case where no export for this card was supplied at all,

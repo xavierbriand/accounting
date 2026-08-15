@@ -47,8 +47,9 @@ const buy = (postedOn: string, settlesOn: string, amount: string): FixtureRow =>
 });
 
 /** The lump the account is charged for a card's month. */
-const charge = (postedOn: string, amount: string, card: string): FixtureRow => ({
+const charge = (postedOn: string, amount: string, card: string, valueOn?: string): FixtureRow => ({
   postedOn,
+  ...(valueOn === undefined ? {} : { valueOn }),
   amount,
   label: `DEBIT DIFFERE N° ...${card}`,
   operationType: 'Carte bancaire',
@@ -171,6 +172,55 @@ describe('reconcileSettlements', () => {
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.inFlight).toBe(0);
+    expect(report.mismatched).toBe(1);
+  });
+
+  it('does not excuse a batch whose rows exceed the charge', () => {
+    // Clipping can only remove rows, so it can only make the itemised total
+    // smaller. Rows exceeding the charge means duplicates, or another card's
+    // rows in this batch — the very thing worth catching.
+    const card = statementOf([buy('15/01/2025', '04/02/2025', '-200,00')],
+      'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('04/02/2025', '-100,00', '3333')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.windowEdge).toBe(0);
+    expect(report.mismatched).toBe(1);
+  });
+
+  it('matches a charge to its batch by value date, not posting date', () => {
+    // A settlement posted on the 4th but valued on the 5th must still meet the
+    // card rows it pays for. Keying the two sides on different dates reports the
+    // same money twice — an orphan charge and a phantom pending batch.
+    const card = statementOf([buy('05/07/2026', '05/08/2026', '-30,00'), buy('06/07/2026', '05/08/2026', '-12,34')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('04/08/2026', '-42,34', '1111', '05/08/2026')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.reconciled).toBe(1);
+    expect(report.mismatched).toBe(0);
+  });
+
+  it('does not let a settlement row on a card export cancel a real charge', () => {
+    // Counted on both sides, the two errors annihilate and the check built to
+    // catch double-counting certifies the double-count as correct.
+    const card = statementOf(
+      [
+        buy('01/07/2026', '04/08/2026', '-42,34'),
+        { ...charge('04/08/2026', '-42,34', '1111'), valueOn: '04/08/2026' },
+      ],
+      'carte_1111_01012024_31122024.ofx',
+      { ...WINDOW, balance: '+0.00' },
+    );
+    const account = statementOf([charge('04/08/2026', '-42,34', '1111')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    // The card export's own settlement row is not a charge, so the batch is
+    // over-itemised against the real charge and that shows up.
+    expect(report.reconciled).toBe(0);
     expect(report.mismatched).toBe(1);
   });
 

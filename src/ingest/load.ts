@@ -12,8 +12,24 @@ import {
   type Transaction,
 } from './ledger.ts';
 import { csvNameFor, sourceOf, type Source } from './sources.ts';
+import { reconcileSettlements, type ReconciliationReport } from './reconcile.ts';
 
 export type { LedgerData, LoadedSource } from './ledger.ts';
+
+/**
+ * A ledger that has already checked itself.
+ *
+ * The report is part of the result rather than something a caller remembers to
+ * ask for, because "run the reconciliation" is not a step anyone should be able
+ * to skip: skipping it is silent, and what it catches is a wrong total.
+ *
+ * It reports rather than throws. A mismatch is exactly the kind of thing the
+ * page exists to show, and refusing to render at the moment there is something
+ * important to say would be backwards.
+ */
+export interface Ledger extends LedgerData {
+  readonly reconciliation: ReconciliationReport;
+}
 
 export class ExportsNotFoundError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -122,4 +138,16 @@ export async function loadLedgerData(directory: string): Promise<LedgerData> {
 
   const transactions = mergeLedger(parsed.map((f) => f.transactions));
   return { transactions, sources: consolidate(parsed, transactions) };
+}
+
+/**
+ * The entry point. Reads the exports and checks them, in one step, always.
+ *
+ * `loadLedgerData` is exported alongside it only so the reconciliation can be
+ * tested against a ledger it did not itself produce; application code has no
+ * reason to reach for it.
+ */
+export async function loadLedger(directory: string): Promise<Ledger> {
+  const data = await loadLedgerData(directory);
+  return { ...data, reconciliation: reconcileSettlements(data) };
 }

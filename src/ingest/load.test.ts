@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ExportsNotFoundError, loadLedgerData } from './load.ts';
+import { ExportsNotFoundError, loadLedger, loadLedgerData } from './load.ts';
 import { reconcileSettlements } from './reconcile.ts';
 import { csvFixture, ofxFixture, type FixtureRow, type OfxOptions } from './__fixtures__/build.ts';
 
@@ -123,5 +123,41 @@ describe('loadLedgerData', () => {
     await expect(loadLedgerData(join(tmpdir(), 'sluice-does-not-exist'))).rejects.toThrow(
       /sluice\.toml/,
     );
+  });
+});
+
+describe('loadLedger', () => {
+  it('reconciles as part of loading, not as a step a caller can forget', async () => {
+    const dir = await folderOf([
+      { stem: 'acct_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
+    ]);
+    const ledger = await loadLedger(dir);
+    expect(ledger.reconciliation).toBeDefined();
+    expect(ledger.reconciliation.accountBalance).toBe(50000);
+  });
+
+  it('reports a mismatch rather than refusing to load', async () => {
+    // A mismatch is what section 03 exists to show. Throwing here would make the
+    // tool useless at exactly the moment it has something worth saying.
+    const dir = await folderOf([
+      {
+        stem: 'acct_01012025_31122025',
+        rows: [
+          {
+            postedOn: '04/08/2025',
+            amount: '-180,00',
+            label: 'DEBIT DIFFERE N° ...9999',
+            operationType: 'Carte bancaire',
+            category: 'Transaction exclue',
+            subCategory: 'Transaction differee',
+          },
+        ],
+        options: { from: '20250101', to: '20251231', balance: '+500.00' },
+      },
+    ]);
+
+    const ledger = await loadLedger(dir);
+    expect(ledger.reconciliation.mismatched).toBe(1);
+    expect(ledger.transactions).toHaveLength(1);
   });
 });

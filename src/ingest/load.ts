@@ -76,7 +76,6 @@ function consolidate(files: readonly ParsedFile[], merged: readonly Transaction[
 
     return {
       source,
-      currency: newest.statement.currency,
       from: ordered.map((f) => f.statement.from).reduce((a, b) => (a < b ? a : b)),
       to: ordered.map((f) => f.statement.to).reduce((a, b) => (a > b ? a : b)),
       balance: newest.statement.balance,
@@ -116,9 +115,10 @@ export async function loadLedgerData(directory: string): Promise<LedgerData> {
   }
 
   const present = new Set(entries);
-  const parsed: ParsedFile[] = [];
 
-  for (const ofxFile of ofxFiles) {
+  // Every pair is checked before anything is read, so a missing file is reported
+  // without first waiting on the reads of the files that are present.
+  const pairs = ofxFiles.map((ofxFile) => {
     const csvFile = csvNameFor(ofxFile);
     if (!present.has(csvFile)) {
       throw new ExportsNotFoundError(
@@ -127,11 +127,26 @@ export async function loadLedgerData(directory: string): Promise<LedgerData> {
           `categories the budget is built from.`,
       );
     }
+    return { ofxFile, csvFile };
+  });
 
+  // The reads are independent, so they run together. Parsing stays sequential
+  // and in sorted filename order, which keeps any parse error deterministic
+  // rather than a race between whichever file finished first.
+  const bytes = await Promise.all(
+    pairs.map(async ({ ofxFile, csvFile }) => ({
+      ofxFile,
+      csvFile,
+      ofxBytes: await readFile(joinPath(directory, ofxFile)),
+      csvBytes: await readFile(joinPath(directory, csvFile)),
+    })),
+  );
+
+  const parsed: ParsedFile[] = [];
+  for (const { ofxFile, csvFile, ofxBytes, csvBytes } of bytes) {
     const source = sourceOf(ofxFile);
-    const statement = parseOfx(await readFile(joinPath(directory, ofxFile)), ofxFile);
-    const csvRows = parseCsv(await readFile(joinPath(directory, csvFile)), csvFile);
-    const joined = joinPositionally(statement, csvRows, source.id);
+    const statement = parseOfx(ofxBytes, ofxFile);
+    const joined = joinPositionally(statement, parseCsv(csvBytes, csvFile), source.id);
 
     parsed.push({ source, statement, filename: ofxFile, transactions: toTransactions(joined, source) });
   }

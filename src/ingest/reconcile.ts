@@ -228,8 +228,24 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
     a.settlesOn === b.settlesOn ? a.cardNumber.localeCompare(b.cardNumber) : a.settlesOn.localeCompare(b.settlesOn),
   );
 
-  const inFlight = checks.filter((c) => c.status === 'in-flight');
-  const inFlightTotal = sum(inFlight.map((c) => c.itemised));
+  // One pass for the tallies. Counting per status from the status list rather
+  // than with a filter each means adding a status cannot leave the counts
+  // quietly failing to add up to the number of checks.
+  const counts: Record<SettlementStatus, number> = {
+    reconciled: 0,
+    'in-flight': 0,
+    'window-edge': 0,
+    mismatch: 0,
+  };
+  const unsettledByCard = new Map<string, Cents>();
+  let inFlightTotal = 0;
+
+  for (const c of checks) {
+    counts[c.status] += 1;
+    if (c.status !== 'in-flight') continue;
+    inFlightTotal += c.itemised;
+    unsettledByCard.set(c.cardNumber, (unsettledByCard.get(c.cardNumber) ?? 0) + c.itemised);
+  }
 
   // Second opinion: each card statement reports its own unsettled balance. It
   // should equal that card's in-flight rows, computed a completely different
@@ -239,9 +255,7 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   for (const loaded of ledger.sources) {
     if (loaded.source.kind !== 'card') continue;
     const card = loaded.source.cardNumber;
-    const unsettled = sum(
-      inFlight.filter((c) => c.cardNumber === card).map((c) => c.itemised),
-    );
+    const unsettled = unsettledByCard.get(card) ?? 0;
     if (unsettled !== loaded.balance) {
       balanceDisagreements.push(
         `card ${card}: unsettled rows total ${unsettled} cents but the statement ` +
@@ -257,10 +271,10 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
 
   return {
     checks,
-    reconciled: checks.filter((c) => c.status === 'reconciled').length,
-    inFlight: inFlight.length,
-    windowEdge: checks.filter((c) => c.status === 'window-edge').length,
-    mismatched: checks.filter((c) => c.status === 'mismatch').length,
+    reconciled: counts.reconciled,
+    inFlight: counts['in-flight'],
+    windowEdge: counts['window-edge'],
+    mismatched: counts.mismatch,
     inFlightTotal,
     accountBalance,
     settledPosition: accountBalance + inFlightTotal,

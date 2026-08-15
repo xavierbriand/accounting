@@ -13,7 +13,6 @@ import type { Source } from './sources.ts';
  */
 export interface LoadedSource {
   readonly source: Source;
-  readonly currency: string;
   /** Widest window across every export of this source. */
   readonly from: Day;
   readonly to: Day;

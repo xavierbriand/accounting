@@ -15,7 +15,6 @@ function statementOf(rows: readonly FixtureRow[], filename: string, options: Ofx
   const transactions = toTransactions(joined, source);
   const loaded: LoadedSource = {
     source,
-    currency: statement.currency,
     from: statement.from,
     to: statement.to,
     balance: statement.balance,

@@ -52,13 +52,13 @@ describe('classification', () => {
   it('separates the three things the bank files under one "excluded" category', () => {
     // Filtering on the parent category is the obvious move and it deletes the
     // household's entire funding side along with the card settlements.
-    const ledger = build([CARD_SETTLEMENT, CONTRIBUTION, TRANSFER_OUT, GROCERIES], 'acct_01012024_31122024.ofx').transactions;
+    const ledger = build([CARD_SETTLEMENT, CONTRIBUTION, TRANSFER_OUT, GROCERIES], '00000000001_01012024_31122024.ofx').transactions;
     expect(ledger.map((t) => t.kind)).toEqual(['settlement', 'transfer-in', 'transfer-out', 'movement']);
   });
 
   it('reads a refund as a positive movement, not as funding', () => {
     const refund: FixtureRow = { postedOn: '09/05/2026', amount: '+19,90', category: 'Alimentation' };
-    const [t] = build([refund], 'acct_01012024_31122024.ofx').transactions;
+    const [t] = build([refund], '00000000001_01012024_31122024.ofx').transactions;
     expect(t?.kind).toBe('movement');
     expect(t?.amount).toBeGreaterThan(0);
   });
@@ -75,7 +75,7 @@ describe('mergeLedger', () => {
   const rows: FixtureRow[] = [GROCERIES, CONTRIBUTION];
 
   it('is idempotent: importing the same export twice changes nothing', () => {
-    const batch = build(rows, 'acct_01012024_31122024.ofx');
+    const batch = build(rows, '00000000001_01012024_31122024.ofx');
     const once = mergeLedger([batch]);
     const twice = mergeLedger([batch, batch]);
     expect(twice).toHaveLength(once.length);
@@ -85,8 +85,8 @@ describe('mergeLedger', () => {
   it('is idempotent across overlapping exports of different date ranges', () => {
     // The export filename carries the range, but the source id must not, or a
     // re-export over a wider window would duplicate every row.
-    const january = build(rows, 'acct_01012024_31012024.ofx');
-    const wider = build(rows, 'acct_01012024_31122024.ofx');
+    const january = build(rows, '00000000001_01012024_31012024.ofx');
+    const wider = build(rows, '00000000001_01012024_31122024.ofx');
     expect(mergeLedger([january, wider])).toHaveLength(rows.length);
   });
 
@@ -111,7 +111,7 @@ describe('mergeLedger', () => {
       { postedOn: '10/08/2026', amount: '-4,50', fitId: 'SAME' },
       { postedOn: '10/08/2026', amount: '-4,50', fitId: 'SAME' },
     ];
-    expect(() => mergeLedger([build(twice, 'acct_01012024_31122024.ofx')])).toThrow(
+    expect(() => mergeLedger([build(twice, '00000000001_01012024_31122024.ofx')])).toThrow(
       /appears twice in one statement/,
     );
   });
@@ -120,7 +120,7 @@ describe('mergeLedger', () => {
     const a: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-14,00', fitId: 'SAME' }];
     const b: FixtureRow[] = [{ postedOn: '11/08/2026', amount: '-7,00', fitId: 'SAME' }];
     expect(() =>
-      mergeLedger([build(a, 'acct_01012024_31122024.ofx'), build(b, 'acct_01012024_31122024.ofx')]),
+      mergeLedger([build(a, '00000000001_01012024_31122024.ofx'), build(b, '00000000001_01012024_31122024.ofx')]),
     ).toThrow(DuplicateTransactionError);
   });
 
@@ -142,8 +142,8 @@ describe('mergeLedger', () => {
     ];
 
     const merged = mergeLedger([
-      build(refiled, 'acct_01012025_28022025.ofx', '2025-02-28'),
-      build(uncategorised, 'acct_01012025_31012025.ofx', '2025-01-31'),
+      build(refiled, '00000000001_01012025_28022025.ofx', '2025-02-28'),
+      build(uncategorised, '00000000001_01012025_31012025.ofx', '2025-01-31'),
     ]);
 
     expect(merged).toHaveLength(1);
@@ -161,21 +161,21 @@ describe('mergeLedger', () => {
     const newer: FixtureRow[] = [{ postedOn: '20/12/2025', amount: '-30,00', fitId: 'F1', category: 'New' }];
 
     const filenameOrderWouldPickOlder = mergeLedger([
-      build(newer, 'acct_01012026_31012026.ofx', '2026-01-31'),
-      build(older, 'acct_01122025_31122025.ofx', '2025-12-31'),
+      build(newer, '00000000001_01012026_31012026.ofx', '2026-01-31'),
+      build(older, '00000000001_01122025_31122025.ofx', '2025-12-31'),
     ]);
     expect(filenameOrderWouldPickOlder[0]?.category).toBe('New');
 
     // Same two exports, supplied in the other order: same answer.
     const reversed = mergeLedger([
-      build(older, 'acct_01122025_31122025.ofx', '2025-12-31'),
-      build(newer, 'acct_01012026_31012026.ofx', '2026-01-31'),
+      build(older, '00000000001_01122025_31122025.ofx', '2025-12-31'),
+      build(newer, '00000000001_01012026_31012026.ofx', '2026-01-31'),
     ]);
     expect(reversed[0]?.category).toBe('New');
   });
 
   it('returns the ledger in date order', () => {
-    const merged = mergeLedger([build([TRANSFER_OUT, GROCERIES, CONTRIBUTION], 'acct_01012024_31122024.ofx')]);
+    const merged = mergeLedger([build([TRANSFER_OUT, GROCERIES, CONTRIBUTION], '00000000001_01012024_31122024.ofx')]);
     expect(merged.map((t) => t.occurredOn)).toEqual(['2026-08-03', '2026-08-05', '2026-08-10']);
   });
 });

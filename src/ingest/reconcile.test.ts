@@ -64,7 +64,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('05/07/2026', '04/08/2026', '-30,00'), buy('06/07/2026', '04/08/2026', '-12,34')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('04/08/2026', '-42,34', '1111')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.mismatched).toBe(0);
@@ -77,7 +77,7 @@ describe('reconcileSettlements', () => {
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     // The August charge is a cent off. Nothing crashes; only this check notices.
     const account = statementOf([charge('04/07/2026', '-10,00', '1111'), charge('04/08/2026', '-30,01', '1111')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.mismatched).toBe(1);
@@ -88,7 +88,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-7.00' });
     const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.inFlight).toBe(1);
@@ -102,7 +102,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('11/08/2026', '04/09/2026', '-500,00')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-500.00' });
     const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+300.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+300.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.accountBalance).toBe(30000);
@@ -116,7 +116,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('15/02/2025', '04/03/2025', '-50,00')],
       'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('04/01/2025', '-180,00', '3333'), charge('04/03/2025', '-50,00', '3333')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     const orphan = report.checks.find((c) => c.settlesOn === '2025-01-04');
@@ -146,7 +146,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('11/08/2026', '04/09/2026', '-500,00')],
       'carte_1111_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '-500.00' });
     const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '+300.00' });
+      '00000000001_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '+300.00' });
 
     // The requested range runs to 31 December; the data is current to 15 August.
     const asOf = '2026-08-15' as Day;
@@ -168,7 +168,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('20/06/2026', '04/07/2026', '-33,00')],
       'carte_1111_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '+0.00' });
     const account = statementOf([{ postedOn: '01/06/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { from: '20260101', to: '20260630', balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { from: '20260101', to: '20260630', balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.inFlight).toBe(0);
@@ -182,7 +182,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('15/01/2025', '04/02/2025', '-200,00')],
       'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('04/02/2025', '-100,00', '3333')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.windowEdge).toBe(0);
@@ -196,7 +196,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('05/07/2026', '05/08/2026', '-30,00'), buy('06/07/2026', '05/08/2026', '-12,34')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('04/08/2026', '-42,34', '1111', '05/08/2026')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.reconciled).toBe(1);
@@ -215,7 +215,7 @@ describe('reconcileSettlements', () => {
       { ...WINDOW, balance: '+0.00' },
     );
     const account = statementOf([charge('04/08/2026', '-42,34', '1111')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     // The card export's own settlement row is not a charge, so the batch is
@@ -230,7 +230,7 @@ describe('reconcileSettlements', () => {
     // charge no check covers, inside a report claiming zero mismatches.
     const account = statementOf(
       [{ ...charge('04/08/2026', '-180,00', '1111'), label: 'DEBIT DIFFERE' }],
-      'acct_01012024_31122024.ofx',
+      '00000000001_01012024_31122024.ofx',
       { ...WINDOW, balance: '+100.00' },
     );
 
@@ -245,7 +245,7 @@ describe('reconcileSettlements', () => {
     // The failure this protects against: exporting the account but forgetting a
     // card, and being told everything reconciles.
     const account = statementOf([charge('04/08/2026', '-180,00', '9999')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account]));
     expect(report.mismatched).toBe(1);
@@ -259,7 +259,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('06/12/2025', '05/01/2026', '-30,00')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('05/01/2026', '-45,00', '1111')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.mismatched).toBe(1);
@@ -272,7 +272,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('15/01/2025', '04/02/2025', '-100,00'), buy('15/02/2025', '04/03/2025', '-50,00')],
       'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
     const account = statementOf([charge('04/02/2025', '-180,00', '3333'), charge('04/03/2025', '-50,00', '3333')],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.windowEdge).toBe(1);
@@ -286,7 +286,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-99.00' });
     const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     const report = reconcileSettlements(ledgerOf([account, card]));
     expect(report.balanceDisagreements).toHaveLength(1);
@@ -297,7 +297,7 @@ describe('reconcileSettlements', () => {
     const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
       'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-7.00' });
     const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
-      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+      '00000000001_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
 
     expect(reconcileSettlements(ledgerOf([account, card])).balanceDisagreements).toHaveLength(0);
   });

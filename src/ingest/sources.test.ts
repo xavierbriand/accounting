@@ -44,10 +44,32 @@ describe('sourceOf', () => {
     expect(() => sourceOf('statement.ofx')).toThrow(SourceNameError);
     expect(() => sourceOf('export-2026.ofx')).toThrow(/expects the bank's own export naming/);
   });
+
+  it('refuses a name it cannot classify, rather than assuming it is cash', () => {
+    // Guessing "account" is expensive in both directions: a savings export gets
+    // added to spendable cash, and a card whose name is slightly off has its
+    // negative unsettled balance subtracted from cash while dropping out of the
+    // settlement check entirely.
+    expect(() => sourceOf('livret_a_01012025_31122025.ofx')).toThrow(SourceNameError);
+    expect(() => sourceOf('joint_savings_01012025_31122025.ofx')).toThrow(/refused rather than guessed/);
+  });
+
+  it('refuses a card whose digits are not four, instead of near-matching it', () => {
+    expect(() => sourceOf('carte_111_01012025_31122025.ofx')).toThrow(SourceNameError);
+    expect(() => sourceOf('carte_11111_01012025_31122025.ofx')).toThrow(SourceNameError);
+    expect(() => sourceOf('cb_1111_01012025_31122025.ofx')).toThrow(SourceNameError);
+  });
 });
 
 describe('csvNameFor', () => {
   it('finds the csv beside the ofx', () => {
     expect(csvNameFor('carte_1111_01012024_31122024.ofx')).toBe('carte_1111_01012024_31122024.csv');
+  });
+
+  it('keeps the extension in the case it found it', () => {
+    // The .ofx scan accepts any case and the lookup that follows is an exact
+    // filename match, so lowercasing here rejected a correctly-named uppercase
+    // pair that was sitting in the folder.
+    expect(csvNameFor('CARTE_1111_01012024_31122024.OFX')).toBe('CARTE_1111_01012024_31122024.CSV');
   });
 });

@@ -14,8 +14,6 @@
  * ranges describe one source, and the filename is therefore not part of it.
  */
 
-export type SourceKind = 'account' | 'card';
-
 /**
  * Modelled as a union rather than an optional field, so that a card always has
  * the four digits the account's settlement row cites and an account never
@@ -35,7 +33,10 @@ export class SourceNameError extends Error {
 
 /** `<stem>_DDMMYYYY_DDMMYYYY.ext` — the two date stamps are the volatile part. */
 const EXPORT_NAME = /^(.+?)_\d{8}_\d{8}\.(ofx|csv)$/i;
+/** Anchored at both ends: `carte_111` and `carte_11111` are not near-misses to accept. */
 const CARD_STEM = /^carte_(\d{4})$/i;
+/** The bank's current-account exports are named for the account number itself. */
+const ACCOUNT_STEM = /^\d{6,}$/;
 
 export function sourceOf(filename: string): Source {
   const base = filename.split('/').at(-1) ?? filename;
@@ -51,10 +52,31 @@ export function sourceOf(filename: string): Source {
   const stem = (m[1] ?? '').toLowerCase();
   const card = CARD_STEM.exec(stem);
   if (card) return { kind: 'card', id: stem, cardNumber: card[1] ?? '' };
-  return { kind: 'account', id: stem };
+  if (ACCOUNT_STEM.test(stem)) return { kind: 'account', id: stem };
+
+  // Anything else is refused rather than assumed to be a current account.
+  //
+  // Treating unrecognised names as accounts is silent and expensive both ways: a
+  // savings export dropped in the folder gets added to spendable cash, and a
+  // card whose name is slightly off — `carte_111`, `cb_1111` — has its negative
+  // unsettled balance subtracted from cash while vanishing from the settlement
+  // check entirely. Both produce a confident, wrong headline figure.
+  throw new SourceNameError(
+    `"${base}" is not a name sluice recognises. A card export is "carte_NNNN_…" ` +
+      `with the last four digits of the card; a current-account export is named ` +
+      `for the account number. Anything else — a savings account, a renamed file ` +
+      `— would be counted as spendable cash in the current account, so it is ` +
+      `refused rather than guessed at.`,
+  );
 }
 
-/** The `.csv` sitting beside a `.ofx` for the same source. */
+/**
+ * The `.csv` sitting beside a `.ofx` for the same source.
+ *
+ * The case of the extension is preserved, because the `.ofx` scan accepts any
+ * case and the lookup that follows is an exact filename match — so lowercasing
+ * here rejected an `EXPORT.OFX`/`EXPORT.CSV` pair that was sitting right there.
+ */
 export function csvNameFor(ofxFilename: string): string {
-  return ofxFilename.replace(/\.ofx$/i, '.csv');
+  return ofxFilename.replace(/\.ofx$/i, (ext) => (ext === ext.toUpperCase() ? '.CSV' : '.csv'));
 }

@@ -33,7 +33,7 @@ const ROWS: FixtureRow[] = [
 describe('loadLedgerData', () => {
   it('reads a folder of exports into one ledger', async () => {
     const dir = await folderOf([
-      { stem: 'acct_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
     ]);
     const ledger = await loadLedgerData(dir);
     expect(ledger.transactions).toHaveLength(2);
@@ -45,12 +45,12 @@ describe('loadLedgerData', () => {
     // a row, so one source entry per file counts the same cash twice.
     const dir = await folderOf([
       {
-        stem: 'acct_01012025_31012025',
+        stem: '00000000001_01012025_31012025',
         rows: ROWS,
         options: { from: '20250101', to: '20250131', balance: '+500.00' },
       },
       {
-        stem: 'acct_01012025_28022025',
+        stem: '00000000001_01012025_28022025',
         rows: ROWS,
         options: { from: '20250101', to: '20250228', balance: '+500.00' },
       },
@@ -67,12 +67,12 @@ describe('loadLedgerData', () => {
       // Disjoint ranges of one account, so the rows carry distinct bank ids as
       // they would in a real pair of exports.
       {
-        stem: 'acct_01032025_31032025',
+        stem: '00000000001_01032025_31032025',
         rows: [{ postedOn: '05/03/2025', amount: '-10,00', fitId: 'MAR-1' }],
         options: { from: '20250301', to: '20250331', balance: '+900.00' },
       },
       {
-        stem: 'acct_01012025_31012025',
+        stem: '00000000001_01012025_31012025',
         rows: [{ postedOn: '05/01/2025', amount: '-40,00', fitId: 'JAN-1' }],
         options: { from: '20250101', to: '20250131', balance: '+500.00' },
       },
@@ -89,8 +89,8 @@ describe('loadLedgerData', () => {
 
   it('counts only the rows that survived the merge', async () => {
     const dir = await folderOf([
-      { stem: 'acct_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
-      { stem: 'acct_01012025_28022025', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012025_28022025', rows: ROWS, options: { balance: '+500.00' } },
     ]);
     const [source] = (await loadLedgerData(dir)).sources;
     expect(source?.count).toBe(2);
@@ -98,7 +98,7 @@ describe('loadLedgerData', () => {
 
   it('keeps separate accounts separate', async () => {
     const dir = await folderOf([
-      { stem: 'acct_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
       { stem: 'carte_1111_01012025_31012025', rows: ROWS, options: { balance: '+0.00' } },
     ]);
     const ledger = await loadLedgerData(dir);
@@ -111,7 +111,7 @@ describe('loadLedgerData', () => {
     // that starts after it was retired. One idle card must not take the ledger
     // down with it.
     const dir = await folderOf([
-      { stem: 'acct_01012026_31012026', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012026_31012026', rows: ROWS, options: { balance: '+500.00' } },
       { stem: 'carte_1111_01012026_31012026', rows: [], options: { balance: '+0.00' } },
     ]);
 
@@ -124,7 +124,7 @@ describe('loadLedgerData', () => {
   it('refuses an ofx with no csv beside it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sluice-'));
     created.push(dir);
-    await writeFile(join(dir, 'acct_01012025_31012025.ofx'), ofxFixture(ROWS));
+    await writeFile(join(dir, '00000000001_01012025_31012025.ofx'), ofxFixture(ROWS));
     await expect(loadLedgerData(dir)).rejects.toThrow(/has no matching/);
   });
 
@@ -144,7 +144,7 @@ describe('loadLedgerData', () => {
 describe('loadLedger', () => {
   it('reconciles as part of loading, not as a step a caller can forget', async () => {
     const dir = await folderOf([
-      { stem: 'acct_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: '00000000001_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
     ]);
     const ledger = await loadLedger(dir);
     expect(ledger.reconciliation).toBeDefined();
@@ -156,7 +156,7 @@ describe('loadLedger', () => {
     // tool useless at exactly the moment it has something worth saying.
     const dir = await folderOf([
       {
-        stem: 'acct_01012025_31122025',
+        stem: '00000000001_01012025_31122025',
         rows: [
           {
             postedOn: '04/08/2025',

@@ -1,7 +1,6 @@
 import { sum, type Cents } from '../core/money.ts';
 import { addMonths, monthOf, type Day } from '../core/dates.ts';
-import type { Ledger } from './load.ts';
-import type { Transaction } from './ledger.ts';
+import type { LedgerData, Transaction } from './ledger.ts';
 
 /**
  * Does the itemised card spending add up to what the account was charged?
@@ -82,18 +81,18 @@ function clippedByWindow(settlesOn: Day, cardExportStart: Day): boolean {
   return addMonths(monthOf(settlesOn), -2) < monthOf(cardExportStart);
 }
 
-export function reconcileSettlements(ledger: Ledger): ReconciliationReport {
+export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   // The account is what carries a charge, so the account's export is what
   // decides whether a settlement has had the chance to appear yet.
   const accountEnd = ledger.sources
     .filter((s) => s.source.kind === 'account')
-    .map((s) => s.statement.to)
+    .map((s) => s.to)
     .reduce((a, b) => (a > b ? a : b), '' as Day);
 
   const cardExportStart = new Map<string, Day>();
   for (const s of ledger.sources) {
-    if (s.source.kind !== 'card' || s.source.cardNumber === undefined) continue;
-    cardExportStart.set(s.source.cardNumber, s.statement.from);
+    if (s.source.kind !== 'card') continue;
+    cardExportStart.set(s.source.cardNumber, s.from);
   }
 
   // What the account was charged, per card and settlement date.
@@ -166,20 +165,21 @@ export function reconcileSettlements(ledger: Ledger): ReconciliationReport {
   const balanceDisagreements: string[] = [];
   for (const loaded of ledger.sources) {
     if (loaded.source.kind !== 'card') continue;
-    const card = loaded.source.cardNumber ?? '';
+    const card = loaded.source.cardNumber;
     const unsettled = sum(
       inFlight.filter((c) => c.cardNumber === card).map((c) => c.itemised),
     );
-    if (unsettled !== loaded.statement.balance) {
+    if (unsettled !== loaded.balance) {
       balanceDisagreements.push(
         `card ${card}: unsettled rows total ${unsettled} cents but the statement ` +
-          `reports a balance of ${loaded.statement.balance} cents`,
+          `reports a balance of ${loaded.balance} cents`,
       );
     }
   }
 
+  // One entry per account, never one per file — see `consolidate` in load.ts.
   const accountBalance = sum(
-    ledger.sources.filter((s) => s.source.kind === 'account').map((s) => s.statement.balance),
+    ledger.sources.filter((s) => s.source.kind === 'account').map((s) => s.balance),
   );
 
   return {

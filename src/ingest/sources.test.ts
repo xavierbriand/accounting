@@ -6,12 +6,15 @@ describe('sourceOf', () => {
     const s = sourceOf('00000000001_01012024_31122024.ofx');
     expect(s.kind).toBe('account');
     expect(s.id).toBe('00000000001');
-    expect(s.cardNumber).toBeUndefined();
+    // The union gives an account no card number at all, rather than an optional
+    // one that every consumer has to defend against.
+    expect(s).not.toHaveProperty('cardNumber');
   });
 
   it('reads a card export and keeps the four digits the settlement row cites', () => {
     const s = sourceOf('carte_1111_01012024_31122024.ofx');
     expect(s.kind).toBe('card');
+    if (s.kind !== 'card') throw new Error('unreachable');
     expect(s.cardNumber).toBe('1111');
   });
 

@@ -4,25 +4,71 @@ import { join as joinPath } from 'node:path';
 import { parseCsv } from './csv.ts';
 import { parseOfx, type OfxStatement } from './ofx.ts';
 import { joinPositionally } from './join.ts';
-import { toTransactions, mergeLedger, type Transaction } from './ledger.ts';
+import {
+  toTransactions,
+  mergeLedger,
+  type LedgerData,
+  type LoadedSource,
+  type Transaction,
+} from './ledger.ts';
 import { csvNameFor, sourceOf, type Source } from './sources.ts';
 
-export interface LoadedSource {
-  readonly source: Source;
-  readonly statement: OfxStatement;
-  readonly count: number;
-}
-
-export interface Ledger {
-  readonly transactions: readonly Transaction[];
-  readonly sources: readonly LoadedSource[];
-}
+export type { LedgerData, LoadedSource } from './ledger.ts';
 
 export class ExportsNotFoundError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'ExportsNotFoundError';
   }
+}
+
+interface ParsedFile {
+  readonly source: Source;
+  readonly statement: OfxStatement;
+  readonly filename: string;
+  readonly transactions: Transaction[];
+}
+
+/**
+ * Fold every export of one account or card into a single source.
+ *
+ * The window widens to cover all of them, because more history means less of a
+ * settlement batch is clipped by the edge of the export. The balance does the
+ * opposite and takes only the newest: it describes one instant, so an older
+ * export's balance is not additional information, it is stale information.
+ */
+function consolidate(files: readonly ParsedFile[], merged: readonly Transaction[]): LoadedSource[] {
+  const bySourceId = new Map<string, ParsedFile[]>();
+  for (const file of files) {
+    let group = bySourceId.get(file.source.id);
+    if (group === undefined) bySourceId.set(file.source.id, (group = []));
+    group.push(file);
+  }
+
+  const countBySourceId = new Map<string, number>();
+  for (const t of merged) {
+    countBySourceId.set(t.source.id, (countBySourceId.get(t.source.id) ?? 0) + 1);
+  }
+
+  return [...bySourceId.values()].map((group) => {
+    // Sorted oldest first, so the last entry carries the current balance.
+    const ordered = [...group].sort((a, b) =>
+      a.statement.balanceAsOf.localeCompare(b.statement.balanceAsOf),
+    );
+    const newest = ordered.at(-1)!;
+    const source = newest.source;
+
+    return {
+      source,
+      currency: newest.statement.currency,
+      from: ordered.map((f) => f.statement.from).reduce((a, b) => (a < b ? a : b)),
+      to: ordered.map((f) => f.statement.to).reduce((a, b) => (a > b ? a : b)),
+      balance: newest.statement.balance,
+      balanceAsOf: newest.statement.balanceAsOf,
+      count: countBySourceId.get(source.id) ?? 0,
+      files: ordered.map((f) => f.filename),
+    };
+  });
 }
 
 /**
@@ -33,7 +79,7 @@ export class ExportsNotFoundError extends Error {
  * dates, and neither alone is enough. A `.qif` in the folder is ignored — it has
  * no ids and no categories, so it is a strict subset of what is already here.
  */
-export async function loadLedger(directory: string): Promise<Ledger> {
+export async function loadLedgerData(directory: string): Promise<LedgerData> {
   let entries: string[];
   try {
     entries = await readdir(directory);
@@ -54,8 +100,7 @@ export async function loadLedger(directory: string): Promise<Ledger> {
   }
 
   const present = new Set(entries);
-  const batches: Transaction[][] = [];
-  const sources: LoadedSource[] = [];
+  const parsed: ParsedFile[] = [];
 
   for (const ofxFile of ofxFiles) {
     const csvFile = csvNameFor(ofxFile);
@@ -72,9 +117,9 @@ export async function loadLedger(directory: string): Promise<Ledger> {
     const csvRows = parseCsv(await readFile(joinPath(directory, csvFile)), csvFile);
     const joined = joinPositionally(statement, csvRows, source.id);
 
-    batches.push(toTransactions(joined, source));
-    sources.push({ source, statement, count: joined.length });
+    parsed.push({ source, statement, filename: ofxFile, transactions: toTransactions(joined, source) });
   }
 
-  return { transactions: mergeLedger(batches), sources };
+  const transactions = mergeLedger(parsed.map((f) => f.transactions));
+  return { transactions, sources: consolidate(parsed, transactions) };
 }

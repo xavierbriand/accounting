@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { parseCsv } from './csv.ts';
 import { parseOfx } from './ofx.ts';
 import { joinPositionally } from './join.ts';
-import { mergeLedger, toTransactions, type Transaction } from './ledger.ts';
+import { mergeLedger, toTransactions, type LedgerData, type LoadedSource, type Transaction } from './ledger.ts';
 import { sourceOf } from './sources.ts';
 import { reconcileSettlements } from './reconcile.ts';
-import type { Ledger, LoadedSource } from './load.ts';
 import { csvFixture, ofxFixture, type FixtureRow, type OfxOptions } from './__fixtures__/build.ts';
 
 function statementOf(rows: readonly FixtureRow[], filename: string, options: OfxOptions = {}) {
@@ -13,13 +12,22 @@ function statementOf(rows: readonly FixtureRow[], filename: string, options: Ofx
   const statement = parseOfx(ofxFixture(rows, options), filename);
   const joined = joinPositionally(statement, parseCsv(csvFixture(rows), filename), source.id);
   const transactions = toTransactions(joined, source);
-  const loaded: LoadedSource = { source, statement, count: transactions.length };
+  const loaded: LoadedSource = {
+    source,
+    currency: statement.currency,
+    from: statement.from,
+    to: statement.to,
+    balance: statement.balance,
+    balanceAsOf: statement.balanceAsOf,
+    count: transactions.length,
+    files: [filename],
+  };
   return { loaded, transactions };
 }
 
 function ledgerOf(
   parts: readonly { loaded: LoadedSource; transactions: Transaction[] }[],
-): Ledger {
+): LedgerData {
   return {
     transactions: mergeLedger(parts.map((p) => p.transactions)),
     sources: parts.map((p) => p.loaded),

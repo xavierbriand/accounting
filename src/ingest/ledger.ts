@@ -4,6 +4,40 @@ import type { JoinedRow } from './join.ts';
 import type { Source } from './sources.ts';
 
 /**
+ * One account or card, as assembled from however many exports describe it.
+ *
+ * Deliberately not "one statement". Dropping two overlapping exports of the same
+ * account into the folder must not change any total, and a per-file view breaks
+ * that in a way transaction de-duplication cannot fix: balances are not rows, so
+ * summing one per file counts the same cash twice.
+ */
+export interface LoadedSource {
+  readonly source: Source;
+  readonly currency: string;
+  /** Widest window across every export of this source. */
+  readonly from: Day;
+  readonly to: Day;
+  /**
+   * The most recently reported closing balance for this source.
+   *
+   * A balance is a fact about an instant, so overlapping exports do not combine:
+   * the newest one simply supersedes the others.
+   */
+  readonly balance: Cents;
+  readonly balanceAsOf: Day;
+  /** How many rows of the merged ledger came from this source. */
+  readonly count: number;
+  /** Every file this source was assembled from, for error messages. */
+  readonly files: readonly string[];
+}
+
+/** Everything the ingest produces before it checks itself. */
+export interface LedgerData {
+  readonly transactions: readonly Transaction[];
+  readonly sources: readonly LoadedSource[];
+}
+
+/**
  * One transaction, after the OFX and CSV views of it have been reconciled.
  *
  * `kind` is the structural classification, and it is the load-bearing part of

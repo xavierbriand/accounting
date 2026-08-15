@@ -9,18 +9,22 @@
  * carefully, and with the volatile part (the exported date range) stripped, so
  * that re-exporting a different range does not mint a new source and duplicate
  * every row.
+ *
+ * A source is an *account or card*, not a file: several exports over different
+ * ranges describe one source, and the filename is therefore not part of it.
  */
 
 export type SourceKind = 'account' | 'card';
 
-export interface Source {
-  /** Stable across exports of different date ranges. */
-  readonly id: string;
-  readonly kind: SourceKind;
-  /** Last four digits, for a card. This is what the account's settlement row cites. */
-  readonly cardNumber?: string;
-  readonly filename: string;
-}
+/**
+ * Modelled as a union rather than an optional field, so that a card always has
+ * the four digits the account's settlement row cites and an account never
+ * pretends to. Code that narrows on `kind` needs no defensive branch for a card
+ * without a number, because the type does not admit one.
+ */
+export type Source =
+  | { readonly kind: 'account'; readonly id: string }
+  | { readonly kind: 'card'; readonly id: string; readonly cardNumber: string };
 
 export class SourceNameError extends Error {
   constructor(message: string) {
@@ -44,12 +48,10 @@ export function sourceOf(filename: string): Source {
     );
   }
 
-  const stem = m[1] ?? '';
+  const stem = (m[1] ?? '').toLowerCase();
   const card = CARD_STEM.exec(stem);
-  if (card) {
-    return { id: stem.toLowerCase(), kind: 'card', cardNumber: card[1] ?? '', filename: base };
-  }
-  return { id: stem.toLowerCase(), kind: 'account', filename: base };
+  if (card) return { kind: 'card', id: stem, cardNumber: card[1] ?? '' };
+  return { kind: 'account', id: stem };
 }
 
 /** The `.csv` sitting beside a `.ofx` for the same source. */

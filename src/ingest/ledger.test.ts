@@ -101,6 +101,19 @@ describe('mergeLedger', () => {
     expect(new Set(merged.map((t) => t.id)).size).toBe(2);
   });
 
+  it('refuses two rows sharing an id inside one statement, even if identical', () => {
+    // The dangerous shape: same day, same amount, a purchase genuinely made
+    // twice. Treating it as a re-import deletes one of them, and the total it
+    // leaves behind is wrong but entirely plausible.
+    const twice: FixtureRow[] = [
+      { postedOn: '10/08/2026', amount: '-4,50', fitId: 'SAME' },
+      { postedOn: '10/08/2026', amount: '-4,50', fitId: 'SAME' },
+    ];
+    expect(() => mergeLedger([build(twice, 'acct_01012024_31122024.ofx')])).toThrow(
+      /appears twice in one statement/,
+    );
+  });
+
   it('refuses to merge two different transactions that claim the same identity', () => {
     const a: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-14,00', fitId: 'SAME' }];
     const b: FixtureRow[] = [{ postedOn: '11/08/2026', amount: '-7,00', fitId: 'SAME' }];

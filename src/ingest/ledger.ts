@@ -137,7 +137,24 @@ export function mergeLedger(batches: readonly (readonly Transaction[])[]): Trans
   const byId = new Map<string, Transaction>();
 
   for (const batch of batches) {
+    // De-duplication is only ever meaningful *between* statements, where the
+    // same row genuinely appears twice. Within one statement, two rows sharing
+    // an id are two transactions the bank labelled alike — collapsing them
+    // deletes real money, and it does so most easily in the case hardest to
+    // notice: same day, same amount, a repeated purchase.
+    const seenInBatch = new Set<string>();
+
     for (const t of batch) {
+      if (seenInBatch.has(t.id)) {
+        throw new DuplicateTransactionError(
+          `"${t.id}" appears twice in one statement, on ${t.occurredOn}. Within a ` +
+            `single export every row carries its own id, so these are two ` +
+            `transactions rather than one imported twice, and merging them would ` +
+            `silently drop one.`,
+        );
+      }
+      seenInBatch.add(t.id);
+
       const existing = byId.get(t.id);
       if (existing === undefined) {
         byId.set(t.id, t);

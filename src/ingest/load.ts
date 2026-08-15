@@ -136,7 +136,9 @@ export async function loadLedgerData(directory: string): Promise<LedgerData> {
     parsed.push({ source, statement, filename: ofxFile, transactions: toTransactions(joined, source) });
   }
 
-  const transactions = mergeLedger(parsed.map((f) => f.transactions));
+  const transactions = mergeLedger(
+    parsed.map((f) => ({ transactions: f.transactions, asOf: f.statement.balanceAsOf })),
+  );
   return { transactions, sources: consolidate(parsed, transactions) };
 }
 

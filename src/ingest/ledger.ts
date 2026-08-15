@@ -126,17 +126,31 @@ export class DuplicateTransactionError extends Error {
   }
 }
 
+/** One export's worth of transactions, tagged with when that export was taken. */
+export interface LedgerBatch {
+  readonly transactions: readonly Transaction[];
+  /** The export's own closing-balance date — when the bank says this view is current. */
+  readonly asOf: Day;
+}
+
 /**
  * Merge sources into one ledger, keyed on `id`.
  *
  * Re-importing an overlapping export must change no total, which is what the key
- * is for. A collision between *different* sources is the failure this guards —
- * it means the source ids are not distinguishing what they should.
+ * is for. Where two exports disagree about a row, the newer one is believed —
+ * the same rule `consolidate` applies to balances, for the same reason.
  */
-export function mergeLedger(batches: readonly (readonly Transaction[])[]): Transaction[] {
+export function mergeLedger(batches: readonly LedgerBatch[]): Transaction[] {
   const byId = new Map<string, Transaction>();
 
-  for (const batch of batches) {
+  // Oldest export first, so that when the same row appears twice the newer copy
+  // is the one left standing. Ordering by the export's own as-of date rather
+  // than by filename matters: the bank stamps files `_DDMMYYYY_DDMMYYYY`, and
+  // sorting those as text compares the day before the month, so `01012026`
+  // sorts before `01122025` and "first read" is not "oldest".
+  const ordered = [...batches].sort((a, b) => a.asOf.localeCompare(b.asOf));
+
+  for (const batch of ordered) {
     // De-duplication is only ever meaningful *between* statements, where the
     // same row genuinely appears twice. Within one statement, two rows sharing
     // an id are two transactions the bank labelled alike — collapsing them
@@ -144,7 +158,7 @@ export function mergeLedger(batches: readonly (readonly Transaction[])[]): Trans
     // notice: same day, same amount, a repeated purchase.
     const seenInBatch = new Set<string>();
 
-    for (const t of batch) {
+    for (const t of batch.transactions) {
       if (seenInBatch.has(t.id)) {
         throw new DuplicateTransactionError(
           `"${t.id}" appears twice in one statement, on ${t.occurredOn}. Within a ` +
@@ -156,22 +170,34 @@ export function mergeLedger(batches: readonly (readonly Transaction[])[]): Trans
       seenInBatch.add(t.id);
 
       const existing = byId.get(t.id);
-      if (existing === undefined) {
-        byId.set(t.id, t);
-        continue;
+      if (existing !== undefined) {
+        // Amount and date identify the transaction itself. If those differ, the
+        // two rows are not one row seen twice, whatever the bank's id says, and
+        // silently keeping either would drop real money.
+        //
+        // `source.id` is deliberately not compared: it is already the prefix of
+        // `t.id`, so it cannot differ here.
+        const sameTransaction =
+          existing.amount === t.amount && existing.occurredOn === t.occurredOn;
+        if (!sameTransaction) {
+          throw new DuplicateTransactionError(
+            `Two different transactions share the id "${t.id}": ` +
+              `${existing.occurredOn} vs ${t.occurredOn}. The bank's row ids are only ` +
+              `unique within one exported statement, so this means two statements are ` +
+              `being treated as the same source.`,
+          );
+        }
       }
-      const identical =
-        existing.amount === t.amount &&
-        existing.occurredOn === t.occurredOn &&
-        existing.source.id === t.source.id;
-      if (!identical) {
-        throw new DuplicateTransactionError(
-          `Two different transactions share the id "${t.id}": ` +
-            `${existing.occurredOn} vs ${t.occurredOn}. The bank's row ids are only ` +
-            `unique within one exported statement, so this means two statements are ` +
-            `being treated as the same source.`,
-        );
-      }
+
+      // The newer export wins, and wins wholesale.
+      //
+      // Everything else on the row — category, sub-category, value date, label —
+      // is the bank's current view of a transaction it has already identified,
+      // and the user changes exactly those fields by re-filing a transaction at
+      // the bank and exporting again. Keeping the first copy read would throw
+      // that correction away and, when the correction is to a sub-category,
+      // silently move the row between spending and internal transfer.
+      byId.set(t.id, t);
     }
   }
 

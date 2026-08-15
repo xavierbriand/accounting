@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Day } from '../core/dates.ts';
 import { parseCsv } from './csv.ts';
 import { parseOfx } from './ofx.ts';
 import { joinPositionally } from './join.ts';
@@ -6,10 +7,11 @@ import { DuplicateTransactionError, mergeLedger, toTransactions } from './ledger
 import { sourceOf } from './sources.ts';
 import { csvFixture, ofxFixture, type FixtureRow } from './__fixtures__/build.ts';
 
-function build(rows: readonly FixtureRow[], filename: string) {
+/** One export's worth of rows. `asOf` is when that export was taken. */
+function build(rows: readonly FixtureRow[], filename: string, asOf = '2025-01-31') {
   const source = sourceOf(filename);
   const joined = joinPositionally(parseOfx(ofxFixture(rows)), parseCsv(csvFixture(rows)), source.id);
-  return toTransactions(joined, source);
+  return { transactions: toTransactions(joined, source), asOf: asOf as Day };
 }
 
 const CARD_SETTLEMENT: FixtureRow = {
@@ -50,20 +52,20 @@ describe('classification', () => {
   it('separates the three things the bank files under one "excluded" category', () => {
     // Filtering on the parent category is the obvious move and it deletes the
     // household's entire funding side along with the card settlements.
-    const ledger = build([CARD_SETTLEMENT, CONTRIBUTION, TRANSFER_OUT, GROCERIES], 'acct_01012024_31122024.ofx');
+    const ledger = build([CARD_SETTLEMENT, CONTRIBUTION, TRANSFER_OUT, GROCERIES], 'acct_01012024_31122024.ofx').transactions;
     expect(ledger.map((t) => t.kind)).toEqual(['settlement', 'transfer-in', 'transfer-out', 'movement']);
   });
 
   it('reads a refund as a positive movement, not as funding', () => {
     const refund: FixtureRow = { postedOn: '09/05/2026', amount: '+19,90', category: 'Alimentation' };
-    const [t] = build([refund], 'acct_01012024_31122024.ofx');
+    const [t] = build([refund], 'acct_01012024_31122024.ofx').transactions;
     expect(t?.kind).toBe('movement');
     expect(t?.amount).toBeGreaterThan(0);
   });
 
   it('dates a card purchase when it happened and records when it settles', () => {
     const purchase: FixtureRow = { postedOn: '11/08/2026', valueOn: '04/09/2026', amount: '-7,00' };
-    const [t] = build([purchase], 'carte_1111_01012024_31122024.ofx');
+    const [t] = build([purchase], 'carte_1111_01012024_31122024.ofx').transactions;
     expect(t?.occurredOn).toBe('2026-08-11');
     expect(t?.settlesOn).toBe('2026-09-04');
   });
@@ -120,6 +122,56 @@ describe('mergeLedger', () => {
     expect(() =>
       mergeLedger([build(a, 'acct_01012024_31122024.ofx'), build(b, 'acct_01012024_31122024.ofx')]),
     ).toThrow(DuplicateTransactionError);
+  });
+
+  it('keeps the newer export’s categories when a row is re-filed at the bank', () => {
+    // The workflow this protects: correct a transaction's category in the
+    // bank's own interface, export again, and keep both files in the folder.
+    // Losing the correction here would be silent and permanent.
+    const uncategorised: FixtureRow[] = [
+      { postedOn: '05/01/2025', amount: '-40,00', fitId: 'A1', category: 'A categoriser - sortie d’argent' },
+    ];
+    const refiled: FixtureRow[] = [
+      {
+        postedOn: '05/01/2025',
+        amount: '-40,00',
+        fitId: 'A1',
+        category: 'Transaction exclue',
+        subCategory: 'Virement interne',
+      },
+    ];
+
+    const merged = mergeLedger([
+      build(refiled, 'acct_01012025_28022025.ofx', '2025-02-28'),
+      build(uncategorised, 'acct_01012025_31012025.ofx', '2025-01-31'),
+    ]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.category).toBe('Transaction exclue');
+    // And the correction must carry through to classification, or the row keeps
+    // being counted as household spending.
+    expect(merged[0]?.kind).toBe('transfer-out');
+  });
+
+  it('decides which export is newer by its as-of date, not by filename order', () => {
+    // The bank stamps files `_DDMMYYYY_DDMMYYYY`, so sorting them as text
+    // compares the day before the month: "01012026" sorts before "01122025".
+    // Reading order is therefore not chronological order.
+    const older: FixtureRow[] = [{ postedOn: '20/12/2025', amount: '-30,00', fitId: 'F1', category: 'Old' }];
+    const newer: FixtureRow[] = [{ postedOn: '20/12/2025', amount: '-30,00', fitId: 'F1', category: 'New' }];
+
+    const filenameOrderWouldPickOlder = mergeLedger([
+      build(newer, 'acct_01012026_31012026.ofx', '2026-01-31'),
+      build(older, 'acct_01122025_31122025.ofx', '2025-12-31'),
+    ]);
+    expect(filenameOrderWouldPickOlder[0]?.category).toBe('New');
+
+    // Same two exports, supplied in the other order: same answer.
+    const reversed = mergeLedger([
+      build(older, 'acct_01122025_31122025.ofx', '2025-12-31'),
+      build(newer, 'acct_01012026_31012026.ofx', '2026-01-31'),
+    ]);
+    expect(reversed[0]?.category).toBe('New');
   });
 
   it('returns the ledger in date order', () => {

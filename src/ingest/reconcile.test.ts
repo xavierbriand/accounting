@@ -29,7 +29,9 @@ function ledgerOf(
   parts: readonly { loaded: LoadedSource; transactions: Transaction[] }[],
 ): LedgerData {
   return {
-    transactions: mergeLedger(parts.map((p) => p.transactions)),
+    transactions: mergeLedger(
+      parts.map((p) => ({ transactions: p.transactions, asOf: p.loaded.balanceAsOf })),
+    ),
     sources: parts.map((p) => p.loaded),
   };
 }

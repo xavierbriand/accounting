@@ -1,0 +1,122 @@
+/*
+ * Tokens first, components second. Every colour below is defined once on :root
+ * and only *redefined* under the dark scheme, so nothing can end up with its
+ * sole definition inside a media query.
+ *
+ * The two series colours are not chosen by eye — they were validated for
+ * lightness band, chroma floor and colour-vision-deficiency separation against
+ * each surface. Light and dark are separate steps, not an automatic flip.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --surface: #ffffff;
+  --surface-sunken: #f6f7f8;
+  --surface-raised: #ffffff;
+  --border: #e2e5e9;
+  --border-strong: #c8ced6;
+
+  --ink: #14181d;
+  --ink-secondary: #4a535e;
+  --ink-muted: #6f7885;
+
+  /* Series — validated pair. 1 is the primary measure, 2 the comparison. */
+  --series-1: #0094a8;
+  --series-2: #c2410c;
+  --series-1-soft: #d6eff3;
+  --series-2-soft: #fae5da;
+
+  /* Status. Reserved: never reused as a third series. */
+  --good: #16794a;
+  --warning: #a35c00;
+  --serious: #b4400f;
+  --critical: #a01b2b;
+
+  --grid: #eceef1;
+  --axis: #c8ced6;
+
+  --radius: 8px;
+  --radius-sm: 4px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-num: ui-monospace, 'SF Mono', 'Menlo', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --surface: #14181d;
+    --surface-sunken: #0e1216;
+    --surface-raised: #1c2129;
+    --border: #2a313a;
+    --border-strong: #3d4652;
+
+    --ink: #eef1f4;
+    --ink-secondary: #b3bcc7;
+    --ink-muted: #838d99;
+
+    --series-1: #22a3b5;
+    --series-2: #d2703c;
+    --series-1-soft: #143840;
+    --series-2-soft: #3d2418;
+
+    --good: #3fa876;
+    --warning: #d29338;
+    --serious: #e07a4e;
+    --critical: #e0576a;
+
+    --grid: #232932;
+    --axis: #3d4652;
+  }
+}
+
+:root[data-theme='dark'] {
+  --surface: #14181d;
+  --surface-sunken: #0e1216;
+  --surface-raised: #1c2129;
+  --border: #2a313a;
+  --border-strong: #3d4652;
+
+  --ink: #eef1f4;
+  --ink-secondary: #b3bcc7;
+  --ink-muted: #838d99;
+
+  --series-1: #22a3b5;
+  --series-2: #d2703c;
+  --series-1-soft: #143840;
+  --series-2-soft: #3d2418;
+
+  --good: #3fa876;
+  --warning: #d29338;
+  --serious: #e07a4e;
+  --critical: #e0576a;
+
+  --grid: #232932;
+  --axis: #3d4652;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Money is read in columns and compared down the page: it gets tabular figures
+   everywhere, without exception. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}

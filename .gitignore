@@ -1,4 +1,25 @@
 .DS_Store
 .claude/settings.local.json
 .claude/worktrees/
+.claude/.last-lint-result
 observability/.state/
+
+# Next.js / node
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Bank exports and household config never live here — they live outside the
+# working tree entirely (see README). These patterns are a second line of
+# defence, not the mechanism.
+*.ofx
+*.qif
+*.csv
+*.xlsx
+sluice.toml
+
+# ...with one deliberate exception: hand-written synthetic fixtures, which
+# contain no real transaction. Anything real is rejected by the pattern above
+# before it can reach a commit.
+!src/ingest/__fixtures__/**

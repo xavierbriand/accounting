@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+import { parseCsv } from './csv.ts';
+import { parseOfx } from './ofx.ts';
+import { joinPositionally } from './join.ts';
+import { mergeLedger, toTransactions, type Transaction } from './ledger.ts';
+import { sourceOf } from './sources.ts';
+import { reconcileSettlements } from './reconcile.ts';
+import type { Ledger, LoadedSource } from './load.ts';
+import { csvFixture, ofxFixture, type FixtureRow, type OfxOptions } from './__fixtures__/build.ts';
+
+function statementOf(rows: readonly FixtureRow[], filename: string, options: OfxOptions = {}) {
+  const source = sourceOf(filename);
+  const statement = parseOfx(ofxFixture(rows, options), filename);
+  const joined = joinPositionally(statement, parseCsv(csvFixture(rows), filename), source.id);
+  const transactions = toTransactions(joined, source);
+  const loaded: LoadedSource = { source, statement, count: transactions.length };
+  return { loaded, transactions };
+}
+
+function ledgerOf(
+  parts: readonly { loaded: LoadedSource; transactions: Transaction[] }[],
+): Ledger {
+  return {
+    transactions: mergeLedger(parts.map((p) => p.transactions)),
+    sources: parts.map((p) => p.loaded),
+  };
+}
+
+/** A card purchase: it happens on one date and is charged on another. */
+const buy = (postedOn: string, settlesOn: string, amount: string): FixtureRow => ({
+  postedOn,
+  valueOn: settlesOn,
+  amount,
+  category: 'Alimentation',
+  subCategory: 'Supermarche',
+});
+
+/** The lump the account is charged for a card's month. */
+const charge = (postedOn: string, amount: string, card: string): FixtureRow => ({
+  postedOn,
+  amount,
+  label: `DEBIT DIFFERE N° ...${card}`,
+  operationType: 'Carte bancaire',
+  category: 'Transaction exclue',
+  subCategory: 'Transaction differee',
+});
+
+const WINDOW: OfxOptions = { from: '20250101', to: '20260815' };
+
+describe('reconcileSettlements', () => {
+  it('reconciles a card’s purchases against the account’s charge, to the cent', () => {
+    const card = statementOf([buy('05/07/2026', '04/08/2026', '-30,00'), buy('06/07/2026', '04/08/2026', '-12,34')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('04/08/2026', '-42,34', '1111')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.mismatched).toBe(0);
+    expect(report.reconciled).toBe(1);
+    expect(report.checks[0]?.difference).toBe(0);
+  });
+
+  it('catches a charge that does not match the purchases behind it', () => {
+    const card = statementOf([buy('05/07/2026', '04/08/2026', '-30,00'), buy('06/06/2026', '04/07/2026', '-10,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    // The August charge is a cent off. Nothing crashes; only this check notices.
+    const account = statementOf([charge('04/07/2026', '-10,00', '1111'), charge('04/08/2026', '-30,01', '1111')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.mismatched).toBe(1);
+    expect(report.checks.find((c) => c.status === 'mismatch')?.difference).toBe(-1);
+  });
+
+  it('reports spending not yet charged as in-flight, not as an error', () => {
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-7.00' });
+    const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.inFlight).toBe(1);
+    expect(report.mismatched).toBe(0);
+    expect(report.inFlightTotal).toBe(-700);
+  });
+
+  it('shows what the account is worth once the cards settle', () => {
+    // The number the bank never puts in one place: a balance that looks
+    // comfortable while the cards behind it are already spent.
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-500,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-500.00' });
+    const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+300.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.accountBalance).toBe(30000);
+    expect(report.settledPosition).toBe(30000 - 50000);
+    expect(report.settledPosition).toBeLessThan(0);
+  });
+
+  it('accepts a first batch clipped by the start of the export window', () => {
+    // The earliest charge covers purchases made before the export began, so it
+    // is legitimately larger than the rows available. Later batches are not.
+    const card = statementOf([buy('15/01/2025', '04/02/2025', '-100,00'), buy('15/02/2025', '04/03/2025', '-50,00')],
+      'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('04/02/2025', '-180,00', '3333'), charge('04/03/2025', '-50,00', '3333')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.windowEdge).toBe(1);
+    expect(report.mismatched).toBe(0);
+    expect(report.reconciled).toBe(1);
+  });
+
+  it('checks the card’s own reported balance against its unsettled rows', () => {
+    // Two independent routes to the same number. When the statement disagrees
+    // with the arithmetic, one of them is wrong and it matters which.
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-99.00' });
+    const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.balanceDisagreements).toHaveLength(1);
+    expect(report.balanceDisagreements[0]).toContain('1111');
+  });
+
+  it('is silent when the two routes agree', () => {
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-7.00' });
+    const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    expect(reconcileSettlements(ledgerOf([account, card])).balanceDisagreements).toHaveLength(0);
+  });
+});

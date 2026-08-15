@@ -1,5 +1,5 @@
 import { sum, type Cents } from '../core/money.ts';
-import type { Day } from '../core/dates.ts';
+import { addMonths, monthOf, type Day } from '../core/dates.ts';
 import type { Ledger } from './load.ts';
 import type { Transaction } from './ledger.ts';
 
@@ -22,7 +22,7 @@ export type SettlementStatus =
   | 'reconciled'
   /** Spent, not yet charged to the account. Real money the buffer must cover. */
   | 'in-flight'
-  /** The batch began before the export did, so part of it cannot be itemised. */
+  /** The batch began before the export did, so part or all of it cannot be itemised. */
   | 'window-edge'
   /** Neither of the above. Something is genuinely wrong. */
   | 'mismatch';
@@ -67,10 +67,34 @@ function cardNumberOf(settlement: Transaction): string | null {
   return CARD_IN_LABEL.exec(settlement.label.trim())?.[1] ?? null;
 }
 
+/**
+ * A settlement batch covers roughly the month running up to one month before it
+ * is charged, so its earliest purchase sits about two months before the charge.
+ * If the export begins after that, part of the batch is simply not in the files
+ * and the shortfall is the window's doing rather than an error.
+ *
+ * Compared at month granularity, which is right for an export that starts on a
+ * month boundary. An export starting mid-month can clip a batch this test calls
+ * complete — that direction is deliberate: it reports a loud mismatch rather
+ * than quietly excusing a real one.
+ */
+function clippedByWindow(settlesOn: Day, cardExportStart: Day): boolean {
+  return addMonths(monthOf(settlesOn), -2) < monthOf(cardExportStart);
+}
+
 export function reconcileSettlements(ledger: Ledger): ReconciliationReport {
-  const exportEnd = ledger.sources
+  // The account is what carries a charge, so the account's export is what
+  // decides whether a settlement has had the chance to appear yet.
+  const accountEnd = ledger.sources
+    .filter((s) => s.source.kind === 'account')
     .map((s) => s.statement.to)
     .reduce((a, b) => (a > b ? a : b), '' as Day);
+
+  const cardExportStart = new Map<string, Day>();
+  for (const s of ledger.sources) {
+    if (s.source.kind !== 'card' || s.source.cardNumber === undefined) continue;
+    cardExportStart.set(s.source.cardNumber, s.statement.from);
+  }
 
   // What the account was charged, per card and settlement date.
   const charges = new Map<string, Cents>();
@@ -94,31 +118,34 @@ export function reconcileSettlements(ledger: Ledger): ReconciliationReport {
     batch.push(t);
   }
 
-  // Only a card's *earliest* batch can be clipped by the start of the export
-  // window: every later batch is bounded by two settlement dates inside it.
-  const earliestPerCard = new Map<string, Day>();
-  for (const key of batches.keys()) {
-    const [card = '', settlesOn = ''] = key.split('|');
-    const current = earliestPerCard.get(card);
-    if (current === undefined || settlesOn < current) earliestPerCard.set(card, settlesOn as Day);
-  }
+  // Both sides, not just the card side. A charge the account paid for which no
+  // card rows exist is the most dangerous case available here: iterating only
+  // the batches would emit no check at all for it, and a ledger missing an
+  // entire card export would then be reported as perfectly reconciled.
+  const keys = new Set([...batches.keys(), ...charges.keys()]);
 
   const checks: SettlementCheck[] = [];
-  for (const [key, rows] of batches) {
+  for (const key of keys) {
     const [cardNumber = '', settlesOnRaw = ''] = key.split('|');
     const settlesOn = settlesOnRaw as Day;
+    const rows = batches.get(key) ?? [];
     const itemised = sum(rows.map((r) => r.amount));
     const charged = charges.get(key) ?? null;
     const difference = charged === null ? 0 : charged - itemised;
+    const exportStart = cardExportStart.get(cardNumber);
 
     let status: SettlementStatus;
     if (charged === null) {
-      status = settlesOn > exportEnd ? 'in-flight' : 'mismatch';
+      // Nothing charged yet. Either it is genuinely still pending, or the
+      // account's export stops short of a settlement that has already happened.
+      status = settlesOn > accountEnd ? 'in-flight' : 'mismatch';
     } else if (difference === 0) {
       status = 'reconciled';
-    } else if (earliestPerCard.get(cardNumber) === settlesOn) {
+    } else if (exportStart !== undefined && clippedByWindow(settlesOn, exportStart)) {
       status = 'window-edge';
     } else {
+      // Includes the case where no export for this card was supplied at all,
+      // which must never be silently forgiven.
       status = 'mismatch';
     }
 

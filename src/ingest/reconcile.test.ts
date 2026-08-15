@@ -98,6 +98,47 @@ describe('reconcileSettlements', () => {
     expect(report.settledPosition).toBeLessThan(0);
   });
 
+  it('never lets a charge pass unchecked just because no card rows match it', () => {
+    // Iterating only the card side would emit no check at all here, and a
+    // ledger missing an entire card export would report as fully reconciled.
+    const card = statementOf([buy('15/02/2025', '04/03/2025', '-50,00')],
+      'carte_3333_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('04/01/2025', '-180,00', '3333'), charge('04/03/2025', '-50,00', '3333')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    const orphan = report.checks.find((c) => c.settlesOn === '2025-01-04');
+    expect(orphan).toBeDefined();
+    expect(orphan?.rowCount).toBe(0);
+    // Its purchases predate the export entirely, so the window explains it.
+    expect(orphan?.status).toBe('window-edge');
+  });
+
+  it('calls a charge a mismatch when no export for that card was supplied at all', () => {
+    // The failure this protects against: exporting the account but forgetting a
+    // card, and being told everything reconciles.
+    const account = statementOf([charge('04/08/2026', '-180,00', '9999')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account]));
+    expect(report.mismatched).toBe(1);
+    expect(report.checks[0]?.itemised).toBe(0);
+  });
+
+  it('does not excuse a mismatch on a card that began inside the export window', () => {
+    // A replacement card's first batch is bounded by dates inside the window, so
+    // it is complete and a shortfall in it is a real error. Deciding this by
+    // "is it the earliest batch" would hide exactly that.
+    const card = statementOf([buy('06/12/2025', '05/01/2026', '-30,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+    const account = statementOf([charge('05/01/2026', '-45,00', '1111')],
+      'acct_01012024_31122024.ofx', { ...WINDOW, balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.mismatched).toBe(1);
+    expect(report.windowEdge).toBe(0);
+  });
+
   it('accepts a first batch clipped by the start of the export window', () => {
     // The earliest charge covers purchases made before the export began, so it
     // is legitimately larger than the rows available. Later batches are not.

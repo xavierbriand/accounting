@@ -62,8 +62,19 @@ export interface ReconciliationReport {
 /** `DEBIT DIFFERE N° ...1111` → `1111`. */
 const CARD_IN_LABEL = /(\d{4})\s*$/;
 
-function cardNumberOf(settlement: Transaction): string | null {
-  return CARD_IN_LABEL.exec(settlement.label.trim())?.[1] ?? null;
+/**
+ * Stands in for a settlement whose label does not name a card.
+ *
+ * Never dropped, and never matched by a real card, so such a charge always
+ * surfaces as a mismatch. Discarding it instead — which is what an earlier
+ * version did — reproduces the worst failure this module has: an account charge
+ * that no check ever covers, inside a report that then announces zero
+ * mismatches.
+ */
+export const UNIDENTIFIED_CARD = 'unidentified';
+
+function cardNumberOf(settlement: Transaction): string {
+  return CARD_IN_LABEL.exec(settlement.label.trim())?.[1] ?? UNIDENTIFIED_CARD;
 }
 
 /**
@@ -99,9 +110,9 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   const charges = new Map<string, Cents>();
   for (const t of ledger.transactions) {
     if (t.kind !== 'settlement') continue;
-    const card = cardNumberOf(t);
-    if (card === null) continue;
-    const key = `${card}|${t.occurredOn}`;
+    // The sub-category already proved this is a settlement; a label that does
+    // not name a card makes it unattributable, not absent.
+    const key = `${cardNumberOf(t)}|${t.occurredOn}`;
     charges.set(key, (charges.get(key) ?? 0) + t.amount);
   }
 
@@ -109,9 +120,7 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   const batches = new Map<string, Transaction[]>();
   for (const t of ledger.transactions) {
     if (t.source.kind !== 'card') continue;
-    const card = t.source.cardNumber;
-    if (card === undefined) continue;
-    const key = `${card}|${t.settlesOn}`;
+    const key = `${t.source.cardNumber}|${t.settlesOn}`;
     let batch = batches.get(key);
     if (batch === undefined) batches.set(key, (batch = []));
     batch.push(t);

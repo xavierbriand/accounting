@@ -4,7 +4,7 @@ import { parseOfx } from './ofx.ts';
 import { joinPositionally } from './join.ts';
 import { mergeLedger, toTransactions, type LedgerData, type LoadedSource, type Transaction } from './ledger.ts';
 import { sourceOf } from './sources.ts';
-import { reconcileSettlements } from './reconcile.ts';
+import { reconcileSettlements, UNIDENTIFIED_CARD } from './reconcile.ts';
 import { csvFixture, ofxFixture, type FixtureRow, type OfxOptions } from './__fixtures__/build.ts';
 
 function statementOf(rows: readonly FixtureRow[], filename: string, options: OfxOptions = {}) {
@@ -120,6 +120,23 @@ describe('reconcileSettlements', () => {
     expect(orphan?.rowCount).toBe(0);
     // Its purchases predate the export entirely, so the window explains it.
     expect(orphan?.status).toBe('window-edge');
+  });
+
+  it('surfaces a settlement whose label does not name a card', () => {
+    // The sub-category already proved it is a settlement. Dropping it for want
+    // of a parseable label would recreate the worst failure here: an account
+    // charge no check covers, inside a report claiming zero mismatches.
+    const account = statementOf(
+      [{ ...charge('04/08/2026', '-180,00', '1111'), label: 'DEBIT DIFFERE' }],
+      'acct_01012024_31122024.ofx',
+      { ...WINDOW, balance: '+100.00' },
+    );
+
+    const report = reconcileSettlements(ledgerOf([account]));
+    expect(report.checks).toHaveLength(1);
+    expect(report.mismatched).toBe(1);
+    expect(report.checks[0]?.cardNumber).toBe(UNIDENTIFIED_CARD);
+    expect(report.checks[0]?.charged).toBe(-18000);
   });
 
   it('calls a charge a mismatch when no export for that card was supplied at all', () => {

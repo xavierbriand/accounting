@@ -92,13 +92,14 @@ export function parseOfx(bytes: Uint8Array, filename = 'export.ofx'): OfxStateme
     };
   });
 
-  if (transactions.length === 0) {
-    throw new OfxFormatError(`${filename}: no transactions`);
-  }
-
-  // The balance block sits after the last transaction, so it lands in the final
-  // split fragment rather than the preamble.
-  const tail = txBlocks.at(-1) ?? '';
+  // A statement with no transactions is ordinary, not broken: a card that was
+  // replaced part-way through the year has no activity in a window that starts
+  // after it was retired. Refusing the file would take the whole ledger down
+  // with it, and the balance it still reports is worth reading.
+  //
+  // With no transactions the balance block never gets split off, so it stays in
+  // the preamble; with transactions it lands in the final fragment.
+  const tail = txBlocks.at(-1) ?? preamble;
   const balanceAt = tail.indexOf('<LEDGERBAL>');
   if (balanceAt === -1) {
     throw new OfxFormatError(

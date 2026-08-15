@@ -46,8 +46,14 @@ describe('parseOfx', () => {
     expect(() => parseOfx(Buffer.from('just some text', 'latin1'), 'x.ofx')).toThrow(OfxFormatError);
   });
 
-  it('refuses a statement with no transactions', () => {
-    expect(() => parseOfx(ofxFixture([]), 'x.ofx')).toThrow(/no transactions/);
+  it('accepts a statement with no transactions and still reads its balance', () => {
+    // A card retired part-way through the year has no activity in a later
+    // window. Rejecting the file would abort the entire ledger over a card that
+    // simply was not used.
+    const statement = parseOfx(ofxFixture([], { balance: '+123.45', to: '20260815' }), 'carte_1111.ofx');
+    expect(statement.transactions).toHaveLength(0);
+    expect(statement.balance).toBe(12345);
+    expect(statement.balanceAsOf).toBe('2026-08-15');
   });
 
   it('does not confuse <DTSERVER> in the header with <DTSTART>', () => {

@@ -106,6 +106,21 @@ describe('loadLedgerData', () => {
     expect(ledger.transactions).toHaveLength(4);
   });
 
+  it('loads a folder containing a card with no activity in the window', async () => {
+    // The realistic case: a card replaced last year, re-exported over a window
+    // that starts after it was retired. One idle card must not take the ledger
+    // down with it.
+    const dir = await folderOf([
+      { stem: 'acct_01012026_31012026', rows: ROWS, options: { balance: '+500.00' } },
+      { stem: 'carte_1111_01012026_31012026', rows: [], options: { balance: '+0.00' } },
+    ]);
+
+    const ledger = await loadLedgerData(dir);
+    expect(ledger.sources).toHaveLength(2);
+    expect(ledger.transactions).toHaveLength(2);
+    expect(ledger.sources.find((s) => s.source.kind === 'card')?.count).toBe(0);
+  });
+
   it('refuses an ofx with no csv beside it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sluice-'));
     created.push(dir);

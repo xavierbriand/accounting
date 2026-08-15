@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Day } from '../core/dates.ts';
 import { parseCsv } from './csv.ts';
 import { parseOfx } from './ofx.ts';
 import { joinPositionally } from './join.ts';
@@ -122,6 +123,55 @@ describe('reconcileSettlements', () => {
     expect(orphan?.rowCount).toBe(0);
     // Its purchases predate the export entirely, so the window explains it.
     expect(orphan?.status).toBe('window-edge');
+  });
+
+  it('refuses to call anything in-flight when there is no account export', () => {
+    // Forget the current account and every settlement in history looks like it
+    // has simply not been charged yet — a clean report over a ledger missing
+    // the side that would contradict it.
+    const card = statementOf([buy('15/03/2025', '04/04/2025', '-500,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '+0.00' });
+
+    const report = reconcileSettlements(ledgerOf([card]));
+    expect(report.inFlight).toBe(0);
+    expect(report.mismatched).toBe(1);
+  });
+
+  it('judges pending against when the data is current, not the range requested', () => {
+    // Asking the bank for a whole calendar year in August returns a December
+    // end date over data that stops today. Trusting that end date would place
+    // every pending settlement inside a covered window and zero the in-flight
+    // total — the one figure the page exists to show.
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-500,00')],
+      'carte_1111_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '-500.00' });
+    const account = statementOf([{ postedOn: '01/08/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '+300.00' });
+
+    // The requested range runs to 31 December; the data is current to 15 August.
+    const asOf = '2026-08-15' as Day;
+    const ledger = ledgerOf([
+      { ...account, loaded: { ...account.loaded, balanceAsOf: asOf } },
+      { ...card, loaded: { ...card.loaded, balanceAsOf: asOf } },
+    ]);
+
+    const report = reconcileSettlements(ledger);
+    expect(report.inFlight).toBe(1);
+    expect(report.inFlightTotal).toBe(-50000);
+    expect(report.settledPosition).toBe(30000 - 50000);
+  });
+
+  it('calls an uncharged settlement a mismatch once the account data passes it', () => {
+    // The account export stops in June; the card runs to December. A batch that
+    // settled in July was certainly charged — the account file just does not
+    // reach it. That is missing data, not money in flight.
+    const card = statementOf([buy('20/06/2026', '04/07/2026', '-33,00')],
+      'carte_1111_01012024_31122024.ofx', { from: '20260101', to: '20261231', balance: '+0.00' });
+    const account = statementOf([{ postedOn: '01/06/2026', amount: '-20,00' }],
+      'acct_01012024_31122024.ofx', { from: '20260101', to: '20260630', balance: '+100.00' });
+
+    const report = reconcileSettlements(ledgerOf([account, card]));
+    expect(report.inFlight).toBe(0);
+    expect(report.mismatched).toBe(1);
   });
 
   it('surfaces a settlement whose label does not name a card', () => {

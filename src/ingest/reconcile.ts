@@ -95,10 +95,26 @@ function clippedByWindow(settlesOn: Day, cardExportStart: Day): boolean {
 export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   // The account is what carries a charge, so the account's export is what
   // decides whether a settlement has had the chance to appear yet.
-  const accountEnd = ledger.sources
-    .filter((s) => s.source.kind === 'account')
-    .map((s) => s.to)
-    .reduce((a, b) => (a > b ? a : b), '' as Day);
+  //
+  // `balanceAsOf`, not `to`. `to` is the range that was *requested* — ask the
+  // bank for a full calendar year in June and it reports a December end date,
+  // which would place every pending settlement inside a window the data does
+  // not actually cover, flipping the whole in-flight total to zero.
+  // `balanceAsOf` is when the bank says the figures are current.
+  //
+  // `null` rather than an empty-string seed: with no account export at all there
+  // is no date to compare against, and seeding with `''` made every settlement
+  // in history look like it was still to come.
+  const hasAccount = ledger.sources.some((s) => s.source.kind === 'account');
+
+  // How far the household's data reaches, taken across every export rather than
+  // the account's alone. If the cards are current to December while the account
+  // export stops in June, a July settlement is not "still to come" — it is a
+  // charge the account file simply does not reach, and saying "in flight" would
+  // book money as owed that was in fact paid months ago.
+  const dataCurrentTo = ledger.sources
+    .map((s) => s.balanceAsOf)
+    .reduce<Day | null>((a, b) => (a === null || b > a ? b : a), null);
 
   const cardExportStart = new Map<string, Day>();
   for (const s of ledger.sources) {
@@ -144,9 +160,14 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
 
     let status: SettlementStatus;
     if (charged === null) {
-      // Nothing charged yet. Either it is genuinely still pending, or the
-      // account's export stops short of a settlement that has already happened.
-      status = settlesOn > accountEnd ? 'in-flight' : 'mismatch';
+      // Nothing charged. Only genuinely pending if the account's data does not
+      // yet reach the settlement date; otherwise the charge should be here and
+      // is not, which is an error however ordinary its cause.
+      //
+      // With no account export at all, nothing can be confirmed, so nothing is
+      // forgiven.
+      status =
+        hasAccount && dataCurrentTo !== null && settlesOn > dataCurrentTo ? 'in-flight' : 'mismatch';
     } else if (difference === 0) {
       status = 'reconciled';
     } else if (exportStart !== undefined && clippedByWindow(settlesOn, exportStart)) {

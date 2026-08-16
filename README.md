@@ -63,8 +63,8 @@ monthly = "3200.00"       # exactly one of "monthly" and "annual"
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
-estimate = "7800.00"      # realistic
-goal = "7200.00"          # optimised — both or neither
+estimate = "7800.00"      # what it is expected to cost. Required.
+goal = "7200.00"          # an optimisation target, only where there is one
 ```
 
 A fuller worked example lives in [`src/config/__fixtures__/build.ts`](src/config/__fixtures__/build.ts). It is a test fixture that a test parses, so it cannot drift away from what the parser actually accepts.
@@ -73,6 +73,7 @@ Four things about the format are deliberate, and each has a reason worth knowing
 
 - **Amounts are quoted strings.** A bare `7800.10` is a TOML float, and money here is whole cents so the card-settlement check can be exact to the cent.
 - **Envelopes are optional, and declaring one never hides the rest.** Every category the bank reports that no envelope claims gets one of its own, derived from the ledger. The section is for grouping and planning, never for deciding what counts.
+- **An estimate is written down, not derived.** Its first value comes from last year's actuals, but from then on it is a commitment you own, and last year's actuals are a separate number it is measured against. An estimate that re-derived itself each year would agree with reality by construction — spending could grow every year, the plan would silently grow to match, and nothing would ever report drift.
 - **Seasonal shapes are per envelope**, as twelve relative weights or a list of months. A flat one-twelfth line marks a holiday envelope as catastrophically over in July, when July is exactly when it should empty.
 - **Every problem in the file is reported at once**, not one per run — including keys sluice does not recognise, which are refused rather than ignored, because a misspelt key leaves the real one at its default and the figure that comes out is wrong rather than missing.
 

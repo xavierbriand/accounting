@@ -59,10 +59,11 @@ monthly = "3200.00"
 [envelopes.leisure]
 name = "Leisure"
 matches = [{ category = "Leisure" }]
-
+estimate = "1000.00"
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "1000.00"
 `,
     });
     expect(config.envelopes[0]?.matches[0]).toEqual({ kind: 'category', category: 'Leisure' });
@@ -73,16 +74,36 @@ matches = [{ category = "Food", sub_category = "Supermarket" }]
     });
   });
 
-  it('leaves an envelope with no figures on the derived plan', () => {
+  it('takes an estimate without a goal, for an envelope nobody is optimising', () => {
     const config = parse({
       envelopes: `
 [envelopes.leisure]
 name = "Leisure"
 matches = [{ category = "Leisure" }]
+estimate = "2400.00"
 `,
     });
-    expect(config.envelopes[0]?.plan).toEqual({ kind: 'derived' });
+    expect(config.envelopes[0]?.estimate).toBe(240000);
+    expect(config.envelopes[0]?.goal).toBeNull();
     expect(config.envelopes[0]?.seasonal).toBeNull();
+  });
+
+  it('keeps the estimate as written rather than deriving it', () => {
+    // The estimate is a commitment, not a derivation. One that re-derived itself
+    // from last year's actuals would agree with reality by construction, and the
+    // drift this product exists to catch would never show: spending could grow
+    // every year with the plan silently growing to match.
+    const config = parse({
+      envelopes: `
+[envelopes.groceries]
+name = "Groceries"
+matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "7800.00"
+goal = "7200.00"
+`,
+    });
+    expect(config.envelopes[0]?.estimate).toBe(780000);
+    expect(config.envelopes[0]?.goal).toBe(720000);
   });
 
   it('expands the months shorthand into twelve weights', () => {
@@ -92,6 +113,7 @@ matches = [{ category = "Leisure" }]
 name = "Insurance"
 matches = [{ category = "Home", sub_category = "Insurance" }]
 seasonal = { months = [6] }
+estimate = "1000.00"
 `,
     });
     expect(config.envelopes[0]?.seasonal).toEqual([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
@@ -106,6 +128,7 @@ seasonal = { months = [6] }
 name = "Heating"
 matches = [{ category = "Home", sub_category = "Energy" }]
 seasonal = { weights = [3, 3, 2, 1, 1, 1, 1, 1, 1, 2, 3, 3] }
+estimate = "1000.00"
 `,
     });
     expect(config.envelopes[0]?.seasonal).toEqual([3, 3, 2, 1, 1, 1, 1, 1, 1, 2, 3, 3]);
@@ -162,10 +185,11 @@ goal = "7800.00"
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
-
+estimate = "1000.00"
 [envelopes.food]
 name = "Food"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(ConfigError);
@@ -179,10 +203,11 @@ matches = [{ category = "Food", sub_category = "Supermarket" }]
 [envelopes.all_food]
 name = "All food"
 matches = [{ category = "Food" }]
-
+estimate = "1000.00"
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/count it twice/);
@@ -195,6 +220,7 @@ matches = [{ category = "Food", sub_category = "Supermarket" }]
 [envelopes.cards]
 name = "Cards"
 matches = [{ category = "Transaction exclue", sub_category = "Transaction differee" }]
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(ConfigError);
@@ -208,6 +234,7 @@ matches = [{ category = "Transaction exclue", sub_category = "Transaction differ
 [envelopes.moves]
 name = "Moves"
 matches = [{ category = "Transaction exclue", sub_category = "Virement interne" }]
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/not spending/);
@@ -261,6 +288,7 @@ label = "Salary"
 name = "Heating"
 matches = [{ category = "Home", sub_category = "Energy" }]
 seasonal = { weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/stops setting money aside for/);
@@ -274,6 +302,7 @@ seasonal = { weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }
 name = "Heating"
 matches = [{ category = "Home", sub_category = "Energy" }]
 seasonal = { weights = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/no total to divide by/);
@@ -287,6 +316,7 @@ seasonal = { weights = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
 name = "Heating"
 matches = [{ category = "Home", sub_category = "Energy" }]
 seasonal = { weights = [1, 1, 1, 1, -1, 1, 1, 1, 1, 1, 1, 1] }
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/take money back out of a month/);
@@ -300,6 +330,7 @@ seasonal = { weights = [1, 1, 1, 1, -1, 1, 1, 1, 1, 1, 1, 1] }
 name = "Heating"
 matches = [{ category = "Home", sub_category = "Energy" }]
 seasonal = { months = [6], weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/Give one/);
@@ -313,6 +344,7 @@ seasonal = { months = [6], weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }
 name = "Insurance"
 matches = [{ category = "Home", sub_category = "Insurance" }]
 seasonal = { months = [13] }
+estimate = "1000.00"
 `,
       });
     expect(bad).toThrow(/Months are 1 to 12/);
@@ -320,21 +352,27 @@ seasonal = { months = [13] }
 
   it('refuses an envelope that claims nothing', () => {
     const bad = () =>
-      parse({ envelopes: '[envelopes.groceries]\nname = "Groceries"\nmatches = []\n' });
+      parse({
+        envelopes: '[envelopes.groceries]\nname = "Groceries"\nmatches = []\nestimate = "1000.00"\n',
+      });
     expect(bad).toThrow(/budgeted for spending that is also counted/);
   });
 
-  it('refuses an envelope with one of estimate and goal', () => {
+  it('refuses a declared envelope with no estimate', () => {
+    // Declaring an envelope is an act of planning. Without a figure there is
+    // nothing for the year's actuals to be compared against, so the envelope
+    // could drift indefinitely and never register as drifting.
     const bad = () =>
       parse({
         envelopes: `
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
-estimate = "7800.00"
+goal = "7200.00"
 `,
       });
-    expect(bad).toThrow(/Give both or neither/);
+    expect(bad).toThrow(ConfigError);
+    expect(bad).toThrow(/estimate" is missing/);
   });
 
   it('refuses an empty transfer label', () => {
@@ -448,10 +486,12 @@ describe('envelopeIndex', () => {
 [envelopes.groceries]
 name = "Groceries"
 matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "7800.00"
 
 [envelopes.leisure]
 name = "Leisure"
 matches = [{ category = "Leisure" }]
+estimate = "2400.00"
 `,
   });
   const index = envelopeIndex(config);

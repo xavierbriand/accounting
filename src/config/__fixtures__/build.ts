@@ -118,7 +118,8 @@ matches = [
   { category = "Food", sub_category = "Supermarket" },
   { category = "Food", sub_category = "Market" },
 ]
-# Two annual scenarios: realistic, and optimised. Both or neither.
+# The estimate is always given and is a commitment, not a derivation. The goal
+# is the optimised scenario, and only when there is one.
 estimate = "7800.00"
 goal = "7200.00"
 
@@ -141,5 +142,6 @@ seasonal = { weights = [3, 3, 2, 1, 1, 1, 1, 1, 1, 2, 3, 3] }
 [envelopes.leisure]
 name = "Leisure"
 matches = [{ category = "Leisure" }]   # a whole category
-# No estimate and no goal: groups only, figures come from history.
+# An estimate is always given; a goal only when there is something to optimise.
+estimate = "2400.00"
 `;

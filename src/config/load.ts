@@ -8,7 +8,6 @@ export type {
   Config,
   EnvelopeConfig,
   EnvelopeMatcher,
-  EnvelopePlan,
   IncomeSource,
   Person,
   SeasonalWeights,

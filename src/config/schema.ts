@@ -36,20 +36,30 @@ export interface Person {
   readonly transferLabels: readonly string[];
 }
 
-/**
- * Both figures or neither, so an optimised scenario is never shown against a
- * realistic one nobody chose.
- */
-export type EnvelopePlan =
-  | { readonly kind: 'derived' }
-  | { readonly kind: 'planned'; readonly estimate: Cents; readonly goal: Cents };
-
 export interface EnvelopeConfig {
   readonly id: string;
   readonly name: string;
   /** At least one. */
   readonly matches: readonly EnvelopeMatcher[];
-  readonly plan: EnvelopePlan;
+  /**
+   * What this envelope is expected to cost over a year. Required.
+   *
+   * Written down rather than derived, and that is the whole point. Its first
+   * value comes from last year's actuals — the generator hands you the figure —
+   * but from then on it is a commitment you own, and last year's actuals are a
+   * separate number it is compared against.
+   *
+   * An estimate that re-derived itself each year would track reality by
+   * construction and always agree with it, which would make the drift this
+   * product exists to catch invisible: spending could grow every year and the
+   * plan would silently grow with it, reporting no problem at any point.
+   */
+  readonly estimate: Cents;
+  /**
+   * An optimisation target, when there is one. `null` when this envelope is
+   * simply expected to cost what it costs.
+   */
+  readonly goal: Cents | null;
   /** `null` means take the shape from the envelope's own history. */
   readonly seasonal: SeasonalWeights | null;
 }
@@ -190,9 +200,7 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
   const matches = (matchReaders ?? [])
     .map((m) => readMatcher(m, problems))
     .filter((m): m is EnvelopeMatcher => m !== null);
-  const declaredEstimate = r.has('estimate');
-  const declaredGoal = r.has('goal');
-  const estimate = r.optionalMoney('estimate');
+  const estimate = r.money('estimate');
   const goal = r.optionalMoney('goal');
   const seasonalReader = r.optionalTable('seasonal');
   const seasonal = seasonalReader === null ? null : readSeasonal(seasonalReader, problems);
@@ -222,35 +230,25 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
     return null;
   }
 
-  if (declaredEstimate !== declaredGoal) {
-    const given = declaredEstimate ? 'estimate' : 'goal';
-    const missing = declaredEstimate ? 'goal' : 'estimate';
+  if (estimate === null) return null;
+
+  if (estimate < 0) {
+    problems.add(r.where, `Envelope "${id}" has an estimate of ${formatEur(estimate)}.`);
+    return null;
+  }
+
+  if (goal !== null && goal > estimate) {
     problems.add(
       r.where,
-      `Envelope "${id}" sets "${given}" but not "${missing}". Give both or neither: ` +
-        `they are the realistic and optimised scenarios shown side by side, and one ` +
-        `alone would be compared against a figure taken from history that nobody chose.`,
+      `Envelope "${id}" has a goal of ${formatEur(goal)} above its estimate of ` +
+        `${formatEur(estimate)}. The goal is the optimised scenario and the estimate ` +
+        `the realistic one, so the goal is never the larger — as written, the ` +
+        `optimised plan asks for more money than the realistic one.`,
     );
     return null;
   }
 
-  let plan: EnvelopePlan = { kind: 'derived' };
-  if (declaredEstimate && declaredGoal) {
-    if (estimate === null || goal === null) return null;
-    if (goal > estimate) {
-      problems.add(
-        r.where,
-        `Envelope "${id}" has a goal of ${formatEur(goal)} above its estimate of ` +
-          `${formatEur(estimate)}. The goal is the optimised scenario and the estimate ` +
-          `the realistic one, so the goal is never the larger — as written, the ` +
-          `optimised plan asks for more money than the realistic one.`,
-      );
-      return null;
-    }
-    plan = { kind: 'planned', estimate, goal };
-  }
-
-  return { id, name, matches, plan, seasonal };
+  return { id, name, matches, estimate, goal, seasonal };
 }
 
 function readIncome(r: Reader, problems: Problems): IncomeSource | null {

@@ -34,7 +34,7 @@ export interface Contribution {
  */
 export function attributeContributions(config: Config, ledger: Ledger): readonly Contribution[] {
   const contributions = ledger.transactions
-    .filter((t): t is Transaction => t.kind === 'transfer-in')
+    .filter((t) => t.kind === 'transfer-in')
     .map((transaction) => {
       const fundingMonth =
         dayOfMonth(transaction.occurredOn) >= config.fundingCutoffDay

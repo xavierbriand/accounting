@@ -85,6 +85,13 @@ describe('allocate', () => {
     expect(allocate(0, [1, 2, 3])).toEqual([0, 0, 0]);
   });
 
+  it('gives a zero weight nothing, without breaking the split for the rest', () => {
+    // Distinct from "all weights zero", which is refused: one weight can
+    // legitimately be zero (a person with no income this month) so long as
+    // the others still sum positive.
+    expect(allocate(100, [1, 0])).toEqual([100, 0]);
+  });
+
   it('refuses a negative total', () => {
     expect(() => allocate(-100, [1, 1])).toThrow(/non-negative/);
   });

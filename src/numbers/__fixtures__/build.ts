@@ -39,13 +39,18 @@ export interface TxParts {
 /**
  * One transaction. `id` defaults to a value derived from the other fields
  * rather than a shared counter, so two fixtures built in any order, in any
- * test, never collide and never depend on execution order.
+ * test, never collide and never depend on execution order. Includes `kind`
+ * specifically: a `movement` and a `settlement` on the same day for the same
+ * amount is an ordinary fixture to want, and without `kind` in the mix the
+ * two would default to the same id. Two rows that are genuinely identical in
+ * every field this touches still need an explicit `id` from the caller.
  */
 export function tx(parts: TxParts): Transaction {
+  const kind = parts.kind ?? 'movement';
   return {
-    id: parts.id ?? `${parts.occurredOn}:${parts.label ?? parts.category ?? 'movement'}:${parts.amount}`,
+    id: parts.id ?? `${parts.occurredOn}:${kind}:${parts.label ?? parts.category ?? 'movement'}:${parts.amount}`,
     source: parts.source ?? ACCOUNT,
-    kind: parts.kind ?? 'movement',
+    kind,
     occurredOn: parts.occurredOn as Day,
     settlesOn: (parts.settlesOn ?? parts.occurredOn) as Day,
     amount: parts.amount,

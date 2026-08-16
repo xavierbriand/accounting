@@ -93,8 +93,10 @@ describe('allocate', () => {
     expect(() => allocate(100, [0, 0])).toThrow(/non-negative and sum to more than zero/);
   });
 
-  it('refuses a negative weight', () => {
-    expect(() => allocate(100, [1, -1])).toThrow(/non-negative and sum to more than zero/);
+  it('refuses a negative weight, even when the weights still sum positive', () => {
+    // Sum is 4, not <= 0 — isolates the negative-weight check from the
+    // all-zero-sum one, which [1, -1] (summing to 0) would not.
+    expect(() => allocate(100, [5, -1])).toThrow(/non-negative and sum to more than zero/);
   });
 });
 

@@ -107,6 +107,36 @@ describe('contributionsByMonth', () => {
     expect(month?.total).toBe(150000);
   });
 
+  it('folds a two-person match into unattributed, not into either person', () => {
+    const config = numbersConfig({
+      people: `
+[people.alice]
+name = "Alice"
+transfer_labels = ["ALICE"]
+
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+
+[people.carol]
+name = "Carol"
+transfer_labels = ["CAROL"]
+
+[[people.carol.income]]
+label = "Salary"
+monthly = "2000.00"
+`,
+    });
+    const ledger = ledgerOf([
+      tx({ kind: 'transfer-in', occurredOn: '2026-01-05', label: 'VIR ALICE CAROL JOINT', amount: 50000 }),
+    ]);
+    const [month] = contributionsByMonth(attributeContributions(config, ledger));
+
+    expect(month?.byPerson.size).toBe(0);
+    expect(month?.unattributed).toBe(50000);
+    expect(month?.total).toBe(50000);
+  });
+
   it('sorts months ascending', () => {
     const config = numbersConfig();
     const ledger = ledgerOf([

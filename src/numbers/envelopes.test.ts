@@ -41,6 +41,22 @@ estimate = "1200.00"
     expect(resolved[0]).toMatchObject({ kind: 'configured', config: { id: 'groceries' } });
   });
 
+  it('keeps two distinct pairs distinct even when their category and sub-category, joined, would overlap', () => {
+    // "Loisirs et" + "vacances Bar" and "Loisirs et vacances" + "Bar" join to
+    // the same string under any single-character delimiter — this must
+    // resolve to two derived envelopes, not one silently swallowing the
+    // other's spending.
+    const config = numbersConfig();
+    const ledger = ledgerOf([
+      tx({ id: 'x', occurredOn: '2026-01-05', amount: -1000, category: 'Loisirs et', subCategory: 'vacances Bar' }),
+      tx({ id: 'y', occurredOn: '2026-01-06', amount: -2000, category: 'Loisirs et vacances', subCategory: 'Bar' }),
+    ]);
+    const derived = resolveEnvelopes(config, ledger).filter((e) => e.kind === 'derived');
+    expect(derived).toHaveLength(2);
+    expect(transactionsFor(derived[0]!, ledger).map((t) => t.id)).toHaveLength(1);
+    expect(transactionsFor(derived[1]!, ledger).map((t) => t.id)).toHaveLength(1);
+  });
+
   it('never derives an envelope for a settlement or a transfer', () => {
     // A configured envelope always appears regardless of the ledger — this
     // config declares "groceries" — so the check is that nothing *derived*

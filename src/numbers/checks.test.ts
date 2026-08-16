@@ -131,7 +131,10 @@ describe('checkPlan — worstObservedMonth and bufferSufficient', () => {
       }),
       tx({
         kind: 'settlement',
-        occurredOn: '2026-02-04',
+        // Posted in January, settles in February — deliberately different
+        // months, so a mutation that used occurredOn instead of settlesOn
+        // would move -80000 into January and change which month is worst.
+        occurredOn: '2026-01-31',
         settlesOn: '2026-02-04',
         amount: -80000,
         category: 'Transaction exclue',
@@ -145,13 +148,17 @@ describe('checkPlan — worstObservedMonth and bufferSufficient', () => {
   });
 
   it('counts a contribution in the month it funds, not the month it posts', () => {
-    // Posted Jan 26, after the cutoff day (25) — funds February, not January.
-    // If wrongly attributed to January, the worst month would be 0 instead
-    // of -20000.
+    // Posted Jan 26, after the cutoff day (25) — funds February, not
+    // January. Correct: Jan = -20000 (movement only), Feb = -60000 + 50000
+    // (the contribution) = -10000; worst is January, -20000. If the
+    // contribution were dropped, or wrongly attributed to January instead
+    // of February, February would be the worst month at -60000 either way
+    // — a different month *and* a different value, so both mistakes show.
     const config = numbersConfig();
     const ledger = ledgerOf([
-      tx({ occurredOn: '2026-01-10', amount: -20000, category: 'Alimentation', subCategory: 'Supermarche' }),
-      tx({ kind: 'transfer-in', occurredOn: '2026-01-26', label: 'VIR ALICE MARTIN', amount: 50000 }),
+      tx({ id: 'jan-spend', occurredOn: '2026-01-10', amount: -20000, category: 'Alimentation', subCategory: 'Supermarche' }),
+      tx({ id: 'contribution', kind: 'transfer-in', occurredOn: '2026-01-26', label: 'VIR ALICE MARTIN', amount: 50000 }),
+      tx({ id: 'feb-spend', occurredOn: '2026-02-10', amount: -60000, category: 'Alimentation', subCategory: 'Supermarche' }),
     ]);
     const resolved = resolveEnvelopes(config, ledger);
     const consumption = computeConsumption(ledger, resolved, '2026-02-15' as Day);

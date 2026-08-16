@@ -42,6 +42,28 @@ describe('computePlan', () => {
     expect(plan.warnings.some((w) => w.kind === 'matcher-matches-nothing')).toBe(false);
   });
 
+  it('picks the reference month\'s own cell of the plan, not any month\'s', () => {
+    // All 1200.00 lands in June (month index 5) by configured seasonal
+    // shape; every other month's cell is 0. A reference day outside June
+    // must see a monthlyRequirement of 0, not June's 120000.
+    const config = numbersConfig({
+      envelopes: `
+[envelopes.groceries]
+name = "Groceries"
+matches = [{ category = "Alimentation", sub_category = "Supermarche" }]
+estimate = "1200.00"
+seasonal = { months = [6] }
+`,
+    });
+    const ledger = ledgerOf([]);
+
+    const inJanuary = computePlan(config, ledger, '2026-01-15' as Day);
+    expect(sum(inJanuary.shares.map((s) => s.amount))).toBe(0);
+
+    const inJune = computePlan(config, ledger, '2026-06-15' as Day);
+    expect(sum(inJune.shares.map((s) => s.amount))).toBe(120000);
+  });
+
   it('the monthly requirement excludes derived envelopes — nothing to fund yet', () => {
     // No configured envelopes at all: a configured one contributes its
     // planned amount regardless of whether it happens to have any

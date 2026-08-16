@@ -23,7 +23,7 @@ describe('computeConsumption', () => {
       tx({ id: '26-mar-late', occurredOn: '2026-03-20', amount: -5000, category: 'Alimentation', subCategory: 'Supermarche' }),
     ]);
     const resolved = resolveEnvelopes(config, ledger);
-    const [c] = computeConsumption(config, ledger, resolved, '2026-03-15' as Day);
+    const [c] = computeConsumption(ledger, resolved, '2026-03-15' as Day);
 
     expect(c?.priorYearActual).toBe(30000);
     expect(c?.seasonal).toEqual({
@@ -55,7 +55,7 @@ seasonal = { months = [7] }
     });
     const ledger = ledgerOf([]);
     const resolved = resolveEnvelopes(config, ledger);
-    const [c] = computeConsumption(config, ledger, resolved, '2026-05-20' as Day);
+    const [c] = computeConsumption(ledger, resolved, '2026-05-20' as Day);
 
     expect(c?.monthlyPlan?.[6]).toBe(240000); // July, zero-indexed — the whole estimate
     expect(c?.paceExpected).toBe(0); // nothing expected yet, as of May
@@ -69,7 +69,7 @@ seasonal = { months = [7] }
       tx({ occurredOn: '2026-01-05', amount: -1500, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
     ]);
     const resolved = resolveEnvelopes(config, ledger);
-    const consumption = computeConsumption(config, ledger, resolved, '2026-06-01' as Day);
+    const consumption = computeConsumption(ledger, resolved, '2026-06-01' as Day);
     const c = consumption.find((e) => e.envelope.kind === 'derived');
 
     expect(c?.envelope.kind).toBe('derived');
@@ -88,7 +88,7 @@ seasonal = { months = [7] }
       tx({ occurredOn: '2026-01-05', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' }),
     ]);
     const resolved = resolveEnvelopes(config, ledger);
-    const consumption = computeConsumption(config, ledger, resolved, '2026-06-01' as Day);
+    const consumption = computeConsumption(ledger, resolved, '2026-06-01' as Day);
     expect(consumption.map((c) => c.envelope)).toEqual(resolved);
   });
 });

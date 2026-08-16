@@ -1,6 +1,5 @@
 import { allocate, type Cents } from '../core/money.ts';
 import { monthNumber, monthOf, yearOf, type Day } from '../core/dates.ts';
-import type { Config } from '../config/load.ts';
 import type { Ledger } from '../ingest/load.ts';
 import { outflow, transactionsFor, type ResolvedEnvelope } from './envelopes.ts';
 import { resolveSeasonal, type SeasonalShape } from './seasonal.ts';
@@ -34,10 +33,11 @@ export interface EnvelopeConsumption {
  * there is no full year of the current one to derive it from yet.
  *
  * Sorted the same way `resolveEnvelopes` sorts `resolved`, since this is a
- * one-to-one map over it.
+ * one-to-one map over it. Takes `resolved` rather than a `Config`, since
+ * everything a configured envelope needs (`estimate`, `seasonal`) already
+ * rides along on each entry — nothing here needs the config directly.
  */
 export function computeConsumption(
-  config: Config,
   ledger: Ledger,
   resolved: readonly ResolvedEnvelope[],
   referenceDay: Day,

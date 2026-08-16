@@ -18,7 +18,14 @@ export interface EnvelopeConsumption {
   readonly monthlyPlan: readonly Cents[] | null;
   /** Cumulative `monthlyPlan` through `referenceDay`'s month, inclusive. */
   readonly paceExpected: Cents;
-  /** `max(0, yearToDateSpent - paceExpected)`. Zero for a derived envelope. */
+  /**
+   * `max(0, yearToDateSpent - paceExpected)`.
+   *
+   * For a derived envelope, `paceExpected` is 0 — there is no plan to be
+   * "on pace" against — so `overPace` equals `yearToDateSpent` exactly: any
+   * spending at all reads as entirely over pace, by construction, not as
+   * zero.
+   */
   readonly overPace: Cents;
   readonly seasonal: SeasonalShape;
 }
@@ -54,7 +61,7 @@ export function computeConsumption(
     );
     const priorYearActual = outflow(transactions.filter((t) => yearOf(t.occurredOn) === priorYear));
 
-    const seasonal = resolveSeasonal(envelope, ledger, priorYear);
+    const seasonal = resolveSeasonal(envelope, transactions, priorYear);
     const monthlyPlan =
       envelope.kind === 'configured' ? allocate(envelope.config.estimate, seasonal.weights) : null;
 

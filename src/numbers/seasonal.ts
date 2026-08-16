@@ -1,8 +1,7 @@
 import { monthNumber, monthOf, yearOf } from '../core/dates.ts';
 import type { SeasonalWeights } from '../config/load.ts';
 import type { Transaction } from '../ingest/ledger.ts';
-import type { Ledger } from '../ingest/load.ts';
-import { outflow, transactionsFor, type ResolvedEnvelope } from './envelopes.ts';
+import { outflow, type ResolvedEnvelope } from './envelopes.ts';
 
 /**
  * Where an envelope's month-by-month shape came from — never left implicit,
@@ -29,10 +28,16 @@ const FLAT: SeasonalWeights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
  * shows up as eleven zeros and one twelve, without anyone declaring it.
  * Falls back to a flat year only when the envelope has no outflow at all in
  * `priorYear` — new spending, or a category that only started this year.
+ *
+ * Takes `envelope`'s own `movement` transactions directly, rather than a
+ * `Ledger` to filter itself — `computeConsumption` already calls
+ * `transactionsFor(envelope, ledger)` once for its own year-to-date figures,
+ * and re-deriving the same filter here would scan the whole ledger a second
+ * time per envelope for no reason.
  */
 export function resolveSeasonal(
   envelope: ResolvedEnvelope,
-  ledger: Ledger,
+  transactions: readonly Transaction[],
   priorYear: number,
 ): SeasonalShape {
   if (envelope.kind === 'configured' && envelope.config.seasonal !== null) {
@@ -40,7 +45,7 @@ export function resolveSeasonal(
   }
 
   const byMonth: Transaction[][] = Array.from({ length: 12 }, () => []);
-  for (const t of transactionsFor(envelope, ledger)) {
+  for (const t of transactions) {
     if (yearOf(t.occurredOn) !== priorYear) continue;
     byMonth[monthNumber(monthOf(t.occurredOn)) - 1]!.push(t);
   }

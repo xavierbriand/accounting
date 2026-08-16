@@ -12,9 +12,8 @@ describe('resolveEnvelopes', () => {
     const resolved = resolveEnvelopes(config, ledger);
 
     expect(resolved).toHaveLength(2);
-    expect(resolved[0]).toMatchObject({ kind: 'configured', config: { id: 'groceries' } });
-    expect(resolved[1]).toMatchObject({
-      kind: 'derived',
+    expect(resolved.find((e) => e.kind === 'configured')).toMatchObject({ config: { id: 'groceries' } });
+    expect(resolved.find((e) => e.kind === 'derived')).toMatchObject({
       category: 'Loisirs et vacances',
       subCategory: 'Cinema',
     });
@@ -72,12 +71,15 @@ estimate = "1200.00"
   it('sorts by id: the configured envelope\'s own id, or the derived "category / subCategory" id', () => {
     const config = numbersConfig();
     const ledger = ledgerOf([
-      // "Loisirs..." sorts after "groceries" (the configured envelope's id).
       tx({ occurredOn: '2026-01-06', amount: -1500, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
       tx({ occurredOn: '2026-01-05', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' }),
     ]);
     const ids = resolveEnvelopes(config, ledger).map((e) => (e.kind === 'configured' ? e.config.id : e.id));
-    expect(ids).toEqual(['groceries', 'Loisirs et vacances / Cinema']);
+    // Plain code-point order, not locale-aware: uppercase "L" (76) sorts
+    // before lowercase "g" (103), so the derived id comes first — this is
+    // the discriminator that would fail if the sort silently went back to
+    // localeCompare(), where the two commonly order the other way.
+    expect(ids).toEqual(['Loisirs et vacances / Cinema', 'groceries']);
   });
 });
 
@@ -126,7 +128,7 @@ estimate = "1200.00"
       tx({ id: 'b', occurredOn: '2026-01-06', amount: -1200, category: 'Alimentation', subCategory: 'Marche' }),
       tx({ id: 'c', occurredOn: '2026-01-07', amount: -500, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
     ]);
-    const [envelope] = resolveEnvelopes(config, ledger);
+    const envelope = resolveEnvelopes(config, ledger).find((e) => e.kind === 'configured');
     expect(transactionsFor(envelope!, ledger).map((t) => t.id).sort()).toEqual(['a', 'b']);
   });
 

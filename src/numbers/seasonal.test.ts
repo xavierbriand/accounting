@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSeasonal } from './seasonal.ts';
-import type { ResolvedEnvelope } from './envelopes.ts';
+import { transactionsFor, type ResolvedEnvelope } from './envelopes.ts';
 import { ledgerOf, numbersConfig, tx } from './__fixtures__/build.ts';
 
 describe('resolveSeasonal', () => {
@@ -21,7 +21,7 @@ seasonal = { months = [6] }
     ]);
     const [envelope] = config.envelopes.map((c) => ({ kind: 'configured' as const, config: c }));
 
-    const shape = resolveSeasonal(envelope!, ledger, 2025);
+    const shape = resolveSeasonal(envelope!, transactionsFor(envelope!, ledger), 2025);
     expect(shape.provenance).toBe('configured');
     expect(shape.weights).toEqual([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
   });
@@ -37,7 +37,7 @@ seasonal = { months = [6] }
     ]);
     const [envelope] = config.envelopes.map((c) => ({ kind: 'configured' as const, config: c }));
 
-    const shape = resolveSeasonal(envelope!, ledger, 2025);
+    const shape = resolveSeasonal(envelope!, transactionsFor(envelope!, ledger), 2025);
     expect(shape.provenance).toBe('derived-from-history');
     expect(shape.weights).toEqual([3000, 800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
@@ -46,7 +46,7 @@ seasonal = { months = [6] }
     const envelope: ResolvedEnvelope = { kind: 'derived', id: 'x', category: 'X', subCategory: 'Y' };
     const ledger = ledgerOf([tx({ occurredOn: '2025-03-05', amount: -500, category: 'X', subCategory: 'Y' })]);
 
-    const shape = resolveSeasonal(envelope, ledger, 2025);
+    const shape = resolveSeasonal(envelope, transactionsFor(envelope, ledger), 2025);
     expect(shape.provenance).toBe('derived-from-history');
   });
 
@@ -56,7 +56,7 @@ seasonal = { months = [6] }
     // history to derive a shape from.
     const ledger = ledgerOf([tx({ occurredOn: '2026-03-05', amount: -500, category: 'X', subCategory: 'Y' })]);
 
-    const shape = resolveSeasonal(envelope, ledger, 2025);
+    const shape = resolveSeasonal(envelope, transactionsFor(envelope, ledger), 2025);
     expect(shape.provenance).toBe('flat-no-history');
     expect(shape.weights).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
   });
@@ -69,7 +69,7 @@ seasonal = { months = [6] }
       tx({ id: 'may', occurredOn: '2025-05-05', amount: -700, category: 'X', subCategory: 'Y' }),
     ]);
 
-    const shape = resolveSeasonal(envelope, ledger, 2025);
+    const shape = resolveSeasonal(envelope, transactionsFor(envelope, ledger), 2025);
     expect(shape.weights[3]).toBe(0); // April, zero-indexed
     expect(shape.weights.every((w) => w >= 0)).toBe(true);
   });

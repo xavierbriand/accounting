@@ -68,7 +68,15 @@ export function resolveEnvelopes(config: Config, ledger: Ledger): readonly Resol
     })),
   );
 
-  return [...configured, ...derived].sort((a, b) => idOf(a).localeCompare(idOf(b)));
+  // Plain code-point comparison, not localeCompare(): the latter's ordering
+  // depends on the runtime's default locale, which is not guaranteed to
+  // agree between two machines (or two Node builds) — precisely the
+  // opposite of the deterministic order this function promises.
+  return [...configured, ...derived].sort((a, b) => {
+    const idA = idOf(a);
+    const idB = idOf(b);
+    return idA < idB ? -1 : idA > idB ? 1 : 0;
+  });
 }
 
 /**

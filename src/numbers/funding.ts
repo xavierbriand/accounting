@@ -7,10 +7,11 @@ import type { Transaction } from '../ingest/ledger.ts';
 /**
  * Plain code-point comparison, not `localeCompare()`: the latter's ordering
  * depends on the runtime's default locale, not guaranteed to agree between
- * two machines — the opposite of the deterministic order this module
- * promises for every list it returns.
+ * two machines — the opposite of the deterministic order `src/numbers/`
+ * promises for every list it returns. Exported rather than duplicated:
+ * `generate.ts` needs the identical comparison for the same reason.
  */
-function compare(a: string, b: string): number {
+export function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 

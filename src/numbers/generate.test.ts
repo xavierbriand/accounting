@@ -67,6 +67,20 @@ describe('generateEnvelopeBlock', () => {
     expect(block).toContain('"groceries" had no spending in 2026');
   });
 
+  it('orders new envelopes by (category, subCategory), not ledger encounter order', () => {
+    const ledger = ledgerOf([
+      // Built in reverse of the expected output order — "Z"'s transaction
+      // comes first in the ledger, "A"'s second.
+      tx({ occurredOn: '2026-01-06', amount: -1000, category: 'Z', subCategory: 'Z' }),
+      tx({ occurredOn: '2026-01-05', amount: -2000, category: 'A', subCategory: 'A' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    const aIndex = block.indexOf('[envelopes.a_a]');
+    const zIndex = block.indexOf('[envelopes.z_z]');
+    expect(aIndex).toBeGreaterThanOrEqual(0);
+    expect(zIndex).toBeGreaterThan(aIndex);
+  });
+
   it('disambiguates two pairs that would otherwise slugify to the same id', () => {
     const ledger = ledgerOf([
       tx({ id: 'a', occurredOn: '2026-01-05', amount: -1000, category: 'A B', subCategory: 'C' }),

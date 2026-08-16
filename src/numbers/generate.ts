@@ -4,6 +4,7 @@ import { envelopeIndex, type Config } from '../config/load.ts';
 import type { Ledger } from '../ingest/load.ts';
 import { outflow, resolveEnvelopes, transactionsFor, type ResolvedEnvelope } from './envelopes.ts';
 import { resolveSeasonal, type SeasonalShape } from './seasonal.ts';
+import { compare } from './funding.ts';
 
 /**
  * The yearly rebuild, automated: read what actually happened in `year` and
@@ -41,31 +42,37 @@ export function generateEnvelopeBlock(ledger: Ledger, config: Config | null, yea
     subCategories.add(t.subCategory);
   }
 
+  // Every new pair, sorted by (category, subCategory) rather than left in
+  // ledger encounter order — the same "every list src/numbers/ produces
+  // commits to an order" discipline the rest of this step follows, using
+  // plain code-point comparison rather than localeCompare() for the same
+  // reason envelopes.ts and funding.ts do.
+  const pairs = [...byCategory.entries()]
+    .flatMap(([category, subCategories]) => [...subCategories].map((subCategory) => ({ category, subCategory })))
+    .filter(({ category, subCategory }) => index === null || index.find(category, subCategory) === null)
+    .sort((a, b) => compare(a.category, b.category) || compare(a.subCategory, b.subCategory));
+
   const usedIds = new Set<string>(config?.envelopes.map((e) => e.id) ?? []);
   const blocks: string[] = [];
 
-  for (const [category, subCategories] of byCategory) {
-    for (const subCategory of subCategories) {
-      if (index !== null && index.find(category, subCategory) !== null) continue;
+  for (const { category, subCategory } of pairs) {
+    const candidate: ResolvedEnvelope = {
+      kind: 'derived',
+      id: `${category} / ${subCategory}`,
+      category,
+      subCategory,
+    };
+    const transactions = transactionsFor(candidate, ledger);
+    const estimate = outflow(transactions.filter((t) => yearOf(t.occurredOn) === year));
+    // `priorYear = year`, not `year - 1`: unlike the runtime call in
+    // computeConsumption, which paces the year in progress against the
+    // one before it, the generator is summarising the year it just
+    // measured — the shape and the total it's paired with come from the
+    // same twelve months, with no lag.
+    const seasonal = resolveSeasonal(candidate, transactions, year);
 
-      const candidate: ResolvedEnvelope = {
-        kind: 'derived',
-        id: `${category} / ${subCategory}`,
-        category,
-        subCategory,
-      };
-      const transactions = transactionsFor(candidate, ledger);
-      const estimate = outflow(transactions.filter((t) => yearOf(t.occurredOn) === year));
-      // `priorYear = year`, not `year - 1`: unlike the runtime call in
-      // computeConsumption, which paces the year in progress against the
-      // one before it, the generator is summarising the year it just
-      // measured — the shape and the total it's paired with come from the
-      // same twelve months, with no lag.
-      const seasonal = resolveSeasonal(candidate, transactions, year);
-
-      const id = uniqueId(slugify(`${category}_${subCategory}`), usedIds);
-      blocks.push(envelopeToml(id, category, subCategory, estimate, seasonal));
-    }
+    const id = uniqueId(slugify(`${category}_${subCategory}`), usedIds);
+    blocks.push(envelopeToml(id, category, subCategory, estimate, seasonal));
   }
 
   const notes: string[] = [];

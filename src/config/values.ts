@@ -53,13 +53,17 @@ function isTable(value: unknown): value is Record<string, unknown> {
 export class Reader {
   private readonly raw: Record<string, unknown>;
   private readonly read = new Set<string>();
+  private readonly problems: Problems;
+  readonly where: string;
 
-  constructor(
-    table: Record<string, unknown>,
-    readonly where: string,
-    private readonly problems: Problems,
-  ) {
+  // Plain fields rather than constructor parameter properties: node executes
+  // this file's TypeScript directly, in strip-only mode, which does not support
+  // them. The test runner transforms instead of stripping and would accept them,
+  // which is how one got in here unnoticed — see src/runnable.test.ts.
+  constructor(table: Record<string, unknown>, where: string, problems: Problems) {
     this.raw = table;
+    this.where = where;
+    this.problems = problems;
   }
 
   private path(key: string): string {

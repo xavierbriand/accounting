@@ -120,10 +120,6 @@ describe('auditPlan — uncategorised-rows', () => {
 describe('auditPlan — order', () => {
   it('is stated: grouped by kind, uncategorised-rows last', () => {
     const config = numbersConfig();
-    // No groceries spending (matcher-matches-nothing), no transfers at all
-    // (label-matches-nothing), plus an uncategorised row — three different
-    // kinds, deliberately built in a ledger that would produce them in a
-    // different order if `warnings` were left in encounter order.
     const ledger = ledgerOf([
       tx({ occurredOn: '2026-01-05', amount: -3000, category: UNCATEGORISED_OUTGOING, subCategory: 'Virement emis - a categoriser' }),
     ]);
@@ -134,5 +130,33 @@ describe('auditPlan — order', () => {
       'label-matches-nothing',
       'uncategorised-rows',
     ]);
+  });
+
+  it('sorts within a kind by its own key, not by declaration order', () => {
+    // "zoe" is declared before "alice" — encounter order (a no-op sort
+    // would preserve it, since Array.sort is stable) would put zoe's
+    // warning first. The sorted contract puts alice's first.
+    const config = numbersConfig({
+      people: `
+[people.zoe]
+name = "Zoe"
+transfer_labels = ["VIR ZOE"]
+
+[[people.zoe.income]]
+label = "Salary"
+monthly = "3000.00"
+
+[people.alice]
+name = "Alice"
+transfer_labels = ["VIR ALICE"]
+
+[[people.alice.income]]
+label = "Salary"
+monthly = "3000.00"
+`,
+    });
+    const ledger = ledgerOf([]); // neither label ever fires
+    const warnings = auditPlan(config, ledger).filter((w) => w.kind === 'label-matches-nothing');
+    expect(warnings.map((w) => (w.kind === 'label-matches-nothing' ? w.personId : null))).toEqual(['alice', 'zoe']);
   });
 });

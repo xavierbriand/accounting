@@ -79,8 +79,8 @@ export function generateEnvelopeBlock(ledger: Ledger, config: Config | null, yea
   if (config !== null) {
     for (const envelope of resolveEnvelopes(config, ledger)) {
       if (envelope.kind !== 'configured') continue;
-      const hadSpending = transactionsFor(envelope, ledger).some((t) => yearOf(t.occurredOn) === year);
-      if (!hadSpending) {
+      const yearOutflow = outflow(transactionsFor(envelope, ledger).filter((t) => yearOf(t.occurredOn) === year));
+      if (yearOutflow === 0) {
         notes.push(`# "${envelope.config.id}" had no spending in ${year}.`);
       }
     }

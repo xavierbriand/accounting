@@ -67,6 +67,18 @@ describe('generateEnvelopeBlock', () => {
     expect(block).toContain('"groceries" had no spending in 2026');
   });
 
+  it('still notes it when the only transaction this year is a refund, not a purchase', () => {
+    // A transaction exists in 2026 — a `.some(...)` check on presence alone
+    // would miss this. Net outflow is what actually matters: a refund with
+    // no purchase behind it this year is zero real spending.
+    const config = numbersConfig();
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-03-05', amount: 1500, category: 'Alimentation', subCategory: 'Supermarche' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, config, 2026);
+    expect(block).toContain('"groceries" had no spending in 2026');
+  });
+
   it('orders new envelopes by (category, subCategory), not ledger encounter order', () => {
     const ledger = ledgerOf([
       // Built in reverse of the expected output order — "Z"'s transaction

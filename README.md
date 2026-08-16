@@ -14,7 +14,68 @@ That is an information outcome, not a software one. The software has to keep ear
 
 ## Status
 
-v0.2 is at its opening. There is no product code yet — the first version is being discovered by interview rather than specified up front, which is the correction v0.1 needed most.
+v0.2 is being built in steps, each its own pull request. The first version was discovered by interview rather than specified up front, which is the correction v0.1 needed most.
+
+| | step | state |
+|---|---|---|
+| 1 | **ingest** — bank exports into one reconciled ledger | merged |
+| 2 | **config** — `sluice.toml`: income, envelopes, goals, buffer | in review |
+| 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks | next |
+| 4 | the page — instalment strip and four sections | |
+| 5 | `CLAUDE.md`, written once there is code to describe | |
+
+## Running it
+
+```bash
+npm install
+npm run check      # typecheck and tests
+npm run dev        # the app, on localhost
+```
+
+sluice reads two things and holds nothing: a folder of bank exports, and one configuration file. There is no database and no import step — every run re-reads the files, because a stale render of a household's money is worse than a slow one.
+
+## Configuration
+
+Everything sluice cannot read out of the bank exports lives in **`sluice.toml`**, which sits outside this repository because it holds household data.
+
+```toml
+[exports]
+# Relative paths resolve from this file's folder, not the shell's cwd.
+directory = "~/sluice-private/exports"
+
+[buffer]
+# The cushion the joint account holds on top of the month's spending.
+target = "2500.00"
+
+[funding]
+# A contribution leaving on or after this day funds the FOLLOWING month.
+cutoff_day = 25
+
+[people.alice]
+name = "Alice"
+# Inbound transfers whose label contains one of these are credited to Alice.
+transfer_labels = ["VIR ALICE MARTIN"]
+
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"       # exactly one of "monthly" and "annual"
+
+[envelopes.groceries]
+name = "Groceries"
+matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "7800.00"      # what it is expected to cost. Required.
+goal = "7200.00"          # an optimisation target, only where there is one
+```
+
+A fuller worked example lives in [`src/config/__fixtures__/build.ts`](src/config/__fixtures__/build.ts). It is a test fixture that a test parses, so it cannot drift away from what the parser actually accepts.
+
+Five things about the format are deliberate, and each has a reason worth knowing:
+
+- **Amounts are quoted strings.** A bare `7800.10` is a TOML float, and money here is whole cents so the card-settlement check can be exact to the cent.
+- **Envelopes are optional, and declaring one never hides the rest.** Every category the bank reports that no envelope claims gets one of its own, derived from the ledger. The section is for grouping and planning, never for deciding what counts.
+- **An estimate is written down, not derived.** Its first value comes from last year's actuals, but from then on it is a commitment you own, and last year's actuals are a separate number it is measured against. An estimate that re-derived itself each year would agree with reality by construction — spending could grow every year, the plan would silently grow to match, and nothing would ever report drift.
+- **Seasonal shapes are per envelope**, as twelve relative weights or a list of months. A flat one-twelfth line marks a holiday envelope as catastrophically over in July, when July is exactly when it should empty.
+- **Every problem in the file is reported at once**, not one per run — including keys sluice does not recognise, which are refused rather than ignored, because a misspelt key leaves the real one at its default and the figure that comes out is wrong rather than missing.
 
 ## v0.1
 

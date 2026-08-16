@@ -19,7 +19,9 @@ next-env.d.ts
 *.xlsx
 sluice.toml
 
-# ...with one deliberate exception: hand-written synthetic fixtures, which
-# contain no real transaction. Anything real is rejected by the pattern above
-# before it can reach a commit.
-!src/ingest/__fixtures__/**
+# ...with one deliberate exception. Fixtures are built in code rather than stored
+# as files, so nothing here is currently excluded by the patterns above — this
+# guards the day someone adds a stored synthetic export, which would otherwise be
+# ignored silently and fail only in CI, on a clean clone, for no visible reason.
+# Anything real is still rejected by the patterns above before reaching a commit.
+!src/**/__fixtures__/**

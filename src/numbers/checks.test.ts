@@ -117,6 +117,20 @@ describe('checkPlan — plannedTotal, trailingYearActual, drift', () => {
 });
 
 describe('checkPlan — worstObservedMonth and bufferSufficient', () => {
+  it('floors at zero when every observed month was net-positive, rather than reporting the smallest gain', () => {
+    const config = numbersConfig();
+    const ledger = ledgerOf([
+      tx({ kind: 'transfer-in', occurredOn: '2026-01-05', label: 'VIR ALICE MARTIN', amount: 20000 }),
+      tx({ kind: 'transfer-in', occurredOn: '2026-02-05', label: 'VIR ALICE MARTIN', amount: 100000 }),
+    ]);
+    const resolved = resolveEnvelopes(config, ledger);
+    const consumption = computeConsumption(ledger, resolved, '2026-02-15' as Day);
+    const result = checkPlan(config, ledger, consumption, '2026-02-15' as Day);
+    // Without the floor, this would be 20000 — the smallest gain — not 0.
+    expect(result.worstObservedMonth).toBe(0);
+    expect(result.bufferSufficient).toBe(true);
+  });
+
   it('counts a card settlement at settlesOn, not the card purchase at occurredOn', () => {
     // If the card purchase counted directly, January would be -81000 —
     // worse than February's settlement — and this would fail.

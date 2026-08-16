@@ -32,7 +32,11 @@ export interface PlanCheck {
   readonly trailingYearActual: Cents;
   readonly drift: Cents;
   readonly bufferTarget: Cents;
-  /** The most negative single month of real cash flow observed in the whole ledger. */
+  /**
+   * The most negative single month of real cash flow observed in the whole
+   * ledger — never positive: a household whose worst month was still a net
+   * gain has a worst drawdown of zero, not the smallest of its gains.
+   */
   readonly worstObservedMonth: Cents;
   readonly bufferSufficient: boolean;
   readonly envelopes: readonly EnvelopeCheck[];
@@ -109,8 +113,11 @@ export function checkPlan(
     ),
   );
 
+  // Floored at zero, the same convention outflow() uses: if every observed
+  // month was net-positive, the worst drawdown the buffer ever had to
+  // absorb was none at all, not the smallest of several gains.
   const monthly = [...netFlowByMonth(config, ledger).values()];
-  const worstObservedMonth = monthly.length === 0 ? 0 : Math.min(...monthly);
+  const worstObservedMonth = Math.min(0, ...monthly);
 
   return {
     plannedTotal,

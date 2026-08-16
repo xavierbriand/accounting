@@ -5,6 +5,16 @@ import type { Ledger } from '../ingest/load.ts';
 import type { Transaction } from '../ingest/ledger.ts';
 
 /**
+ * Plain code-point comparison, not `localeCompare()`: the latter's ordering
+ * depends on the runtime's default locale, not guaranteed to agree between
+ * two machines — the opposite of the deterministic order this module
+ * promises for every list it returns.
+ */
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
  * A contribution is credited to the month it funds, not the month it posts.
  *
  * A transfer sent in the last days of a month is that month's payment for
@@ -45,8 +55,8 @@ export function attributeContributions(config: Config, ledger: Ledger): readonly
 
   return contributions.sort((a, b) =>
     a.fundingMonth === b.fundingMonth
-      ? a.transaction.id.localeCompare(b.transaction.id)
-      : a.fundingMonth.localeCompare(b.fundingMonth),
+      ? compare(a.transaction.id, b.transaction.id)
+      : compare(a.fundingMonth, b.fundingMonth),
   );
 }
 
@@ -87,6 +97,6 @@ export function contributionsByMonth(
   }
 
   return [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compare(a, b))
     .map(([month, entry]) => ({ month, ...entry }));
 }

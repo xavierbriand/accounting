@@ -116,3 +116,23 @@ describe('auditPlan — uncategorised-rows', () => {
     expect(warnings.some((w) => w.kind === 'uncategorised-rows')).toBe(false);
   });
 });
+
+describe('auditPlan — order', () => {
+  it('is stated: grouped by kind, uncategorised-rows last', () => {
+    const config = numbersConfig();
+    // No groceries spending (matcher-matches-nothing), no transfers at all
+    // (label-matches-nothing), plus an uncategorised row — three different
+    // kinds, deliberately built in a ledger that would produce them in a
+    // different order if `warnings` were left in encounter order.
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-01-05', amount: -3000, category: UNCATEGORISED_OUTGOING, subCategory: 'Virement emis - a categoriser' }),
+    ]);
+    const warnings = auditPlan(config, ledger);
+    expect(warnings.map((w) => w.kind)).toEqual([
+      'matcher-matches-nothing',
+      'label-matches-nothing',
+      'label-matches-nothing',
+      'uncategorised-rows',
+    ]);
+  });
+});

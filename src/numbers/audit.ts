@@ -35,6 +35,20 @@ export type PlanWarning =
   | { readonly kind: 'transfer-matches-two-people'; readonly transaction: Transaction; readonly people: readonly Person[] }
   | { readonly kind: 'uncategorised-rows'; readonly count: number; readonly total: Cents };
 
+/** Groups by kind, then by a natural key within it — a stated order rather than however the checks below happen to run. */
+function sortKey(w: PlanWarning): string {
+  switch (w.kind) {
+    case 'matcher-matches-nothing':
+      return `0-${w.envelopeId}`;
+    case 'label-matches-nothing':
+      return `1-${w.personId}-${w.label}`;
+    case 'transfer-matches-two-people':
+      return `2-${w.transaction.id}`;
+    case 'uncategorised-rows':
+      return '3';
+  }
+}
+
 export function auditPlan(config: Config, ledger: Ledger): readonly PlanWarning[] {
   const warnings: PlanWarning[] = [];
 
@@ -77,5 +91,9 @@ export function auditPlan(config: Config, ledger: Ledger): readonly PlanWarning[
     });
   }
 
-  return warnings;
+  return warnings.sort((a, b) => {
+    const ka = sortKey(a);
+    const kb = sortKey(b);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
 }

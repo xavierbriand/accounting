@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AmountParseError, formatEur, formatEurCompact, parseAmount, sum } from './money.ts';
+import { AmountParseError, allocate, formatEur, formatEurCompact, parseAmount, sum } from './money.ts';
 
 /**
  * French grouping uses a narrow no-break space (U+202F), and which space ICU
@@ -54,6 +54,47 @@ describe('sum', () => {
 
     const many = Array.from({ length: 1000 }, () => 1049);
     expect(sum(many)).toBe(1_049_000);
+  });
+});
+
+describe('allocate', () => {
+  it('always sums back to the total, even when the weights do not divide it evenly', () => {
+    // 1000 / 3 = 333.33... per weight; three independent roundings would land
+    // on 999 or 1002 depending on which way each one rounds.
+    expect(sum(allocate(1000, [1, 1, 1]))).toBe(1000);
+  });
+
+  it('splits proportionally to the weights, worked by hand', () => {
+    // weight sum 3: shares are 666.67 and 333.33. Both floor to 666/333 = 999,
+    // and the one cent left over goes to the larger fractional remainder — the
+    // 2-weight, at 0.67 against 0.33.
+    expect(allocate(1000, [2, 1])).toEqual([667, 333]);
+  });
+
+  it('splits an exact ratio with nothing left to distribute', () => {
+    expect(allocate(10000, [3, 1])).toEqual([7500, 2500]);
+  });
+
+  it('breaks an exact tie by index, deterministically', () => {
+    // weight sum 5, share 2.2 each: every fractional remainder is exactly 0.2,
+    // so the tie-break is what decides which weight gets the spare cent.
+    expect(allocate(11, [1, 1, 1, 1, 1])).toEqual([3, 2, 2, 2, 2]);
+  });
+
+  it('gives every weight zero when the total is zero', () => {
+    expect(allocate(0, [1, 2, 3])).toEqual([0, 0, 0]);
+  });
+
+  it('refuses a negative total', () => {
+    expect(() => allocate(-100, [1, 1])).toThrow(/non-negative/);
+  });
+
+  it('refuses weights that are all zero', () => {
+    expect(() => allocate(100, [0, 0])).toThrow(/non-negative and sum to more than zero/);
+  });
+
+  it('refuses a negative weight', () => {
+    expect(() => allocate(100, [1, -1])).toThrow(/non-negative and sum to more than zero/);
   });
 });
 

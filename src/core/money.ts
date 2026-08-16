@@ -54,6 +54,52 @@ export function sum(amounts: readonly Cents[]): Cents {
   return total;
 }
 
+/**
+ * Split `total` across `weights`, proportionally, landing on a sum that is
+ * exactly `total` — never a cent short or over from independent roundings.
+ *
+ * Largest-remainder apportionment: each weight gets `floor(total * w / Σw)`,
+ * then the few cents still unassigned go one each to the weights with the
+ * largest fractional remainder, ties broken by index for a deterministic
+ * result. Twelve seasonal weights that must sum to exactly an annual
+ * estimate, or a household's incomes that must sum to exactly a monthly
+ * requirement, are why this exists: naive independent rounding of twelve or
+ * more shares does not sum back to the total it was split from.
+ *
+ * `total` must be non-negative — refuses otherwise. Nothing in this codebase
+ * ever allocates a negative pot, and floor-based remainder distribution is
+ * not validated for one, so the contract stays honest rather than
+ * half-supporting a case nothing exercises. `weights` must be non-negative
+ * and sum to more than zero: an internal invariant, not user input — config
+ * already refuses all-zero or negative seasonal weights and negative income
+ * at the parse stage, so nothing should ever call this with a broken weight
+ * set.
+ */
+export function allocate(total: Cents, weights: readonly number[]): Cents[] {
+  if (total < 0) {
+    throw new Error(`allocate: total must be non-negative, got ${total}`);
+  }
+  if (weights.some((w) => w < 0) || sum(weights) <= 0) {
+    throw new Error('allocate: weights must be non-negative and sum to more than zero');
+  }
+
+  const weightTotal = sum(weights);
+  const shares = weights.map((w) => (total * w) / weightTotal);
+  const bases = shares.map(Math.floor);
+  const remainder = total - sum(bases);
+
+  const byRemainder = shares
+    .map((s, i) => ({ i, fraction: s - Math.floor(s) }))
+    .sort((a, b) => b.fraction - a.fraction || a.i - b.i);
+
+  const out = [...bases];
+  for (let k = 0; k < remainder; k++) {
+    const i = byRemainder[k]!.i;
+    out[i] = (out[i] ?? 0) + 1;
+  }
+  return out;
+}
+
 const EUR = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
   currency: 'EUR',

@@ -5,12 +5,22 @@ import { configToml } from '../config/__fixtures__/build.ts';
 import { ledgerOf, numbersConfig, tx } from './__fixtures__/build.ts';
 
 describe('generateEnvelopeBlock', () => {
-  it('emits an id slugified from the pair — accents stripped, lowercased, spaces folded', () => {
+  it('emits an id slugified from the pair — spaces folded to underscore', () => {
     const ledger = ledgerOf([
       tx({ occurredOn: '2026-01-05', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' }),
     ]);
     const block = generateEnvelopeBlock(ledger, null, 2026);
     expect(block).toContain('[envelopes.alimentation_supermarche]');
+  });
+
+  it('strips accents from the id, not just from the display name', () => {
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-01-05', amount: -3000, category: 'Énergie', subCategory: 'Électricité' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    expect(block).toContain('[envelopes.energie_electricite]');
+    // The display name keeps the accents — only the id is folded to ASCII.
+    expect(block).toContain('name = "Énergie / Électricité"');
   });
 
   it('sets estimate to the year’s net outflow, worked by hand', () => {

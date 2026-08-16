@@ -66,14 +66,24 @@ export function sum(amounts: readonly Cents[]): Cents {
  * requirement, are why this exists: naive independent rounding of twelve or
  * more shares does not sum back to the total it was split from.
  *
+ * The remainder step needs a fraction, but computed as an IEEE-754 double
+ * (`(total * w) / weightTotal`) that fraction is exactly the kind of value
+ * this module's own "integer cents, never a float" rule exists to rule
+ * out — a near-tie between two weights could in principle round differently
+ * than exact arithmetic would. So the whole computation runs in `BigInt`
+ * instead: `total * w` divided by `weightTotal` is `bigint` truncating
+ * division, exact for any input, and the remainder used to break ties is the
+ * exact `bigint` remainder of that division, not a subtraction of floats.
+ * `weights` must therefore be whole numbers — true of every caller today,
+ * relative seasonal weights and `Cents` incomes alike.
+ *
  * `total` must be non-negative — refuses otherwise. Nothing in this codebase
- * ever allocates a negative pot, and floor-based remainder distribution is
- * not validated for one, so the contract stays honest rather than
- * half-supporting a case nothing exercises. `weights` must be non-negative
- * and sum to more than zero: an internal invariant, not user input — config
- * already refuses all-zero or negative seasonal weights and negative income
- * at the parse stage, so nothing should ever call this with a broken weight
- * set.
+ * ever allocates a negative pot, and this division is not validated for one,
+ * so the contract stays honest rather than half-supporting a case nothing
+ * exercises. `weights` must be non-negative and sum to more than zero: an
+ * internal invariant, not user input — config already refuses all-zero or
+ * negative seasonal weights and negative income at the parse stage, so
+ * nothing should ever call this with a broken weight set.
  */
 export function allocate(total: Cents, weights: readonly number[]): Cents[] {
   if (total < 0) {
@@ -83,16 +93,27 @@ export function allocate(total: Cents, weights: readonly number[]): Cents[] {
     throw new Error('allocate: weights must be non-negative and sum to more than zero');
   }
 
-  const weightTotal = sum(weights);
-  const shares = weights.map((w) => (total * w) / weightTotal);
-  const bases = shares.map(Math.floor);
-  const remainder = total - sum(bases);
+  const totalBig = BigInt(total);
+  const weightTotalBig = weights.reduce((acc, w) => acc + BigInt(w), 0n);
 
-  const byRemainder = shares
-    .map((s, i) => ({ i, fraction: s - Math.floor(s) }))
-    .sort((a, b) => b.fraction - a.fraction || a.i - b.i);
+  const bases: bigint[] = [];
+  const remainders: bigint[] = [];
+  for (const w of weights) {
+    const product = totalBig * BigInt(w);
+    bases.push(product / weightTotalBig);
+    remainders.push(product % weightTotalBig);
+  }
 
-  const out = [...bases];
+  // How many cents are still unassigned once every weight has its exact
+  // floor — always a small non-negative integer, at most one per weight,
+  // so converting it back to a plain number is safe.
+  const remainder = Number(totalBig - bases.reduce((a, b) => a + b, 0n));
+
+  const byRemainder = remainders
+    .map((r, i) => ({ i, remainder: r }))
+    .sort((a, b) => (b.remainder > a.remainder ? 1 : b.remainder < a.remainder ? -1 : 0) || a.i - b.i);
+
+  const out = bases.map(Number);
   for (let k = 0; k < remainder; k++) {
     const i = byRemainder[k]!.i;
     out[i] = (out[i] ?? 0) + 1;

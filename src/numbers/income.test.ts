@@ -21,10 +21,13 @@ describe('netMonthly', () => {
   });
 
   it('rounds a non-exact annual division rather than losing the remainder', () => {
-    // 100 cents / 12 = 8.33...: the rounding is deliberately not exactness
-    // checked here, only where it feeds allocate() as the household total.
-    const p = person({ id: 'alice', income: [{ cadence: 'annual', label: 'Bonus', net: 100 }] });
-    expect(netMonthly(p)).toBe(8);
+    // 115 cents / 12 = 9.58...: chosen so rounding and truncation disagree
+    // (9 vs 10) — a value like 100/12 = 8.33 would pass either way and not
+    // actually prove Math.round() is what runs. The rounding is deliberately
+    // not exactness-checked here, only where it feeds allocate() as the
+    // household total.
+    const p = person({ id: 'alice', income: [{ cadence: 'annual', label: 'Bonus', net: 115 }] });
+    expect(netMonthly(p)).toBe(10);
   });
 
   it('combines monthly and annual sources for the same person', () => {

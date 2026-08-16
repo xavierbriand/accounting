@@ -19,9 +19,9 @@ v0.2 is being built in steps, each its own pull request. The first version was d
 | | step | state |
 |---|---|---|
 | 1 | **ingest** — bank exports into one reconciled ledger | merged |
-| 2 | **config** — `sluice.toml`: income, envelopes, goals, buffer | in review |
-| 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks | next |
-| 4 | the page — instalment strip and four sections | |
+| 2 | **config** — `sluice.toml`: income, envelopes, goals, buffer | merged |
+| 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks, the envelope generator | in review |
+| 4 | the page — instalment strip and four sections | next |
 | 5 | `CLAUDE.md`, written once there is code to describe | |
 
 ## Running it

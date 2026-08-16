@@ -74,10 +74,27 @@ export interface Config {
   readonly envelopes: readonly EnvelopeConfig[];
 }
 
+export interface ConfigErrorOptions extends ErrorOptions {
+  /** Every problem found, one per entry, unformatted. */
+  readonly problems?: readonly string[];
+}
+
 export class ConfigError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  /**
+   * The problems as a list, alongside the joined message.
+   *
+   * The message is for a terminal; the list is for anything that wants to render
+   * one problem per row. Without it a caller's only route is to split the message
+   * back apart on its bullet characters — re-parsing text this module already had
+   * structured. `AmountParseError` and `DateParseError` carry their fields the
+   * same way, for the same reason.
+   */
+  readonly problems: readonly string[];
+
+  constructor(message: string, options?: ConfigErrorOptions) {
     super(message, options);
     this.name = 'ConfigError';
+    this.problems = options?.problems ?? [];
   }
 }
 
@@ -95,6 +112,9 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
   const hasWeights = r.has('weights');
 
   if (hasMonths && hasWeights) {
+    r.skip('months');
+    r.skip('weights');
+    r.done();
     problems.add(
       `"${r.where}" gives both "months" and "weights". Give one: "months" is the ` +
         `shorthand for a pot that falls evenly across the months you list, "weights" ` +
@@ -103,10 +123,17 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
     return null;
   }
   if (!hasMonths && !hasWeights) {
-    problems.add(
-      `"${r.where}" gives neither "months" nor "weights". Remove it to take the ` +
-        `shape from this envelope's own history, or say which months the money falls in.`,
-    );
+    // Unknown keys first. Arriving here usually means a key was misspelt, and
+    // naming the misspelling is the whole answer — where advising the user to
+    // delete the table, which is all this branch could otherwise say, sends them
+    // to throw away the thing they got nearly right.
+    r.done();
+    if (problems.count === before) {
+      problems.add(
+        `"${r.where}" gives neither "months" nor "weights". Remove it to take the ` +
+          `shape from this envelope's own history, or say which months the money falls in.`,
+      );
+    }
     return null;
   }
 
@@ -176,16 +203,23 @@ function readMatcher(r: Reader, problems: Problems): EnvelopeMatcher | null {
   return { kind: 'sub-category', category, subCategory };
 }
 
-const RESERVED: Record<string, string> = {
-  [SETTLEMENT_SUBCATEGORY]:
+// A Map, not an object literal: an object lookup walks the prototype chain, so a
+// sub-category legitimately named "constructor" or "toString" would be refused as
+// reserved, with a stringified function as the explanation.
+const RESERVED = new Map<string, string>([
+  [
+    SETTLEMENT_SUBCATEGORY,
     `is the deferred cards' monthly charge to the account, and the purchases behind ` +
-    `it are already itemised on the card exports — budgeting both would inflate the ` +
-    `year by roughly a third`,
-  [INTERNAL_TRANSFER_SUBCATEGORY]:
+      `it are already itemised on the card exports — budgeting both would inflate the ` +
+      `year by roughly a third`,
+  ],
+  [
+    INTERNAL_TRANSFER_SUBCATEGORY,
     `is the household's own transfers between its own accounts — the funding side of ` +
-    `this whole exercise, not spending — so budgeting it would count money as spent ` +
-    `on the way in`,
-};
+      `this whole exercise, not spending — so budgeting it would count money as spent ` +
+      `on the way in`,
+  ],
+]);
 
 function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig | null {
   const before = problems.count;
@@ -213,7 +247,7 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
 
   for (const m of matches) {
     if (m.kind !== 'sub-category') continue;
-    const why = RESERVED[m.subCategory];
+    const why = RESERVED.get(m.subCategory);
     if (why === undefined) continue;
     problems.add(
       `Envelope "${id}" claims "${m.subCategory}", which ${why}. sluice classifies ` +
@@ -226,6 +260,15 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
 
   if (estimate < 0) {
     problems.add(`Envelope "${id}" has an estimate of ${formatEur(estimate)}.`);
+    return null;
+  }
+
+  if (goal !== null && goal < 0) {
+    // The estimate has this floor already. Without the same one here, "not above
+    // the estimate" is the only constraint on the goal, and any negative value
+    // satisfies it — leaving an optimised scenario that asks the household to set
+    // money aside in reverse.
+    problems.add(`Envelope "${id}" has a goal of ${formatEur(goal)}. A goal cannot be negative.`);
     return null;
   }
 
@@ -359,18 +402,29 @@ function checkEnvelopesDoNotOverlap(envelopes: readonly EnvelopeConfig[], proble
  * would cost a run per label.
  */
 function checkLabelsDoNotCollide(people: readonly Person[], problems: Problems): void {
-  for (const person of people) {
-    for (const other of people) {
-      if (other.id === person.id) continue;
-      for (const mine of person.transferLabels) {
-        for (const theirs of other.transferLabels) {
-          if (!labelMatches(mine, theirs)) continue;
+  // Unordered pairs. Both containment directions still have to be tested — which
+  // label is the shorter one depends on the order they happen to be declared in —
+  // but each pair is examined once, so a symmetric collision (two labels equal
+  // but for case or spacing) is one problem rather than the same problem twice
+  // with the roles swapped.
+  for (let i = 0; i < people.length; i++) {
+    for (let j = i + 1; j < people.length; j++) {
+      const a = people[i]!;
+      const b = people[j]!;
+      for (const inA of a.transferLabels) {
+        for (const inB of b.transferLabels) {
+          const found = labelMatches(inA, inB)
+            ? { shortId: a.id, short: inA, longId: b.id, long: inB }
+            : labelMatches(inB, inA)
+              ? { shortId: b.id, short: inB, longId: a.id, long: inA }
+              : null;
+          if (found === null) continue;
           problems.add(
-            `"${mine}" attributes to "${person.id}", but "${other.id}" declares ` +
-              `"${theirs}", which contains it. Every transfer matching the longer label ` +
-              `matches the shorter one too, so those transfers match two people and can ` +
-              `be credited to neither — they fall into the unattributed band while ` +
-              `looking configured.`,
+            `"${found.short}" attributes to "${found.shortId}", but "${found.longId}" ` +
+              `declares "${found.long}", which contains it. Every transfer matching the ` +
+              `longer label matches the shorter one too, so those transfers match two ` +
+              `people and can be credited to neither — they fall into the unattributed ` +
+              `band while looking configured.`,
           );
         }
       }
@@ -448,6 +502,7 @@ export function parseConfig(text: string, path: string): Config {
         `${listed}\n\n` +
         `Nothing was loaded — sluice reads the whole plan or none of it, because a ` +
         `half-read plan produces a transfer figure that looks reasonable and is not.`,
+      { problems: problems.list },
     );
   }
 

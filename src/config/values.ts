@@ -107,6 +107,17 @@ export class Reader {
     return this.raw[key] !== undefined;
   }
 
+  /**
+   * Mark a key handled without reading it, so `done()` does not call it unknown.
+   *
+   * For the branches that reject a *combination* of keys — giving two forms of
+   * the same thing, or neither — where the keys themselves need no validation but
+   * still have to be accounted for before unknown keys can be reported.
+   */
+  skip(key: string): void {
+    this.read.add(key);
+  }
+
   string(key: string): string | null {
     const value = this.take(key);
     if (value === REFUSED) return null;
@@ -168,6 +179,19 @@ export class Reader {
     }
     if (typeof value !== 'string') {
       return this.fail(key, `"${this.path(key)}" must be an amount in quotes, like "1200.00".`);
+    }
+    if (value.trim() === '') {
+      // `parseAmount` reads an empty string as zero, which is right for the bank's
+      // CSV — debit and credit share a row and the unused one is blank. It is
+      // wrong for a file someone edits by hand: a half-finished edit would become
+      // a confident zero. A blank income gives that person a zero share of the
+      // split and asks everyone else to fund the whole household.
+      return this.fail(
+        key,
+        `"${this.path(key)}" is empty. Give the amount, or remove the line — an ` +
+          `empty amount would be read as zero euros and quietly change the figures ` +
+          `that come out.`,
+      );
     }
     try {
       return parseAmount(value, this.path(key));
@@ -233,6 +257,10 @@ export class Reader {
     const out = new Map<string, Reader>();
     for (const id of Object.keys(parent.raw)) {
       const child = parent.take(id);
+      // Already refused and reported — saying anything more about it would be a
+      // second complaint about one fault, which is the cascade this reader exists
+      // to prevent. Every other accessor guards this; this one did not.
+      if (child === REFUSED) continue;
       if (!isTable(child)) {
         parent.fail(id, `"${parent.path(id)}" must be a section.`);
         continue;

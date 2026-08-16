@@ -440,7 +440,289 @@ monthly = "2450.00"
   });
 });
 
+describe('parseConfig — refusals the reader makes on shape alone', () => {
+  // These were all removable without a single test failing. Each one is a value
+  // of the wrong TOML type that would otherwise be carried into the plan.
+
+  it('refuses text where an amount belongs', () => {
+    expect(() => parse({ buffer: '[buffer]\ntarget = "twelve"\n' })).toThrow(/not an amount/);
+  });
+
+  it('refuses an empty amount rather than reading it as zero', () => {
+    // `parseAmount` reads "" as zero for the bank's CSV, where debit and credit
+    // share a row. On a hand-edited file that turns a half-finished edit into a
+    // confident zero — and a blank income gives that person a zero share.
+    const bad = () => parse({ buffer: '[buffer]\ntarget = ""\n' });
+    expect(bad).toThrow(ConfigError);
+    expect(bad).toThrow(/would be read as zero euros/);
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+[[people.alice.income]]
+label = "Salary"
+monthly = "   "
+`,
+      }),
+    ).toThrow(/would be read as zero euros/);
+  });
+
+  it('refuses a number where text belongs', () => {
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = 5
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+`,
+      }),
+    ).toThrow(/must be text/);
+  });
+
+  it('refuses a non-string amount', () => {
+    expect(() => parse({ buffer: '[buffer]\ntarget = true\n' })).toThrow(/must be an amount/);
+  });
+
+  it('refuses a fractional whole number', () => {
+    expect(() => parse({ funding: '[funding]\ncutoff_day = 25.5\n' })).toThrow(
+      /must be a whole number/,
+    );
+  });
+
+  it('refuses a non-integer in a list of whole numbers', () => {
+    expect(() =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+seasonal = { months = ["6"] }
+`,
+      }),
+    ).toThrow(/must be a list of whole numbers/);
+  });
+
+  it('refuses a non-string in a list of labels', () => {
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+transfer_labels = [5]
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+`,
+      }),
+    ).toThrow(/must be a list of quoted strings/);
+  });
+
+  it('refuses a value where a section belongs', () => {
+    // Reachable only through the root fragment: a bare key placed after a table
+    // would land inside it, and the test would pass on a different rule.
+    expect(() => parse({ root: 'envelopes = 5\n', envelopes: '' })).toThrow(/must be a section/);
+    expect(() => parse({ root: 'people = 5\n', people: '' })).toThrow(/must be a section/);
+  });
+
+  it('refuses a value where a list of sections belongs', () => {
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+income = 5
+`,
+      }),
+    ).toThrow(/must be a list of sections/);
+  });
+});
+
+describe('parseConfig — refusals on amounts that would reverse a figure', () => {
+  it('refuses a negative envelope estimate', () => {
+    expect(() =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "-1200.00"
+`,
+      }),
+    ).toThrow(/estimate of/);
+  });
+
+  it('refuses a negative goal, which "not above the estimate" lets through', () => {
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+goal = "-500.00"
+`,
+      });
+    expect(bad).toThrow(ConfigError);
+    expect(bad).toThrow(/goal cannot be negative/);
+  });
+
+  it('refuses negative income', () => {
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+[[people.alice.income]]
+label = "Salary"
+monthly = "-3200.00"
+`,
+      }),
+    ).toThrow(/Income cannot be negative/);
+  });
+});
+
+describe('parseConfig — seasonal shapes', () => {
+  const withSeasonal = (seasonal: string) =>
+    parse({
+      envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+${seasonal}
+`,
+    });
+
+  it('names a misspelt key rather than advising the table be deleted', () => {
+    // Arriving at "you gave neither form" almost always means a key was
+    // misspelt. Advising removal sends the user to throw away the thing they
+    // got nearly right.
+    const bad = () => withSeasonal('seasonal = { month = [1, 2] }');
+    expect(bad).toThrow(/seasonal\.month" is not a key sluice knows/);
+    expect(bad).not.toThrow(/gives neither/);
+  });
+
+  it('reports an unknown key alongside giving both forms', () => {
+    const bad = () =>
+      withSeasonal('seasonal = { months = [6], weights = [1,1,1,1,1,1,1,1,1,1,1,1], bogus = 1 }');
+    expect(bad).toThrow(/seasonal\.bogus" is not a key sluice knows/);
+    expect(bad).toThrow(/gives both/);
+  });
+
+  it('refuses a seasonal table giving neither form', () => {
+    expect(() => withSeasonal('seasonal = { }')).toThrow(/gives neither/);
+  });
+
+  it('refuses an empty month list, which the all-zero rule would not catch', () => {
+    // The months branch builds its own twelve zeros and returns before the
+    // all-zero check, which guards only the weights branch.
+    expect(() => withSeasonal('seasonal = { months = [] }')).toThrow(/List the months/);
+  });
+});
+
 describe('parseConfig — reporting', () => {
+  it('carries the problems as a list, not only as one joined message', () => {
+    // The page renders one problem per row. Without the list its only route is
+    // splitting the message back apart on its bullet characters.
+    let caught: ConfigError | undefined;
+    try {
+      parse({ buffer: '[buffer]\ntarget = 2500\n', funding: '[funding]\ncutoff_day = 30\n' });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+    expect(caught?.problems).toHaveLength(2);
+    expect(caught?.problems[0]).toMatch(/binary float/);
+    expect(caught?.problems[1]).toMatch(/between 1 and 28/);
+  });
+
+  it('complains once about a fault under a named-table parent', () => {
+    // `namedTables` was the one accessor without the already-refused guard, so
+    // one date here produced the date complaint, then "must be a section", then
+    // a third line claiming no people were declared.
+    let caught: ConfigError | undefined;
+    try {
+      parse({ people: '[people]\nbruno = 2024-01-01\n' });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+    expect(caught?.problems.filter((p) => /people\.bruno/.test(p))).toHaveLength(1);
+    expect(caught?.problems.join('\n')).not.toMatch(/must be a section/);
+  });
+
+  it('reports a symmetric label collision once, not once per direction', () => {
+    let caught: ConfigError | undefined;
+    try {
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+transfer_labels = ["ALICE"]
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+
+[people.bruno]
+name = "Bruno"
+transfer_labels = ["alice"]
+[[people.bruno.income]]
+label = "Salary"
+monthly = "2450.00"
+`,
+      });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+    expect(caught?.problems).toHaveLength(1);
+  });
+
+  it('still catches a collision whichever way round the labels are declared', () => {
+    for (const [first, second] of [
+      ['"ALICE"', '"ALICE MARTIN"'],
+      ['"ALICE MARTIN"', '"ALICE"'],
+    ]) {
+      expect(() =>
+        parse({
+          people: `
+[people.alice]
+name = "Alice"
+transfer_labels = [${first}]
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+
+[people.bruno]
+name = "Bruno"
+transfer_labels = [${second}]
+[[people.bruno.income]]
+label = "Salary"
+monthly = "2450.00"
+`,
+        }),
+      ).toThrow(/credited to neither/);
+    }
+  });
+
+  it('does not treat a sub-category named after a built-in as reserved', () => {
+    // A plain-object lookup walks the prototype chain, so "constructor" was
+    // refused with a stringified function as the explanation.
+    const config = parse({
+      envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries", sub_category = "constructor" }]
+estimate = "1200.00"
+`,
+    });
+    expect(config.envelopes[0]?.matches[0]).toEqual({
+      kind: 'sub-category',
+      category: 'Groceries',
+      subCategory: 'constructor',
+    });
+  });
   it('reports every problem in the file at once, not one per run', () => {
     // The file is hand-edited once a year. Five runs to find five typos works
     // against the reason this product exists.
@@ -645,5 +927,33 @@ monthly = "2450.00"
 
   it('credits nobody when no label catches it', () => {
     expect(peopleMatching(config, 'VIR VERS COMPTE CHEQUE')).toEqual([]);
+  });
+
+  it('returns both people when a transfer matches two, rather than picking one', () => {
+    // The whole reason this returns an array. Validation cannot rule the case
+    // out: "ALICE" and "MARTIN" contain neither, so the config is accepted, and
+    // a transfer naming both matches both. A caller taking the first would move
+    // real money between two people's totals.
+    const ambiguous = parse({
+      people: `
+[people.alice]
+name = "Alice"
+transfer_labels = ["ALICE"]
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+
+[people.bruno]
+name = "Bruno"
+transfer_labels = ["MARTIN"]
+[[people.bruno.income]]
+label = "Salary"
+monthly = "2450.00"
+`,
+    });
+    expect(peopleMatching(ambiguous, 'VIR RECU ALICE MARTIN').map((p) => p.id)).toEqual([
+      'alice',
+      'bruno',
+    ]);
   });
 });

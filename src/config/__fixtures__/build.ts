@@ -11,6 +11,13 @@
  */
 
 export interface ConfigParts {
+  /**
+   * Emitted before every table, so a test can put a value at the root of the
+   * document. Without it a fragment that opens no table of its own is swallowed
+   * by whichever table precedes it, and a test aimed at "this must be a section"
+   * passes on an unknown-key error from a different rule entirely.
+   */
+  readonly root?: string;
   readonly exports?: string;
   readonly buffer?: string;
   readonly funding?: string;
@@ -48,6 +55,7 @@ const DEFAULT_ENVELOPES = '';
 
 export function configToml(parts: ConfigParts = {}): string {
   return [
+    parts.root ?? '',
     parts.exports ?? DEFAULT_EXPORTS,
     parts.buffer ?? DEFAULT_BUFFER,
     parts.funding ?? DEFAULT_FUNDING,

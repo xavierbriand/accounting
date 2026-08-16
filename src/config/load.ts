@@ -7,12 +7,16 @@ import { parseConfig, type Config } from './schema.ts';
 export type {
   Config,
   EnvelopeConfig,
+  EnvelopeIndex,
   EnvelopeMatcher,
   IncomeSource,
   Person,
   SeasonalWeights,
 } from './schema.ts';
 export { ConfigError, envelopeIndex, peopleMatching } from './schema.ts';
+// Exported so the code that spends the config asks the config what a matcher
+// claims, rather than reimplementing the comparison and drifting from it.
+export { matcherMatches } from './match.ts';
 
 /**
  * The name the ingest already tells the user to edit, in

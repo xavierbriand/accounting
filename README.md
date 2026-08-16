@@ -69,7 +69,7 @@ goal = "7200.00"          # an optimisation target, only where there is one
 
 A fuller worked example lives in [`src/config/__fixtures__/build.ts`](src/config/__fixtures__/build.ts). It is a test fixture that a test parses, so it cannot drift away from what the parser actually accepts.
 
-Four things about the format are deliberate, and each has a reason worth knowing:
+Five things about the format are deliberate, and each has a reason worth knowing:
 
 - **Amounts are quoted strings.** A bare `7800.10` is a TOML float, and money here is whole cents so the card-settlement check can be exact to the cent.
 - **Envelopes are optional, and declaring one never hides the rest.** Every category the bank reports that no envelope claims gets one of its own, derived from the ledger. The section is for grouping and planning, never for deciding what counts.

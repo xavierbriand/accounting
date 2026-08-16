@@ -96,7 +96,6 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
 
   if (hasMonths && hasWeights) {
     problems.add(
-      r.where,
       `"${r.where}" gives both "months" and "weights". Give one: "months" is the ` +
         `shorthand for a pot that falls evenly across the months you list, "weights" ` +
         `is the general form.`,
@@ -105,7 +104,6 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
   }
   if (!hasMonths && !hasWeights) {
     problems.add(
-      r.where,
       `"${r.where}" gives neither "months" nor "weights". Remove it to take the ` +
         `shape from this envelope's own history, or say which months the money falls in.`,
     );
@@ -117,14 +115,13 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
     r.done();
     if (months === null || problems.count !== before) return null;
     if (months.length === 0) {
-      problems.add(r.where, `"${r.where}.months" is empty. List the months the money falls in.`);
+      problems.add(`"${r.where}.months" is empty. List the months the money falls in.`);
       return null;
     }
     const weights = Array.from({ length: 12 }, () => 0);
     for (const m of months) {
       if (m < 1 || m > 12) {
         problems.add(
-          r.where,
           `"${r.where}.months" contains ${m}. Months are 1 to 12, January to December.`,
         );
         return null;
@@ -140,7 +137,6 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
 
   if (weights.length !== 12) {
     problems.add(
-      r.where,
       `"${r.where}.weights" has ${weights.length} entries. It needs exactly 12, ` +
         `January to December: with fewer, whichever month was dropped is the one the ` +
         `plan stops setting money aside for.`,
@@ -150,7 +146,6 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
   const negative = weights.findIndex((w) => w < 0);
   if (negative !== -1) {
     problems.add(
-      r.where,
       `"${r.where}.weights" entry ${negative + 1} is ${weights[negative]}. A weight is ` +
         `a share of the year, and a negative share would take money back out of a ` +
         `month that has already been budgeted.`,
@@ -159,7 +154,6 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
   }
   if (weights.every((w) => w === 0)) {
     problems.add(
-      r.where,
       `"${r.where}.weights" are all zero. They are relative and are normalised by ` +
         `their own total, so an all-zero shape has no total to divide by and the ` +
         `envelope would be spread across no month at all. Twelve 1s is a flat year.`,
@@ -209,7 +203,6 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
 
   if (matches.length === 0) {
     problems.add(
-      r.where,
       `Envelope "${id}" claims nothing. An envelope matching no category holds no ` +
         `transactions, but its estimate still enters the plan — so the year is ` +
         `budgeted for spending that is also counted under whatever envelope those ` +
@@ -223,7 +216,6 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
     const why = RESERVED[m.subCategory];
     if (why === undefined) continue;
     problems.add(
-      r.where,
       `Envelope "${id}" claims "${m.subCategory}", which ${why}. sluice classifies ` +
         `those rows before any envelope sees them.`,
     );
@@ -233,13 +225,12 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
   if (estimate === null) return null;
 
   if (estimate < 0) {
-    problems.add(r.where, `Envelope "${id}" has an estimate of ${formatEur(estimate)}.`);
+    problems.add(`Envelope "${id}" has an estimate of ${formatEur(estimate)}.`);
     return null;
   }
 
   if (goal !== null && goal > estimate) {
     problems.add(
-      r.where,
       `Envelope "${id}" has a goal of ${formatEur(goal)} above its estimate of ` +
         `${formatEur(estimate)}. The goal is the optimised scenario and the estimate ` +
         `the realistic one, so the goal is never the larger — as written, the ` +
@@ -263,7 +254,6 @@ function readIncome(r: Reader, problems: Problems): IncomeSource | null {
 
   if (declaredMonthly && declaredAnnual) {
     problems.add(
-      r.where,
       `"${r.where}" gives both "monthly" and "annual". A source is one or the other ` +
         `— write two entries if the salary and the bonus are both real, or the same ` +
         `money is counted twice.`,
@@ -272,7 +262,6 @@ function readIncome(r: Reader, problems: Problems): IncomeSource | null {
   }
   if (!declaredMonthly && !declaredAnnual) {
     problems.add(
-      r.where,
       `"${r.where}" gives neither "monthly" nor "annual". Say which the figure is: a ` +
         `bonus read as a monthly salary is multiplied by twelve, and the split moves ` +
         `with it.`,
@@ -283,7 +272,7 @@ function readIncome(r: Reader, problems: Problems): IncomeSource | null {
   const net = declaredMonthly ? monthly : annual;
   if (net === null) return null;
   if (net < 0) {
-    problems.add(r.where, `"${r.where}" is ${formatEur(net)}. Income cannot be negative.`);
+    problems.add(`"${r.where}" is ${formatEur(net)}. Income cannot be negative.`);
     return null;
   }
   return declaredMonthly
@@ -305,7 +294,6 @@ function readPerson(id: string, r: Reader, problems: Problems): Person | null {
 
   if (income.length === 0) {
     problems.add(
-      r.where,
       `Person "${id}" has no income. The split is each person's net over the ` +
         `household's, so a person with none is given a zero share and everyone else ` +
         `is asked to fund the whole household.`,
@@ -318,7 +306,6 @@ function readPerson(id: string, r: Reader, problems: Problems): Person | null {
     const label = normaliseLabel(raw);
     if (label === '') {
       problems.add(
-        r.where,
         `"${r.where}.transfer_labels" entry ${i + 1} is empty. An empty label is ` +
           `contained in every string, so it would credit every inbound transfer in the ` +
           `ledger to "${id}".`,
@@ -333,29 +320,44 @@ function readPerson(id: string, r: Reader, problems: Problems): Person | null {
 
 // ── cross-record rules ────────────────────────────────────────────────────
 
+/**
+ * Reported once per pair of envelopes, not once per overlapping matcher.
+ *
+ * Every pair is examined — stopping at the first would leave a file with three
+ * overlaps taking three runs to clean up, which is exactly the one-problem-per-run
+ * behaviour this parser was built to avoid. But a whole-category matcher overlaps
+ * every sub-category matcher beneath it, so reporting each of those separately
+ * would bury one mistake under a dozen lines. The pair is the mistake; the first
+ * overlapping claim is the evidence for it.
+ */
 function checkEnvelopesDoNotOverlap(envelopes: readonly EnvelopeConfig[], problems: Problems): void {
   for (let i = 0; i < envelopes.length; i++) {
     for (let j = i + 1; j < envelopes.length; j++) {
       const a = envelopes[i]!;
       const b = envelopes[j]!;
-      for (const ma of a.matches) {
-        for (const mb of b.matches) {
-          if (!matchersOverlap(ma, mb)) continue;
-          const what =
-            ma.kind === 'category' ? `"${ma.category}"` : `"${ma.category} / ${ma.subCategory}"`;
-          problems.add(
-            `envelopes.${a.id}`,
-            `Envelopes "${a.id}" and "${b.id}" both claim ${what}. Every transaction ` +
-              `belongs to exactly one envelope: two claims on the same spending count ` +
-              `it twice, once in each, and inflate the year by the size of the overlap.`,
-          );
-          return;
-        }
-      }
+      const clash = a.matches
+        .flatMap((ma) => b.matches.map((mb) => [ma, mb] as const))
+        .find(([ma, mb]) => matchersOverlap(ma, mb));
+      if (clash === undefined) continue;
+
+      const [ma] = clash;
+      const what =
+        ma.kind === 'category' ? `"${ma.category}"` : `"${ma.category} / ${ma.subCategory}"`;
+      problems.add(
+        `Envelopes "${a.id}" and "${b.id}" both claim ${what}. Every transaction ` +
+          `belongs to exactly one envelope: two claims on the same spending count ` +
+          `it twice, once in each, and inflate the year by the size of the overlap.`,
+      );
     }
   }
 }
 
+/**
+ * Every colliding pair of labels, not just the first.
+ *
+ * Each one is a distinct edit the user has to make, so reporting one at a time
+ * would cost a run per label.
+ */
 function checkLabelsDoNotCollide(people: readonly Person[], problems: Problems): void {
   for (const person of people) {
     for (const other of people) {
@@ -364,14 +366,12 @@ function checkLabelsDoNotCollide(people: readonly Person[], problems: Problems):
         for (const theirs of other.transferLabels) {
           if (!labelMatches(mine, theirs)) continue;
           problems.add(
-            `people.${person.id}`,
             `"${mine}" attributes to "${person.id}", but "${other.id}" declares ` +
               `"${theirs}", which contains it. Every transfer matching the longer label ` +
               `matches the shorter one too, so those transfers match two people and can ` +
               `be credited to neither — they fall into the unattributed band while ` +
               `looking configured.`,
           );
-          return;
         }
       }
     }
@@ -425,7 +425,6 @@ export function parseConfig(text: string, path: string): Config {
 
   if (bufferTarget !== null && bufferTarget < 0) {
     problems.add(
-      'buffer.target',
       `"buffer.target" is ${formatEur(bufferTarget)}. The buffer is a cushion the ` +
         `account holds, so it cannot be negative — a negative target would reduce ` +
         `every contribution by its size.`,
@@ -434,7 +433,6 @@ export function parseConfig(text: string, path: string): Config {
 
   if (peopleTables !== null && peopleTables.size === 0) {
     problems.add(
-      'people',
       `sluice.toml declares no people. The whole output is "how much should each of ` +
         `us transfer", so there is nobody to compute it for.`,
     );
@@ -444,7 +442,7 @@ export function parseConfig(text: string, path: string): Config {
   checkLabelsDoNotCollide(people, problems);
 
   if (problems.count > 0) {
-    const listed = problems.list.map((p) => `  • ${p.message}`).join('\n');
+    const listed = problems.list.map((message) => `  • ${message}`).join('\n');
     throw new ConfigError(
       `"${path}" has ${problems.count} problem${problems.count === 1 ? '' : 's'}:\n\n` +
         `${listed}\n\n` +

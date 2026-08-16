@@ -16,27 +16,38 @@ import { parseAmount, AmountParseError, type Cents } from '../core/money.ts';
  * into a misleading complaint about the meaning of a value that was never read.
  */
 
-export interface Problem {
-  /** Dotted path into the file, e.g. `envelopes.groceries.estimate`. */
-  readonly where: string;
-  readonly message: string;
-}
-
+/**
+ * Every message locates itself — each one names the dotted path, the envelope or
+ * the person it is about. A separate location field was carried alongside for a
+ * while and rendered nowhere, which is how it was found: structure nothing reads
+ * is structure that will drift away from the thing it claims to describe.
+ */
 export class Problems {
-  private readonly items: Problem[] = [];
+  private readonly items: string[] = [];
 
-  add(where: string, message: string): void {
-    this.items.push({ where, message });
+  add(message: string): void {
+    this.items.push(message);
   }
 
   get count(): number {
     return this.items.length;
   }
 
-  get list(): readonly Problem[] {
+  get list(): readonly string[] {
     return this.items;
   }
 }
+
+/**
+ * Stands for a value the reader has already refused.
+ *
+ * Without it, refusing a value once and returning `null` let the next check
+ * treat the `null` as a *second* fault and record a second, misleading message —
+ * one mistake in the file, two complaints in the report, the later one naming
+ * the wrong problem. That is the cascade this module is built to prevent, so it
+ * has to be prevented here first.
+ */
+const REFUSED = Symbol('refused');
 
 function isTable(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
@@ -71,7 +82,7 @@ export class Reader {
   }
 
   private fail(key: string, message: string): null {
-    this.problems.add(this.path(key), message);
+    this.problems.add(message);
     return null;
   }
 
@@ -83,11 +94,11 @@ export class Reader {
       // Nothing in sluice.toml is a date. An unquoted TOML date becomes a
       // timezone-bearing instant, which reads back a day earlier west of UTC —
       // the exact hazard the rest of the codebase avoids by never using Date.
-      return this.fail(
-        key,
+      this.problems.add(
         `"${this.path(key)}" is a date. Nothing in sluice.toml is a date, and an ` +
           `unquoted one becomes a moment in time rather than text. Put quotes around it.`,
       );
+      return REFUSED;
     }
     return value;
   }
@@ -98,6 +109,7 @@ export class Reader {
 
   string(key: string): string | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) {
       return this.fail(key, `"${this.path(key)}" is missing.`);
     }
@@ -117,6 +129,7 @@ export class Reader {
 
   stringArray(key: string): string[] | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
       return this.fail(key, `"${this.path(key)}" must be a list of quoted strings.`);
@@ -142,6 +155,7 @@ export class Reader {
    */
   money(key: string): Cents | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (typeof value === 'number' || typeof value === 'bigint') {
       return this.fail(
@@ -175,6 +189,7 @@ export class Reader {
 
   integer(key: string, min: number, max: number): number | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (typeof value !== 'number' || !Number.isInteger(value)) {
       return this.fail(key, `"${this.path(key)}" must be a whole number.`);
@@ -187,6 +202,7 @@ export class Reader {
 
   integerArray(key: string): number[] | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (!Array.isArray(value) || value.some((v) => typeof v !== 'number' || !Number.isInteger(v))) {
       return this.fail(key, `"${this.path(key)}" must be a list of whole numbers.`);
@@ -196,6 +212,7 @@ export class Reader {
 
   table(key: string): Reader | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (!isTable(value)) return this.fail(key, `"${this.path(key)}" must be a section.`);
     return new Reader(value, this.path(key), this.problems);
@@ -228,6 +245,7 @@ export class Reader {
   /** `[[people.alice.income]]` — an array of tables. */
   tableArray(key: string): Reader[] | null {
     const value = this.take(key);
+    if (value === REFUSED) return null;
     if (value === undefined) return this.fail(key, `"${this.path(key)}" is missing.`);
     if (!Array.isArray(value) || !value.every(isTable)) {
       return this.fail(key, `"${this.path(key)}" must be a list of sections.`);
@@ -248,7 +266,6 @@ export class Reader {
       if (this.read.has(key)) continue;
       const known = [...this.read].sort().join(', ');
       this.problems.add(
-        this.path(key),
         `"${this.path(key)}" is not a key sluice knows${known === '' ? '' : `. The keys here are: ${known}`}. ` +
           `It is refused rather than ignored, because a misspelt key leaves the one ` +
           `it was meant to set at its default and the figure that comes out is wrong ` +

@@ -458,6 +458,116 @@ describe('parseConfig — reporting', () => {
     expect(message).toMatch(/has 2 problems/);
   });
 
+  it('complains once about a refused value, not twice', () => {
+    // A date was refused and then re-examined by the type check that followed,
+    // which reported it a second time as the wrong kind of fault entirely. One
+    // mistake in the file has to be one line in the report, or the report stops
+    // being a list of things to fix.
+    let message = '';
+    try {
+      parse({
+        people: `
+[people.alice]
+name = 2026-01-01
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+`,
+      });
+    } catch (error) {
+      message = (error as ConfigError).message;
+    }
+    expect(message).toMatch(/Nothing in sluice\.toml is a date/);
+    expect(message).not.toMatch(/must be text/);
+    expect(message).toMatch(/has 1 problem:/);
+  });
+
+  it('reports every overlapping pair of envelopes, not only the first', () => {
+    let message = '';
+    try {
+      parse({
+        envelopes: `
+[envelopes.a]
+name = "A"
+matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "1000.00"
+[envelopes.b]
+name = "B"
+matches = [{ category = "Food", sub_category = "Supermarket" }]
+estimate = "1000.00"
+[envelopes.c]
+name = "C"
+matches = [{ category = "Home", sub_category = "Energy" }]
+estimate = "1000.00"
+[envelopes.d]
+name = "D"
+matches = [{ category = "Home", sub_category = "Energy" }]
+estimate = "1000.00"
+`,
+      });
+    } catch (error) {
+      message = (error as ConfigError).message;
+    }
+    expect(message).toMatch(/"a" and "b"/);
+    expect(message).toMatch(/"c" and "d"/);
+    expect(message).toMatch(/has 2 problems:/);
+  });
+
+  it('reports one overlap per pair of envelopes, not one per claim', () => {
+    // A whole-category matcher overlaps every sub-category matcher beneath it,
+    // so listing each would bury one mistake under a pile of lines.
+    let message = '';
+    try {
+      parse({
+        envelopes: `
+[envelopes.all_food]
+name = "All food"
+matches = [{ category = "Food" }]
+estimate = "1000.00"
+[envelopes.groceries]
+name = "Groceries"
+matches = [
+  { category = "Food", sub_category = "Supermarket" },
+  { category = "Food", sub_category = "Market" },
+  { category = "Food", sub_category = "Bakery" },
+]
+estimate = "1000.00"
+`,
+      });
+    } catch (error) {
+      message = (error as ConfigError).message;
+    }
+    expect(message).toMatch(/has 1 problem:/);
+  });
+
+  it('reports every colliding pair of labels, not only the first', () => {
+    let message = '';
+    try {
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+transfer_labels = ["MARTIN", "DUPONT"]
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+
+[people.bruno]
+name = "Bruno"
+transfer_labels = ["MARTIN BRUNO", "DUPONT B"]
+[[people.bruno.income]]
+label = "Salary"
+monthly = "2450.00"
+`,
+      });
+    } catch (error) {
+      message = (error as ConfigError).message;
+    }
+    expect(message).toMatch(/"MARTIN"/);
+    expect(message).toMatch(/"DUPONT"/);
+    expect(message).toMatch(/has 2 problems:/);
+  });
+
   it('does not complain about the meaning of a value it could not read', () => {
     // A shape problem must not cascade into a domain complaint about a figure
     // that was never parsed — that would send the reader after the wrong thing.

@@ -10,6 +10,10 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 
+# SLUICE_CONFIG_DIR lives here for local dev — never committed, same reason
+# sluice.toml itself never is: it's a path into the household's own machine.
+.env*.local
+
 # Bank exports and household config never live here — they live outside the
 # working tree entirely (see README). These patterns are a second line of
 # defence, not the mechanism.

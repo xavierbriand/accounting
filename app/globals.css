@@ -221,12 +221,18 @@ main {
   overflow-x: auto;
 }
 
-table.income {
+/*
+ * Shared by every data table on the page (.income, .checks, .year) — column-
+ * specific styling (income's .person/.cadence/.share, checks' .pace-over/
+ * .pace-ok) stays on each table's own class, applied alongside .data-table
+ * rather than duplicated into it.
+ */
+.data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
 }
-table.income th {
+.data-table th {
   text-align: left;
   font-weight: 500;
   color: var(--ink-muted);
@@ -236,17 +242,20 @@ table.income th {
   padding: 0 10px 8px 0;
   border-bottom: 1px solid var(--border);
 }
-table.income td {
+.data-table td {
   padding: 9px 10px 9px 0;
   border-bottom: 1px solid var(--border);
-  vertical-align: baseline;
 }
-table.income tr:last-child td {
+.data-table tr:last-child td {
   border-bottom: none;
 }
-table.income td.amount,
-table.income th.amount {
+.data-table td.amount,
+.data-table th.amount {
   text-align: right;
+}
+
+table.income td {
+  vertical-align: baseline;
 }
 table.income .person {
   display: flex;

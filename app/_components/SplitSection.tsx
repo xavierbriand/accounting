@@ -14,7 +14,7 @@ export function SplitSection({ config, plan }: { readonly config: Config; readon
       <p className="deck">Income, net of tax, split proportionally. Recomputed every run — never a stored figure.</p>
 
       <div className="table-scroll">
-        <table className="income">
+        <table className="data-table income">
           <thead>
             <tr>
               <th>Person</th>

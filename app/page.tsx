@@ -1,10 +1,13 @@
+import { monthOf, type Day } from '@/core/dates.ts';
 import { loadConfig, expandHome } from '@/config/load.ts';
 import { loadLedger, type Ledger } from '@/ingest/load.ts';
 import { computePlan, type Plan } from '@/numbers/plan.ts';
+import { monthlySpendTimeline, type MonthlySpend } from '@/numbers/timeline.ts';
 import { todayAsDay } from './_lib/today.ts';
 import { newTrace, emitSpan } from './_lib/telemetry.ts';
 import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
 import { SplitSection } from './_components/SplitSection.tsx';
+import { ConsumptionSection } from './_components/ConsumptionSection.tsx';
 
 // Never statically prerendered: `next.config.ts`'s own comment already says
 // this app re-reads its inputs on every request because a stale render is
@@ -25,6 +28,29 @@ function ingestAttrs(ledger: Ledger): Record<string, string | number | boolean> 
     window_edge_count: r.windowEdge,
     mismatched_count: r.mismatched,
   };
+}
+
+/**
+ * `monthlySpendTimeline` stops at the last month with a real `movement` in
+ * it, which is not necessarily the current one — bank exports lag behind
+ * today more often than not. Left alone, a household that hasn't spent yet
+ * this month would see the chart silently end last month with no sign the
+ * current one even exists. `monthlySpendTimeline` itself stays wall-clock
+ * -free (`src/numbers/` never reads it); this is the edge extending its
+ * result by exactly one point when needed, the same place `todayAsDay()`
+ * itself lives.
+ *
+ * A genuinely empty timeline (no `movement` transactions at all — a fresh
+ * household) is left empty rather than extended: `SpendTrendChart`'s own
+ * "No spending recorded yet" empty state is the honest answer there, not a
+ * synthetic one-point, zero-value chart that looks like real data.
+ */
+function withCurrentMonth(timeline: readonly MonthlySpend[], referenceDay: Day): readonly MonthlySpend[] {
+  if (timeline.length === 0) return timeline;
+  const currentMonth = monthOf(referenceDay);
+  const last = timeline[timeline.length - 1]!;
+  if (last.month >= currentMonth) return timeline;
+  return [...timeline, { month: currentMonth, total: 0 }];
 }
 
 function planAttrs(plan: Plan): Record<string, string | number | boolean> {
@@ -69,6 +95,8 @@ export default async function Page() {
   const plan = computePlan(config, ledger, todayAsDay());
   emitSpan(trace, 'sluice.numbers.compute_plan', planAttrs(plan));
 
+  const timeline = withCurrentMonth(monthlySpendTimeline(ledger), plan.referenceDay);
+
   emitSpan(trace, 'sluice.page.report_displayed', { reference_day: plan.referenceDay });
 
   return (
@@ -80,6 +108,7 @@ export default async function Page() {
 
       <InstalmentStrip config={config} plan={plan} />
       <SplitSection config={config} plan={plan} />
+      <ConsumptionSection plan={plan} timeline={timeline} />
     </main>
   );
 }

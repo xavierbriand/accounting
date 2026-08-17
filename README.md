@@ -20,19 +20,21 @@ v0.2 is being built in steps, each its own pull request. The first version was d
 |---|---|---|
 | 1 | **ingest** — bank exports into one reconciled ledger | merged |
 | 2 | **config** — `sluice.toml`: income, envelopes, goals, buffer | merged |
-| 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks, the envelope generator | in review |
-| 4 | the page — instalment strip and four sections | next |
-| 5 | `CLAUDE.md`, written once there is code to describe | |
+| 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks, the envelope generator | merged |
+| 4 | the page — instalment strip and four sections | merged |
+| 5 | `CLAUDE.md`, written once there is code to describe | next |
 
 ## Running it
 
 ```bash
 npm install
-npm run check      # typecheck and tests
-npm run dev        # the app, on localhost
+npm run check                                     # typecheck and tests
+SLUICE_CONFIG_DIR=~/sluice-private npm run dev     # the app, on localhost
 ```
 
 sluice reads two things and holds nothing: a folder of bank exports, and one configuration file. There is no database and no import step — every run re-reads the files, because a stale render of a household's money is worse than a slow one.
+
+`SLUICE_CONFIG_DIR` points at the folder holding `sluice.toml`; the page refuses to render without it, with a message saying so, rather than guessing a path.
 
 ## Configuration
 

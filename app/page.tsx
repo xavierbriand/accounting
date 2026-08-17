@@ -39,11 +39,17 @@ function ingestAttrs(ledger: Ledger): Record<string, string | number | boolean> 
  * -free (`src/numbers/` never reads it); this is the edge extending its
  * result by exactly one point when needed, the same place `todayAsDay()`
  * itself lives.
+ *
+ * A genuinely empty timeline (no `movement` transactions at all — a fresh
+ * household) is left empty rather than extended: `SpendTrendChart`'s own
+ * "No spending recorded yet" empty state is the honest answer there, not a
+ * synthetic one-point, zero-value chart that looks like real data.
  */
 function withCurrentMonth(timeline: readonly MonthlySpend[], referenceDay: Day): readonly MonthlySpend[] {
+  if (timeline.length === 0) return timeline;
   const currentMonth = monthOf(referenceDay);
-  const last = timeline[timeline.length - 1];
-  if (last !== undefined && last.month >= currentMonth) return timeline;
+  const last = timeline[timeline.length - 1]!;
+  if (last.month >= currentMonth) return timeline;
   return [...timeline, { month: currentMonth, total: 0 }];
 }
 

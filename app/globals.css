@@ -405,6 +405,64 @@ svg.trend .mean-line {
   transform: translateX(-1px);
 }
 
+/* 03 · the check */
+.check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-bottom: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.buffer-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.status-icon {
+  font-size: 12px;
+}
+
+table.checks td {
+  vertical-align: middle;
+}
+table.checks .pace-over {
+  color: var(--serious);
+  font-weight: 500;
+}
+table.checks .pace-ok {
+  color: var(--ink-muted);
+}
+
+.findings {
+  margin-top: 22px;
+}
+.findings h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.findings ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.findings li {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
 /* Error boundary */
 .error-panel {
   max-width: 880px;

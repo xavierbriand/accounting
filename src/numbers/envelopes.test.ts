@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { envelopeFor, outflow, resolveEnvelopes, transactionsFor } from './envelopes.ts';
+import { envelopeFor, envelopeId, envelopeName, outflow, resolveEnvelopes, transactionsFor } from './envelopes.ts';
 import { ledgerOf, numbersConfig, tx } from './__fixtures__/build.ts';
+
+describe('envelopeId', () => {
+  it("is the configured envelope's own id", () => {
+    expect(envelopeId({ kind: 'configured', config: { id: 'groceries', name: 'Groceries', matches: [], estimate: 0, goal: null, seasonal: null } })).toBe('groceries');
+  });
+
+  it("is the derived envelope's category/subCategory id", () => {
+    expect(envelopeId({ kind: 'derived', id: 'Loisirs / Cinema', category: 'Loisirs', subCategory: 'Cinema' })).toBe(
+      'Loisirs / Cinema',
+    );
+  });
+});
+
+describe('envelopeName', () => {
+  it("is the configured envelope's own name, distinct from its id", () => {
+    expect(envelopeName({ kind: 'configured', config: { id: 'groceries', name: 'Groceries', matches: [], estimate: 0, goal: null, seasonal: null } })).toBe('Groceries');
+  });
+
+  it("falls back to the derived envelope's id, since it has no other name", () => {
+    expect(envelopeName({ kind: 'derived', id: 'Loisirs / Cinema', category: 'Loisirs', subCategory: 'Cinema' })).toBe(
+      'Loisirs / Cinema',
+    );
+  });
+});
 
 describe('resolveEnvelopes', () => {
   it('resolves a pair the config claims to its configured envelope, and an uncovered one to a derived envelope', () => {

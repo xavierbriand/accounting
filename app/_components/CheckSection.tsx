@@ -16,6 +16,30 @@ function formatDay(day: Day): string {
   return `${dayOfMonth(day)} ${formatMonthShort(monthOf(day))} ${yearOf(day)}`;
 }
 
+/**
+ * A stable React key derived from each warning's own identifying fields —
+ * `PlanWarning` carries no single id field, and the array index isn't
+ * stable across renders where the underlying data (and so the list) can
+ * change. `matcher-matches-nothing` needs both the envelope id and the
+ * matcher itself: one envelope can have several matchers, each producing
+ * its own warning if it never fires.
+ */
+function warningKey(warning: PlanWarning): string {
+  switch (warning.kind) {
+    case 'matcher-matches-nothing': {
+      const m = warning.matcher;
+      const matcherKey = m.kind === 'category' ? m.category : `${m.category}/${m.subCategory}`;
+      return `matcher-matches-nothing:${warning.envelopeId}:${matcherKey}`;
+    }
+    case 'label-matches-nothing':
+      return `label-matches-nothing:${warning.personId}:${warning.label}`;
+    case 'transfer-matches-two-people':
+      return `transfer-matches-two-people:${warning.transaction.id}`;
+    case 'uncategorised-rows':
+      return 'uncategorised-rows';
+  }
+}
+
 function describeWarning(warning: PlanWarning): string {
   switch (warning.kind) {
     case 'matcher-matches-nothing':
@@ -78,8 +102,8 @@ export function CheckSection({ config, plan }: { readonly config: Config; readon
         <div className="findings">
           <h3>Findings</h3>
           <ul>
-            {warnings.map((w, i) => (
-              <li key={i}>{describeWarning(w)}</li>
+            {warnings.map((w) => (
+              <li key={warningKey(w)}>{describeWarning(w)}</li>
             ))}
           </ul>
         </div>

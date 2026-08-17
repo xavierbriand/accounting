@@ -22,8 +22,8 @@ const BAR_WIDTH = 22;
 const BAR_GAP = 16;
 const CHART_HEIGHT = 140;
 const SEGMENT_GAP = 2; // the surface gap between stacked segments, per the dataviz skill
-const LABEL_ROOM = 20; // above the tallest bar, for the total label
 const AXIS_ROOM = 26; // below the baseline, for the month label
+const LEFT_AXIS_WIDTH = 56; // for the Y-axis tick labels
 
 interface Segment {
   readonly height: number;
@@ -32,18 +32,40 @@ interface Segment {
   readonly label: string;
 }
 
+/** Rounds up to a "clean" step (1, 2, or 5 × a power of ten) for a Y-axis tick, the same rule the dataviz skill asks for. */
+function niceMax(value: number): number {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const steps = [1, 2, 5, 10];
+  const step = steps.find((s) => s * magnitude >= value) ?? 10;
+  return step * magnitude;
+}
+
 export function ContributionsChart({ months, people, referenceDay }: ContributionsChartProps) {
   if (months.length === 0) {
     return <p className="chart-empty">No contributions recorded yet.</p>;
   }
 
-  const maxTotal = Math.max(...months.map((m) => m.total), 1);
-  const scale = (cents: Cents): number => (cents / maxTotal) * CHART_HEIGHT;
+  // Rounded up to a clean tick value, not the raw max — a raw max would put
+  // the tallest bar's label at an arbitrary figure nobody would round-trip
+  // by eye, and every other bar would read off an axis with no clean anchor.
+  const axisMax = niceMax(Math.max(...months.map((m) => m.total), 1));
+  const scale = (cents: Cents): number => (cents / axisMax) * CHART_HEIGHT;
 
   const currentMonth = monthOf(referenceDay);
-  const width = months.length * (BAR_WIDTH + BAR_GAP) + BAR_GAP;
-  const svgHeight = CHART_HEIGHT + LABEL_ROOM + AXIS_ROOM;
-  const baseline = LABEL_ROOM + CHART_HEIGHT;
+  const chartWidth = months.length * (BAR_WIDTH + BAR_GAP) + BAR_GAP;
+  const width = LEFT_AXIS_WIDTH + chartWidth;
+  const svgHeight = CHART_HEIGHT + AXIS_ROOM;
+  const baseline = CHART_HEIGHT;
+
+  // Never a number on every point (the dataviz skill's own rule) — with up
+  // to 18+ months of real bars, a total label on each one collides with its
+  // neighbours long before it becomes readable. Two gridlines carry the
+  // scale instead; the exact figure per month lives in the native tooltip.
+  const gridlines = [0.5, 1].map((fraction) => ({
+    y: baseline - CHART_HEIGHT * fraction,
+    value: axisMax * fraction,
+  }));
 
   return (
     <div className="chart-wrap">
@@ -61,9 +83,18 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
         role="img"
         aria-label="Contributions by month, stacked by sender"
       >
-        <line className="axis-line" x1={0} y1={baseline} x2={width} y2={baseline} />
+        {gridlines.map(({ y, value }) => (
+          <g key={value}>
+            <line className="grid-line" x1={LEFT_AXIS_WIDTH} y1={y} x2={width} y2={y} />
+            <text className="axis-tick-label" x={LEFT_AXIS_WIDTH - 8} y={y} textAnchor="end" dominantBaseline="middle">
+              {formatEurCompact(value)}
+            </text>
+          </g>
+        ))}
+        <line className="axis-line" x1={LEFT_AXIS_WIDTH} y1={baseline} x2={width} y2={baseline} />
+
         {months.map((month, i) => {
-          const x = BAR_GAP + i * (BAR_WIDTH + BAR_GAP);
+          const x = LEFT_AXIS_WIDTH + BAR_GAP + i * (BAR_WIDTH + BAR_GAP);
           const isInProgress = month.month === currentMonth;
 
           const segments: Segment[] = [];
@@ -86,10 +117,9 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
             });
           }
 
-          const totalHeight = segments.reduce((a, s) => a + s.height, 0) + SEGMENT_GAP * Math.max(segments.length - 1, 0);
-          const titleText = `${formatMonthShort(month.month)}${isInProgress ? ' (in progress)' : ''} — ${
-            segments.length > 0 ? segments.map((s) => s.label).join(', ') : 'nothing recorded'
-          }`;
+          const titleText = `${formatMonthShort(month.month)}${isInProgress ? ' (in progress)' : ''} — ${formatEur(
+            month.total,
+          )} total${segments.length > 0 ? ` (${segments.map((s) => s.label).join(', ')})` : ''}`;
 
           let cursorTop = baseline;
           const rects = segments.map((seg, idx) => {
@@ -115,16 +145,6 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
             <g key={month.month} opacity={isInProgress ? 0.6 : 1}>
               <title>{titleText}</title>
               {rects}
-              {month.total > 0 && (
-                <text
-                  className="bar-total-label"
-                  x={x + BAR_WIDTH / 2}
-                  y={baseline - totalHeight - 8}
-                  textAnchor="middle"
-                >
-                  {formatEurCompact(month.total)}
-                </text>
-              )}
               <text className="month-label" x={x + BAR_WIDTH / 2} y={svgHeight - 8} textAnchor="middle">
                 {formatMonthShort(month.month)}
                 {isInProgress ? '*' : ''}

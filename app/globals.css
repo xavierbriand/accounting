@@ -216,6 +216,11 @@ main {
   max-width: 60ch;
 }
 
+/* Wide content scrolls in its own box — the page body never scrolls sideways. */
+.table-scroll {
+  overflow-x: auto;
+}
+
 table.income {
   width: 100%;
   border-collapse: collapse;
@@ -288,11 +293,15 @@ svg.contrib .axis-line {
   stroke: var(--axis);
   stroke-width: 1;
 }
-svg.contrib .bar-total-label {
+svg.contrib .grid-line {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+svg.contrib .axis-tick-label {
   font-family: var(--font-num);
-  font-size: 11px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
-  fill: var(--ink-secondary);
+  fill: var(--ink-muted);
 }
 svg.contrib .month-label {
   font-size: 11px;

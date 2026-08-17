@@ -1,7 +1,8 @@
+import { monthOf, type Day } from '@/core/dates.ts';
 import { loadConfig, expandHome } from '@/config/load.ts';
 import { loadLedger, type Ledger } from '@/ingest/load.ts';
 import { computePlan, type Plan } from '@/numbers/plan.ts';
-import { monthlySpendTimeline } from '@/numbers/timeline.ts';
+import { monthlySpendTimeline, type MonthlySpend } from '@/numbers/timeline.ts';
 import { todayAsDay } from './_lib/today.ts';
 import { newTrace, emitSpan } from './_lib/telemetry.ts';
 import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
@@ -27,6 +28,23 @@ function ingestAttrs(ledger: Ledger): Record<string, string | number | boolean> 
     window_edge_count: r.windowEdge,
     mismatched_count: r.mismatched,
   };
+}
+
+/**
+ * `monthlySpendTimeline` stops at the last month with a real `movement` in
+ * it, which is not necessarily the current one — bank exports lag behind
+ * today more often than not. Left alone, a household that hasn't spent yet
+ * this month would see the chart silently end last month with no sign the
+ * current one even exists. `monthlySpendTimeline` itself stays wall-clock
+ * -free (`src/numbers/` never reads it); this is the edge extending its
+ * result by exactly one point when needed, the same place `todayAsDay()`
+ * itself lives.
+ */
+function withCurrentMonth(timeline: readonly MonthlySpend[], referenceDay: Day): readonly MonthlySpend[] {
+  const currentMonth = monthOf(referenceDay);
+  const last = timeline[timeline.length - 1];
+  if (last !== undefined && last.month >= currentMonth) return timeline;
+  return [...timeline, { month: currentMonth, total: 0 }];
 }
 
 function planAttrs(plan: Plan): Record<string, string | number | boolean> {
@@ -71,7 +89,7 @@ export default async function Page() {
   const plan = computePlan(config, ledger, todayAsDay());
   emitSpan(trace, 'sluice.numbers.compute_plan', planAttrs(plan));
 
-  const timeline = monthlySpendTimeline(ledger);
+  const timeline = withCurrentMonth(monthlySpendTimeline(ledger), plan.referenceDay);
 
   emitSpan(trace, 'sluice.page.report_displayed', { reference_day: plan.referenceDay });
 

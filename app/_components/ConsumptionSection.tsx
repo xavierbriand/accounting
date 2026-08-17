@@ -15,7 +15,7 @@ export function ConsumptionSection({ plan, timeline }: ConsumptionSectionProps) 
       <h2>02 · What we spent</h2>
       <p className="deck">Total spend by month, against its own average, and every configured envelope's pace.</p>
 
-      <SpendTrendChart months={timeline} />
+      <SpendTrendChart months={timeline} referenceDay={plan.referenceDay} />
       <EnvelopeMeters consumption={plan.consumption} />
     </section>
   );

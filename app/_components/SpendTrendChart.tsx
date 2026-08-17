@@ -1,4 +1,4 @@
-import { formatMonthShort, formatMonthLong } from '@/core/dates.ts';
+import { formatMonthShort, formatMonthLong, monthOf, type Day } from '@/core/dates.ts';
 import { formatEur, formatEurCompact, sum, type Cents } from '@/core/money.ts';
 import type { MonthlySpend } from '@/numbers/timeline.ts';
 import { niceMax } from '../_lib/chart.ts';
@@ -6,6 +6,8 @@ import { niceMax } from '../_lib/chart.ts';
 export interface SpendTrendChartProps {
   /** `monthlySpendTimeline(ledger)` — every month the ledger has, ascending. */
   readonly months: readonly MonthlySpend[];
+  /** Marks the in-progress month distinctly, by actual calendar month rather than array position — same role as ContributionsChart's prop. */
+  readonly referenceDay: Day;
 }
 
 const CHART_HEIGHT = 140;
@@ -25,12 +27,22 @@ const MARKER_R = 4;
  * line's own y-position collides with whichever data point happens to sit
  * near the mean, at any number of months — a fixed caption never does.
  */
-export function SpendTrendChart({ months }: SpendTrendChartProps) {
+export function SpendTrendChart({ months, referenceDay }: SpendTrendChartProps) {
   if (months.length === 0) {
     return <p className="chart-empty">No spending recorded yet.</p>;
   }
 
-  const mean = Math.round(sum(months.map((m) => m.total)) / months.length);
+  const currentMonth = monthOf(referenceDay);
+
+  // The in-progress month reads lower than a finished one by construction —
+  // averaging it in at full weight would silently pull "average X / month"
+  // down every time this renders mid-month. Excluded from the mean, not
+  // just dimmed in the line: `completeMonths` falls back to `months` only
+  // for the degenerate case of a ledger that has nothing but its first,
+  // in-progress month.
+  const completeMonths = months.filter((m) => m.month !== currentMonth);
+  const meanSource = completeMonths.length > 0 ? completeMonths : months;
+  const mean = Math.round(sum(meanSource.map((m) => m.total)) / meanSource.length);
   const axisMax = niceMax(Math.max(...months.map((m) => m.total), mean, 1));
   const scale = (cents: Cents): number => (cents / axisMax) * CHART_HEIGHT;
 
@@ -53,7 +65,6 @@ export function SpendTrendChart({ months }: SpendTrendChartProps) {
   const points = months.map((month, i) => ({ x: xFor(i), y: yFor(month.total), month }));
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
   const meanY = yFor(mean);
-  const lastIndex = months.length - 1;
 
   return (
     <div className="chart-wrap">
@@ -81,8 +92,8 @@ export function SpendTrendChart({ months }: SpendTrendChartProps) {
 
         <path className="trend-line" d={linePath} fill="none" />
 
-        {points.map((p, i) => {
-          const isPartial = i === lastIndex;
+        {points.map((p) => {
+          const isPartial = p.month.month === currentMonth;
           const titleText = `${formatMonthLong(p.month.month)}${isPartial ? ' (in progress)' : ''} — ${formatEur(
             p.month.total,
           )}`;
@@ -98,9 +109,10 @@ export function SpendTrendChart({ months }: SpendTrendChartProps) {
           );
         })}
       </svg>
-      <p className="chart-note">
-        dashed line — average {formatEurCompact(mean)} / month · * month in progress, not yet a complete data point
-      </p>
+      <p className="chart-note">dashed line — average {formatEurCompact(mean)} / month</p>
+      {months.some((m) => m.month === currentMonth) && (
+        <p className="chart-note">* month in progress — not yet a complete data point</p>
+      )}
     </div>
   );
 }

@@ -463,6 +463,13 @@ table.checks .pace-ok {
   color: var(--ink-secondary);
 }
 
+/* 04 · envelopes for next year — .year has no rules of its own; .data-table covers all of it. */
+.envelope-id {
+  font-family: var(--font-num);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
 /* Error boundary */
 .error-panel {
   max-width: 880px;

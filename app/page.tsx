@@ -9,6 +9,7 @@ import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
 import { SplitSection } from './_components/SplitSection.tsx';
 import { ConsumptionSection } from './_components/ConsumptionSection.tsx';
 import { CheckSection } from './_components/CheckSection.tsx';
+import { NextYearSection } from './_components/NextYearSection.tsx';
 
 // Never statically prerendered: `next.config.ts`'s own comment already says
 // this app re-reads its inputs on every request because a stale render is
@@ -111,6 +112,7 @@ export default async function Page() {
       <SplitSection config={config} plan={plan} />
       <ConsumptionSection plan={plan} timeline={timeline} />
       <CheckSection config={config} plan={plan} />
+      <NextYearSection plan={plan} />
     </main>
   );
 }

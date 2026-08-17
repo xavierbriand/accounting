@@ -44,7 +44,7 @@ export function computePlan(config: Config, ledger: Ledger, referenceDay: Day): 
 
   const shares = computeShares(config.people, monthlyRequirement);
   const contributions = contributionsByMonth(attributeContributions(config, ledger));
-  const check = checkPlan(config, ledger, consumption, referenceDay);
+  const check = checkPlan(config, ledger, consumption, shares, referenceDay);
   const warnings = auditPlan(config, ledger);
 
   return { referenceDay, shares, contributions, consumption, check, warnings };

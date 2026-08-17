@@ -19,7 +19,13 @@ function describeWarning(warning: PlanWarning): string {
     case 'transfer-matches-two-people':
       return `Transfer "${warning.transaction.label}" (${formatEur(warning.transaction.amount)}, ${warning.transaction.occurredOn}) matches ${warning.people.map((p) => p.name).join(' and ')} at once — not credited to anyone.`;
     case 'uncategorised-rows':
-      return `${warning.count} row${warning.count === 1 ? '' : 's'} still uncategorised, totalling ${formatEur(warning.total)}.`;
+      // `warning.total` sums both uncategorised-outgoing (negative) and
+      // uncategorised-incoming (positive) rows — a real net, not a
+      // magnitude. "Totalling X" would read as "X of unfiled spend," which
+      // overstates or understates the true unfiled volume whenever both
+      // kinds are present and partly offset. "Net" says plainly that the
+      // two can cancel.
+      return `${warning.count} row${warning.count === 1 ? '' : 's'} still uncategorised — net ${formatEur(warning.total)} (outgoing and incoming both count toward this figure).`;
   }
 }
 

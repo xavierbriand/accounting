@@ -22,8 +22,26 @@ export type ResolvedEnvelope =
   | { readonly kind: 'configured'; readonly config: EnvelopeConfig }
   | { readonly kind: 'derived'; readonly id: string; readonly category: string; readonly subCategory: string };
 
-function idOf(envelope: ResolvedEnvelope): string {
+/**
+ * The id every consumer identifies this envelope by — a configured
+ * envelope's own `id`, or a derived one's `category / subCategory` pair.
+ * Exported so `app/_components/` reads an envelope's id in exactly one
+ * place, rather than reimplementing the same two-branch check per
+ * component (the same "no third copy" reasoning `funding.ts`'s `compare()`
+ * is exported for).
+ */
+export function envelopeId(envelope: ResolvedEnvelope): string {
   return envelope.kind === 'configured' ? envelope.config.id : envelope.id;
+}
+
+/**
+ * The name a reader sees — a configured envelope's own `name`, or a
+ * derived one's id, which is the only name it has (its `category /
+ * subCategory` pair, already human-readable). Exported for the same
+ * reason `envelopeId` is.
+ */
+export function envelopeName(envelope: ResolvedEnvelope): string {
+  return envelope.kind === 'configured' ? envelope.config.name : envelope.id;
 }
 
 /**
@@ -73,8 +91,8 @@ export function resolveEnvelopes(config: Config, ledger: Ledger): readonly Resol
   // agree between two machines (or two Node builds) — precisely the
   // opposite of the deterministic order this function promises.
   return [...configured, ...derived].sort((a, b) => {
-    const idA = idOf(a);
-    const idB = idOf(b);
+    const idA = envelopeId(a);
+    const idB = envelopeId(b);
     return idA < idB ? -1 : idA > idB ? 1 : 0;
   });
 }

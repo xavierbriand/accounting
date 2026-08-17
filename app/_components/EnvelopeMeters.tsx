@@ -74,7 +74,15 @@ export function EnvelopeMeters({ consumption }: EnvelopeMetersProps) {
                 {formatEur(row.spent)} / {formatEur(row.estimate)}
               </span>
             </div>
-            <div className="meter-track">
+            <div
+              className="meter-track"
+              role="meter"
+              aria-label={row.name}
+              aria-valuenow={row.spent}
+              aria-valuemin={0}
+              aria-valuemax={Math.max(row.estimate, row.spent)}
+              aria-valuetext={`${formatEur(row.spent)} spent of ${formatEur(row.estimate)} estimated`}
+            >
               <div
                 className={overflow ? 'meter-fill meter-fill-over' : 'meter-fill'}
                 style={{ width: `${fillPct}%` }}

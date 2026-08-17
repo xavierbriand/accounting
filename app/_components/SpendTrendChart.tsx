@@ -57,9 +57,16 @@ export function SpendTrendChart({ months, referenceDay }: SpendTrendChartProps) 
   // Same "never a number on every point" rule as ContributionsChart: two
   // gridlines carry the scale, the exact figure per month lives in the
   // native tooltip.
+  //
+  // `value` rounded to a whole cent, keyed by `fraction` not `value` — same
+  // fix as ContributionsChart's own gridlines: `axisMax * fraction` is only
+  // fractional at a very small `axisMax` (1 or 5), but at that size the
+  // rounded 50%/100% values can collide, and `fraction` (0.5, 1) stays
+  // unique where the rounded value doesn't.
   const gridlines = [0.5, 1].map((fraction) => ({
+    fraction,
     y: baseline - CHART_HEIGHT * fraction,
-    value: axisMax * fraction,
+    value: Math.round(axisMax * fraction),
   }));
 
   const points = months.map((month, i) => ({ x: xFor(i), y: yFor(month.total), month }));
@@ -76,8 +83,8 @@ export function SpendTrendChart({ months, referenceDay }: SpendTrendChartProps) 
         role="img"
         aria-label="Total spend by month, against its own average"
       >
-        {gridlines.map(({ y, value }) => (
-          <g key={value}>
+        {gridlines.map(({ fraction, y, value }) => (
+          <g key={fraction}>
             <line className="grid-line" x1={LEFT_AXIS_WIDTH} y1={y} x2={width} y2={y} />
             <text className="axis-tick-label" x={LEFT_AXIS_WIDTH - 8} y={y} textAnchor="end" dominantBaseline="middle">
               {formatEurCompact(value)}

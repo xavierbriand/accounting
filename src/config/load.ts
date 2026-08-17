@@ -31,8 +31,12 @@ export class ConfigNotFoundError extends Error {
   }
 }
 
-/** A leading `~/` is the household's home directory. */
-function expandHome(path: string): string {
+/**
+ * A leading `~/` is the household's home directory. Exported: `app/page.tsx`
+ * expands `SLUICE_CONFIG_DIR` with this same function, so a `~/` there means
+ * exactly what it means in `sluice.toml` — one rule, not two that could drift.
+ */
+export function expandHome(path: string): string {
   if (path === '~') return homedir();
   if (path.startsWith('~/')) return join(homedir(), path.slice(2));
   return path;

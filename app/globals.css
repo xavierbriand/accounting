@@ -120,3 +120,202 @@ body {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
+
+/* --- step 4: the page --- */
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.page-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.page-header .as-of {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* Instalment strip: a KPI row, one stat tile per person. */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 2px;
+  background: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.stat-tile {
+  background: var(--surface-raised);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stat-tile-label {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stat-tile-value {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.stat-tile-sub {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+.swatch-muted {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  background: var(--ink-muted);
+  opacity: 0.55;
+}
+
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px 24px;
+}
+.card > h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.card > .deck {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  max-width: 60ch;
+}
+
+table.income {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+table.income th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 10px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+table.income td {
+  padding: 9px 10px 9px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: baseline;
+}
+table.income tr:last-child td {
+  border-bottom: none;
+}
+table.income td.amount,
+table.income th.amount {
+  text-align: right;
+}
+table.income .person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+table.income .cadence {
+  color: var(--ink-muted);
+}
+table.income .share {
+  color: var(--ink-secondary);
+}
+
+.chart-wrap {
+  margin-top: 22px;
+}
+.chart-legend {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+.chart-legend .legend-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-empty,
+.chart-note {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.chart-note {
+  margin: 8px 0 0;
+}
+
+svg.contrib text {
+  font-family: var(--font-sans);
+  fill: var(--ink-muted);
+}
+svg.contrib .axis-line {
+  stroke: var(--axis);
+  stroke-width: 1;
+}
+svg.contrib .bar-total-label {
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink-secondary);
+}
+svg.contrib .month-label {
+  font-size: 11px;
+}
+
+/* Error boundary */
+.error-panel {
+  max-width: 880px;
+  margin: 64px auto;
+  padding: 24px 24px;
+  border: 1px solid var(--critical);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.error-panel h1 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--critical);
+}
+.error-panel pre {
+  white-space: pre-wrap;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  margin: 0;
+}

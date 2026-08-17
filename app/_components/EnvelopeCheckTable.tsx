@@ -1,17 +1,10 @@
 import { formatEur } from '@/core/money.ts';
+import { envelopeId, envelopeName } from '@/numbers/envelopes.ts';
 import type { EnvelopeCheck, GoalStatus } from '@/numbers/checks.ts';
 import { StatusBadge, type StatusTone } from './StatusBadge.tsx';
 
 export interface EnvelopeCheckTableProps {
   readonly envelopes: readonly EnvelopeCheck[];
-}
-
-function idOf(envelope: EnvelopeCheck['envelope']): string {
-  return envelope.kind === 'configured' ? envelope.config.id : envelope.id;
-}
-
-function nameOf(envelope: EnvelopeCheck['envelope']): string {
-  return envelope.kind === 'configured' ? envelope.config.name : envelope.id;
 }
 
 function goalBadge(status: GoalStatus): { readonly tone: StatusTone; readonly icon: string; readonly label: string } {
@@ -44,7 +37,7 @@ export function EnvelopeCheckTable({ envelopes }: EnvelopeCheckTableProps) {
 
   return (
     <div className="table-scroll">
-      <table className="checks">
+      <table className="data-table checks">
         <thead>
           <tr>
             <th>Envelope</th>
@@ -57,8 +50,8 @@ export function EnvelopeCheckTable({ envelopes }: EnvelopeCheckTableProps) {
           {rows.map((c) => {
             const badge = goalBadge(c.goalStatus);
             return (
-              <tr key={idOf(c.envelope)}>
-                <td>{nameOf(c.envelope)}</td>
+              <tr key={envelopeId(c.envelope)}>
+                <td>{envelopeName(c.envelope)}</td>
                 <td className={c.pastPace ? 'pace-over' : 'pace-ok'}>{c.pastPace ? 'Over' : '—'}</td>
                 <td>
                   <StatusBadge tone={badge.tone} icon={badge.icon} label={badge.label} />

@@ -1,3 +1,4 @@
+import { dayOfMonth, formatMonthShort, monthOf, yearOf, type Day } from '@/core/dates.ts';
 import { formatEur } from '@/core/money.ts';
 import type { Config, EnvelopeMatcher } from '@/config/load.ts';
 import type { Plan } from '@/numbers/plan.ts';
@@ -10,6 +11,11 @@ function describeMatcher(matcher: EnvelopeMatcher): string {
   return matcher.kind === 'category' ? `"${matcher.category}"` : `"${matcher.category} / ${matcher.subCategory}"`;
 }
 
+/** "24 Jan 2026" — every other date-like figure on the page is formatted for humans; a findings sentence shouldn't be the one place a raw ISO string shows through. */
+function formatDay(day: Day): string {
+  return `${dayOfMonth(day)} ${formatMonthShort(monthOf(day))} ${yearOf(day)}`;
+}
+
 function describeWarning(warning: PlanWarning): string {
   switch (warning.kind) {
     case 'matcher-matches-nothing':
@@ -17,7 +23,7 @@ function describeWarning(warning: PlanWarning): string {
     case 'label-matches-nothing':
       return `${warning.personId}: transfer label "${warning.label}" never matches a real inbound transfer.`;
     case 'transfer-matches-two-people':
-      return `Transfer "${warning.transaction.label}" (${formatEur(warning.transaction.amount)}, ${warning.transaction.occurredOn}) matches ${warning.people.map((p) => p.name).join(' and ')} at once — not credited to anyone.`;
+      return `Transfer "${warning.transaction.label}" (${formatEur(warning.transaction.amount)}, ${formatDay(warning.transaction.occurredOn)}) matches ${warning.people.map((p) => p.name).join(' and ')} at once — not credited to anyone.`;
     case 'uncategorised-rows':
       // `warning.total` sums both uncategorised-outgoing (negative) and
       // uncategorised-incoming (positive) rows — a real net, not a

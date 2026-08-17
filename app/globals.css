@@ -431,32 +431,8 @@ svg.trend .mean-line {
   font-size: 12px;
 }
 
-table.checks {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
-table.checks th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--ink-muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 0 10px 8px 0;
-  border-bottom: 1px solid var(--border);
-}
 table.checks td {
-  padding: 9px 10px 9px 0;
-  border-bottom: 1px solid var(--border);
   vertical-align: middle;
-}
-table.checks tr:last-child td {
-  border-bottom: none;
-}
-table.checks td.amount,
-table.checks th.amount {
-  text-align: right;
 }
 table.checks .pace-over {
   color: var(--serious);

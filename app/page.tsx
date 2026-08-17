@@ -6,6 +6,15 @@ import { newTrace, emitSpan } from './_lib/telemetry.ts';
 import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
 import { SplitSection } from './_components/SplitSection.tsx';
 
+// Never statically prerendered: `next.config.ts`'s own comment already says
+// this app re-reads its inputs on every request because a stale render is
+// worse than a slow one. Without this, `next build` tries to prerender "/"
+// once at build time — executing this component with no SLUICE_CONFIG_DIR
+// available and no exports to read — and fails the build for the wrong
+// reason (a missing env var) while quietly implying the opposite of what
+// this app actually promises.
+export const dynamic = 'force-dynamic';
+
 function ingestAttrs(ledger: Ledger): Record<string, string | number | boolean> {
   const r = ledger.reconciliation;
   return {

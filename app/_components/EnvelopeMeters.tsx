@@ -77,9 +77,9 @@ function MeterRowView({ row }: { readonly row: MeterRow }) {
         <div className="meter-mark meter-mark-pace" style={{ left: `${pacePct}%` }} />
         {goalPct !== null && <div className="meter-mark meter-mark-goal" style={{ left: `${goalPct}%` }} />}
       </div>
-      <div className="meter-tooltip" role="tooltip">
-        <div className="meter-tooltip-title">{row.name}</div>
-        <dl className="meter-tooltip-figures">
+      <div className="tooltip-box" role="tooltip">
+        <div className="tooltip-title">{row.name}</div>
+        <dl className="tooltip-figures">
           <dt>Spent</dt>
           <dd className="num">{formatEur(row.spent)}</dd>
           <dt>Estimate</dt>
@@ -93,7 +93,7 @@ function MeterRowView({ row }: { readonly row: MeterRow }) {
             </>
           )}
         </dl>
-        <p className="meter-tooltip-note">
+        <p className="tooltip-note">
           {overEstimate
             ? `${formatEur(row.spent - row.estimate)} over the estimate (striped).`
             : `${formatEur(row.estimate - row.spent)} left in the estimate.`}

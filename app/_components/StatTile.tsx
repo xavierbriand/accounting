@@ -1,4 +1,4 @@
-import { formatEur, type Cents } from '@/core/money.ts';
+import { formatEur, formatEurSigned, type Cents } from '@/core/money.ts';
 
 /**
  * A headline number, not a column: proportional figures, not `.num`
@@ -12,16 +12,26 @@ export interface StatTileProps {
   /** A CSS colour, e.g. `'var(--series-1)'` — identity for the label, never for the value text itself. */
   readonly seriesColor?: string;
   readonly sub?: string;
+  /**
+   * Renders with an explicit sign (`+512,00 €`/`-512,00 €`) instead of
+   * accounting notation — for a figure like drift, where positive and
+   * negative are two different directions to read, not a shortfall to
+   * parenthesise. No colour is implied by the sign either way: the domain
+   * layer names no good/bad threshold for a value like this, so the tile
+   * doesn't invent one.
+   */
+  readonly signed?: boolean;
 }
 
-export function StatTile({ label, value, seriesColor, sub }: StatTileProps) {
+export function StatTile({ label, value, seriesColor, sub, signed }: StatTileProps) {
+  const text = signed === true ? (value > 0 ? `+${formatEurSigned(value)}` : formatEurSigned(value)) : formatEur(value);
   return (
     <div className="stat-tile">
       <span className="stat-tile-label">
         {seriesColor !== undefined && <span className="swatch" style={{ background: seriesColor }} />}
         {label}
       </span>
-      <span className="stat-tile-value">{formatEur(value)}</span>
+      <span className="stat-tile-value">{text}</span>
       {sub !== undefined && <span className="stat-tile-sub">{sub}</span>}
     </div>
   );

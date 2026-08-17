@@ -8,6 +8,7 @@ import { newTrace, emitSpan } from './_lib/telemetry.ts';
 import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
 import { SplitSection } from './_components/SplitSection.tsx';
 import { ConsumptionSection } from './_components/ConsumptionSection.tsx';
+import { CheckSection } from './_components/CheckSection.tsx';
 
 // Never statically prerendered: `next.config.ts`'s own comment already says
 // this app re-reads its inputs on every request because a stale render is
@@ -109,6 +110,7 @@ export default async function Page() {
       <InstalmentStrip config={config} plan={plan} />
       <SplitSection config={config} plan={plan} />
       <ConsumptionSection plan={plan} timeline={timeline} />
+      <CheckSection config={config} plan={plan} />
     </main>
   );
 }

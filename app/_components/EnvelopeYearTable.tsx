@@ -1,16 +1,9 @@
 import { formatEur } from '@/core/money.ts';
+import { envelopeId, envelopeName } from '@/numbers/envelopes.ts';
 import type { EnvelopeConsumption } from '@/numbers/consumption.ts';
 
 export interface EnvelopeYearTableProps {
   readonly consumption: readonly EnvelopeConsumption[];
-}
-
-function idOf(envelope: EnvelopeConsumption['envelope']): string {
-  return envelope.kind === 'configured' ? envelope.config.id : envelope.id;
-}
-
-function nameOf(envelope: EnvelopeConsumption['envelope']): string {
-  return envelope.kind === 'configured' ? envelope.config.name : envelope.id;
 }
 
 /**
@@ -29,7 +22,7 @@ function nameOf(envelope: EnvelopeConsumption['envelope']): string {
 export function EnvelopeYearTable({ consumption }: EnvelopeYearTableProps) {
   return (
     <div className="table-scroll">
-      <table className="year">
+      <table className="data-table year">
         <thead>
           <tr>
             <th>Envelope</th>
@@ -40,8 +33,8 @@ export function EnvelopeYearTable({ consumption }: EnvelopeYearTableProps) {
         </thead>
         <tbody>
           {consumption.map((c) => (
-            <tr key={idOf(c.envelope)}>
-              <td>{nameOf(c.envelope)}</td>
+            <tr key={envelopeId(c.envelope)}>
+              <td>{envelopeName(c.envelope)}</td>
               <td className="amount num">{formatEur(c.priorYearActual)}</td>
               <td className="amount num">
                 {c.envelope.kind === 'configured' ? formatEur(c.envelope.config.estimate) : '—'}

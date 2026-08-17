@@ -463,33 +463,7 @@ table.checks .pace-ok {
   color: var(--ink-secondary);
 }
 
-/* 04 · envelopes for next year */
-table.year {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
-table.year th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--ink-muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 0 10px 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-table.year td {
-  padding: 9px 10px 9px 0;
-  border-bottom: 1px solid var(--border);
-}
-table.year tr:last-child td {
-  border-bottom: none;
-}
-table.year td.amount,
-table.year th.amount {
-  text-align: right;
-}
+/* 04 · envelopes for next year — .year has no rules of its own; .data-table covers all of it. */
 
 /* Error boundary */
 .error-panel {

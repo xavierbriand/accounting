@@ -13,6 +13,12 @@ export interface EnvelopeYearTableProps {
  * only what it actually cost; a configured one with no `goal` set shows
  * `—` there too, same as `EnvelopeCheckTable`'s "no goal" case.
  *
+ * A configured envelope's own `[envelopes.<id>]` id is shown as a muted
+ * sub-line under its name — this table's whole point is rebuilding
+ * `sluice.toml` by hand, and the id (not the display name) is what a
+ * reader copies to cross-reference a generated block against. A derived
+ * envelope's name already *is* its id, so it isn't repeated.
+ *
  * A table, not a chart: `> ~7 classes` already argues for one, and a real
  * household clears that many times over (54 rows, one real test run so
  * far). Sorted the same way `plan.consumption` already is — this is a
@@ -34,7 +40,10 @@ export function EnvelopeYearTable({ consumption }: EnvelopeYearTableProps) {
         <tbody>
           {consumption.map((c) => (
             <tr key={envelopeId(c.envelope)}>
-              <td>{envelopeName(c.envelope)}</td>
+              <td>
+                {envelopeName(c.envelope)}
+                {c.envelope.kind === 'configured' && <div className="envelope-id">{c.envelope.config.id}</div>}
+              </td>
               <td className="amount num">{formatEur(c.priorYearActual)}</td>
               <td className="amount num">
                 {c.envelope.kind === 'configured' ? formatEur(c.envelope.config.estimate) : '—'}

@@ -1,10 +1,12 @@
 import { loadConfig, expandHome } from '@/config/load.ts';
 import { loadLedger, type Ledger } from '@/ingest/load.ts';
 import { computePlan, type Plan } from '@/numbers/plan.ts';
+import { monthlySpendTimeline } from '@/numbers/timeline.ts';
 import { todayAsDay } from './_lib/today.ts';
 import { newTrace, emitSpan } from './_lib/telemetry.ts';
 import { InstalmentStrip } from './_components/InstalmentStrip.tsx';
 import { SplitSection } from './_components/SplitSection.tsx';
+import { ConsumptionSection } from './_components/ConsumptionSection.tsx';
 
 // Never statically prerendered: `next.config.ts`'s own comment already says
 // this app re-reads its inputs on every request because a stale render is
@@ -69,6 +71,8 @@ export default async function Page() {
   const plan = computePlan(config, ledger, todayAsDay());
   emitSpan(trace, 'sluice.numbers.compute_plan', planAttrs(plan));
 
+  const timeline = monthlySpendTimeline(ledger);
+
   emitSpan(trace, 'sluice.page.report_displayed', { reference_day: plan.referenceDay });
 
   return (
@@ -80,6 +84,7 @@ export default async function Page() {
 
       <InstalmentStrip config={config} plan={plan} />
       <SplitSection config={config} plan={plan} />
+      <ConsumptionSection plan={plan} timeline={timeline} />
     </main>
   );
 }

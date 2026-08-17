@@ -2,6 +2,7 @@ import { formatMonthShort, monthOf, type Day } from '@/core/dates.ts';
 import { formatEur, formatEurCompact, type Cents } from '@/core/money.ts';
 import type { Person } from '@/config/load.ts';
 import type { MonthlyContributions } from '@/numbers/funding.ts';
+import { niceMax } from '../_lib/chart.ts';
 import { Legend } from './Legend.tsx';
 
 export interface ContributionsChartProps {
@@ -23,6 +24,7 @@ const BAR_GAP = 16;
 const CHART_HEIGHT = 140;
 const SEGMENT_GAP = 2; // the surface gap between stacked segments, per the dataviz skill
 const AXIS_ROOM = 26; // below the baseline, for the month label
+const TOP_ROOM = 14; // above the 100% gridline, so its label isn't clipped by the viewBox
 const LEFT_AXIS_WIDTH = 56; // for the Y-axis tick labels
 
 interface Segment {
@@ -56,15 +58,6 @@ function roundedTopRectPath(x: number, y: number, width: number, height: number,
   ].join(' ');
 }
 
-/** Rounds up to a "clean" step (1, 2, or 5 × a power of ten) for a Y-axis tick, the same rule the dataviz skill asks for. */
-function niceMax(value: number): number {
-  if (value <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  const steps = [1, 2, 5, 10];
-  const step = steps.find((s) => s * magnitude >= value) ?? 10;
-  return step * magnitude;
-}
-
 export function ContributionsChart({ months, people, referenceDay }: ContributionsChartProps) {
   if (months.length === 0) {
     return <p className="chart-empty">No contributions recorded yet.</p>;
@@ -79,8 +72,8 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
   const currentMonth = monthOf(referenceDay);
   const chartWidth = months.length * (BAR_WIDTH + BAR_GAP) + BAR_GAP;
   const width = LEFT_AXIS_WIDTH + chartWidth;
-  const svgHeight = CHART_HEIGHT + AXIS_ROOM;
-  const baseline = CHART_HEIGHT;
+  const svgHeight = TOP_ROOM + CHART_HEIGHT + AXIS_ROOM;
+  const baseline = TOP_ROOM + CHART_HEIGHT;
 
   // Never a number on every point (the dataviz skill's own rule) — with up
   // to 18+ months of real bars, a total label on each one collides with its

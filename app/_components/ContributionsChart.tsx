@@ -32,6 +32,30 @@ interface Segment {
   readonly label: string;
 }
 
+/**
+ * A rectangle rounded at the top two corners only, square at the bottom —
+ * "4px rounded data-end, square at the baseline" from the dataviz skill's
+ * mark spec. Plain `<rect rx>` rounds all four corners uniformly, which is
+ * wrong specifically when a stacked bar has only one segment: that segment
+ * is then both the data-end *and* the one touching the baseline, and a
+ * plain `rx` would round its bottom too. Radius is clamped to the
+ * segment's own size so a very small amount never produces overlapping arcs.
+ */
+function roundedTopRectPath(x: number, y: number, width: number, height: number, radius: number): string {
+  const r = Math.max(0, Math.min(radius, height / 2, width / 2));
+  if (r === 0) return `M${x},${y} h${width} v${height} h${-width} Z`;
+  return [
+    `M${x + r},${y}`,
+    `H${x + width - r}`,
+    `A${r},${r} 0 0 1 ${x + width},${y + r}`,
+    `V${y + height}`,
+    `H${x}`,
+    `V${y + r}`,
+    `A${r},${r} 0 0 1 ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+}
+
 /** Rounds up to a "clean" step (1, 2, or 5 × a power of ten) for a Y-axis tick, the same rule the dataviz skill asks for. */
 function niceMax(value: number): number {
   if (value <= 0) return 1;
@@ -126,18 +150,12 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
             const top = cursorTop - seg.height;
             cursorTop = top - SEGMENT_GAP;
             const isTopmost = idx === segments.length - 1;
-            return (
-              <rect
-                key={idx}
-                x={x}
-                y={top}
-                width={BAR_WIDTH}
-                height={seg.height}
-                rx={isTopmost ? 4 : 0}
-                ry={isTopmost ? 4 : 0}
-                fill={seg.muted ? 'var(--ink-muted)' : seg.color}
-                fillOpacity={seg.muted ? 0.55 : 1}
-              />
+            const fill = seg.muted ? 'var(--ink-muted)' : seg.color;
+            const fillOpacity = seg.muted ? 0.55 : 1;
+            return isTopmost ? (
+              <path key={idx} d={roundedTopRectPath(x, top, BAR_WIDTH, seg.height, 4)} fill={fill} fillOpacity={fillOpacity} />
+            ) : (
+              <rect key={idx} x={x} y={top} width={BAR_WIDTH} height={seg.height} fill={fill} fillOpacity={fillOpacity} />
             );
           });
 

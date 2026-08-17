@@ -51,6 +51,18 @@ export default async function Page() {
   const trace = newTrace();
 
   const config = await loadConfig(expandHome(directory));
+
+  // Only two categorical colours exist for the page to draw with (see
+  // app/globals.css's --series-1/--series-2) — refused here, loudly, rather
+  // than letting a third person silently reuse a colour and misrepresent
+  // whose money is whose further down the page.
+  if (config.people.length > 2) {
+    throw new Error(
+      `"${directory}/sluice.toml" declares ${config.people.length} people, but this page only has colours ` +
+        'for two (see app/globals.css). Add a third series colour before adding a third person.',
+    );
+  }
+
   const ledger = await loadLedger(config.exportsDirectory);
   emitSpan(trace, 'sluice.ingest.load', ingestAttrs(ledger));
 

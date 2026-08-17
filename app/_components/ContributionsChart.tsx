@@ -14,8 +14,8 @@ export interface ContributionsChartProps {
 
 // Only two categorical colours exist in globals.css — #296 frames this as a
 // two-person tool throughout, and the schema doesn't cap [people.*] at two.
-// A third person renders with an undefined CSS variable, which fails loudly
-// (a missing swatch) rather than silently reusing a colour.
+// A third `[people.*]` entry is refused loudly in page.tsx before this
+// component ever renders, rather than silently reusing a colour here.
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)'] as const;
 
 const BAR_WIDTH = 22;
@@ -86,9 +86,17 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
   // to 18+ months of real bars, a total label on each one collides with its
   // neighbours long before it becomes readable. Two gridlines carry the
   // scale instead; the exact figure per month lives in the native tooltip.
+  //
+  // `value` is rounded to a whole cent — `axisMax * fraction` is only ever
+  // fractional for a very small `axisMax` (1 or 5, `niceMax`'s two odd
+  // steps), but "integer cents, never a float" has no exception for that.
+  // Keyed by `fraction`, not `value`: two gridlines can legitimately round
+  // to the same displayed cent at a small `axisMax`, and `fraction` (0.5,
+  // 1) is unique by construction where the rounded `value` isn't.
   const gridlines = [0.5, 1].map((fraction) => ({
+    fraction,
     y: baseline - CHART_HEIGHT * fraction,
-    value: axisMax * fraction,
+    value: Math.round(axisMax * fraction),
   }));
 
   return (
@@ -107,8 +115,8 @@ export function ContributionsChart({ months, people, referenceDay }: Contributio
         role="img"
         aria-label="Contributions by month, stacked by sender"
       >
-        {gridlines.map(({ y, value }) => (
-          <g key={value}>
+        {gridlines.map(({ fraction, y, value }) => (
+          <g key={fraction}>
             <line className="grid-line" x1={LEFT_AXIS_WIDTH} y1={y} x2={width} y2={y} />
             <text className="axis-tick-label" x={LEFT_AXIS_WIDTH - 8} y={y} textAnchor="end" dominantBaseline="middle">
               {formatEurCompact(value)}

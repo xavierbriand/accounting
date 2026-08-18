@@ -11,6 +11,11 @@ export type Day = string & { readonly __brand: 'Day' };
 /** An ISO calendar month, `YYYY-MM`. */
 export type Month = string & { readonly __brand: 'Month' };
 
+// Anchored for the reader's benefit rather than the parser's: `checked` is only
+// ever handed a string reassembled from FRENCH's or OFX's own capture groups, so
+// the shape is already guaranteed and neither anchor can decide anything. Both
+// anchor-removal mutants therefore survive by construction, not by omission.
+// Stryker disable next-line Regex: every caller builds this string from digit captures, so the anchors are unreachable
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const FRENCH = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 const OFX = /^(\d{4})(\d{2})(\d{2})/;

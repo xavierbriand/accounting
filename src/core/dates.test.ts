@@ -31,6 +31,20 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('2026-08-14')).toThrow(DateParseError);
   });
 
+  it('refuses a month outside 1 to 12, on the day check alone', () => {
+    // These are the pin for a deliberately absent guard. `checked` has no
+    // month-range test of its own: it relies on `daysInMonth` returning 0
+    // outside 1..12, so that `day > 0` refuses the date one line later. The
+    // reliance is invisible from the call site, so it is asserted here — if
+    // `daysInMonth`'s `?? 0` ever becomes `?? 31`, this fails rather than
+    // month 13 being quietly admitted as a real date.
+    expect(() => parseFrenchDay('01/00/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('01/13/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('01/99/2026')).toThrow(DateParseError);
+    expect(() => parseOfxDay('20260013')).toThrow(DateParseError);
+    expect(() => parseOfxDay('20269913')).toThrow(DateParseError);
+  });
+
   it('refuses a day the month does not have', () => {
     expect(() => parseFrenchDay('31/02/2026')).toThrow(DateParseError);
     expect(() => parseFrenchDay('31/04/2026')).toThrow(DateParseError);

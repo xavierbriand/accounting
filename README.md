@@ -30,7 +30,14 @@ v0.2 is being built in steps, each its own pull request. The first version was d
 npm install
 npm run check                                     # typecheck and tests
 SLUICE_CONFIG_DIR=~/sluice-private npm run dev     # the app, on localhost
+npm run mutate                                    # mutation testing (minutes, not seconds)
 ```
+
+`npm run mutate` asks a different question from `npm run check`: not whether the
+tests pass, but whether they are capable of failing. It mutates the source and
+reports which mutations no test objects to. It sits outside `check` on purpose —
+`check` gates every push in about thirty seconds, where a mutation run is about
+three minutes.
 
 sluice reads two things and holds nothing: a folder of bank exports, and one configuration file. There is no database and no import step — every run re-reads the files, because a stale render of a household's money is worse than a slow one.
 

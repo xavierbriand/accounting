@@ -1,3 +1,15 @@
+// The error messages in this file are long prose whose value is that they
+// explain consequences to someone editing sluice.toml once a year. Mutating
+// them generates hundreds of mutants whose only question is whether some test
+// happens to regex that fragment; the signal here is in operators, boundaries
+// and conditionals.
+//
+// Scoped to this file rather than set globally in stryker.config.mjs. The same
+// exclusion applied tree-wide also silences `header.split(';')`, the CSV
+// delimiter, and `new TextDecoder('iso-8859-1')`, the bank export's encoding —
+// strings that ARE the data-format contract, where a wrong one is a silently
+// wrong number rather than a clumsy sentence.
+// Stryker disable StringLiteral: the strings below are prose, not contract — see the note above
 import { parse, TomlError } from 'smol-toml';
 import { formatEur, type Cents } from '../core/money.ts';
 import { INTERNAL_TRANSFER_SUBCATEGORY, SETTLEMENT_SUBCATEGORY } from '../ingest/ledger.ts';

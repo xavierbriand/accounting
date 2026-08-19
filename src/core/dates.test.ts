@@ -59,10 +59,40 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('29/02/1900')).toThrow(DateParseError);
   });
 
-  it('accepts the last day of every month', () => {
+  it('accepts the last day of every month, in a leap year as well as a common one', () => {
     const lastDays = ['31/01', '28/02', '31/03', '30/04', '31/05', '30/06',
                       '31/07', '31/08', '30/09', '31/10', '30/11', '31/12'];
     for (const d of lastDays) expect(() => parseFrenchDay(`${d}/2026`)).not.toThrow();
+
+    // The leap year is the half that matters. Checking only a common year
+    // leaves the February branch of `daysInMonth` free to apply to every other
+    // month: widen its condition and 2026 is unaffected, because 2026 is not a
+    // leap year at all. In 2024 that same widening returns 29 days for January,
+    // and `31/01/2024` — a real date — starts being refused.
+    const leapLastDays = ['31/01', '29/02', '31/03', '30/04', '31/05', '30/06',
+                          '31/07', '31/08', '30/09', '31/10', '30/11', '31/12'];
+    for (const d of leapLastDays) expect(() => parseFrenchDay(`${d}/2024`)).not.toThrow();
+  });
+
+  it('refuses day zero', () => {
+    expect(() => parseFrenchDay('00/01/2026')).toThrow(DateParseError);
+    expect(() => parseOfxDay('20260100')).toThrow(DateParseError);
+  });
+
+  it('refuses a date carrying anything but the date', () => {
+    // Both patterns are anchored. Unanchored, a label that merely *contains*
+    // something date-shaped would parse, and the surrounding text would be
+    // silently discarded rather than refused.
+    expect(() => parseFrenchDay('x14/08/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('14/08/2026x')).toThrow(DateParseError);
+    expect(() => parseOfxDay('x20260814')).toThrow(DateParseError);
+  });
+
+  it('tolerates surrounding whitespace', () => {
+    // Exports have been seen with padded cells. Trimming is deliberate, so it
+    // is asserted rather than left to chance.
+    expect(parseFrenchDay('  14/08/2026  ')).toBe('2026-08-14');
+    expect(parseOfxDay('  20260814  ')).toBe('2026-08-14');
   });
 });
 
@@ -74,6 +104,15 @@ describe('parseOfxDay', () => {
   it('ignores the time and timezone suffix OFX may append', () => {
     expect(parseOfxDay('20260815171313')).toBe('2026-08-15');
     expect(parseOfxDay('20260815120000[+1:CET]')).toBe('2026-08-15');
+  });
+
+  it('refuses something that is not a date at all', () => {
+    // The OFX pattern is unanchored at its tail on purpose, to skip the time
+    // and timezone suffix. That makes the no-match path the only thing standing
+    // between a malformed export and a silently wrong month bucket.
+    expect(() => parseOfxDay('not-a-date')).toThrow(DateParseError);
+    expect(() => parseOfxDay('')).toThrow(DateParseError);
+    expect(() => parseOfxDay('2026')).toThrow(DateParseError);
   });
 
   it('is timezone-independent by construction', () => {

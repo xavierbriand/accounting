@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AmountParseError, allocate, formatEur, formatEurCompact, parseAmount, sum } from './money.ts';
+import {
+  AmountParseError,
+  allocate,
+  formatEur,
+  formatEurCompact,
+  formatEurSigned,
+  parseAmount,
+  sum,
+} from './money.ts';
 
 /**
  * French grouping uses a narrow no-break space (U+202F), and which space ICU
@@ -35,6 +43,15 @@ describe('parseAmount', () => {
     expect(parseAmount('3,5')).toBe(350);
   });
 
+  it('reads a whole-euro amount with no decimal part at all', () => {
+    // `AMOUNT` makes the decimals optional, and the destructuring defaults for
+    // the missing fraction were reached by no test — a whole-euro cell would
+    // have been the one shape nothing here had ever parsed.
+    expect(parseAmount('42')).toBe(4200);
+    expect(parseAmount('-42')).toBe(-4200);
+    expect(parseAmount('0')).toBe(0);
+  });
+
   it('refuses anything it cannot read exactly', () => {
     expect(() => parseAmount('12,345')).toThrow(AmountParseError);
     expect(() => parseAmount('n/a')).toThrow(AmountParseError);
@@ -62,6 +79,19 @@ describe('allocate', () => {
     // 1000 / 3 = 333.33... per weight; three independent roundings would land
     // on 999 or 1002 depending on which way each one rounds.
     expect(sum(allocate(1000, [1, 1, 1]))).toBe(1000);
+  });
+
+  it('breaks a tie by position, not by chance', () => {
+    // Three equal weights over 100 cents: each floors to 33, and the one cent
+    // left over has three equally good claimants. Which one gets it has to be
+    // decided, not left to the sort's behaviour on equal keys — otherwise the
+    // same household split could move a cent between two people between runs,
+    // or between two machines. The comparator's `|| a.i - b.i` tie-break is
+    // what decides, and nothing exercised it before this.
+    expect(allocate(100, [1, 1, 1])).toEqual([34, 33, 33]);
+    expect(allocate(101, [1, 1, 1])).toEqual([34, 34, 33]);
+    // Equal remainders across unequal positions: the earlier index wins.
+    expect(allocate(10, [1, 1, 1, 1])).toEqual([3, 3, 2, 2]);
   });
 
   it('splits proportionally to the weights, worked by hand', () => {
@@ -147,5 +177,29 @@ describe('formatEurCompact', () => {
     expect(plain(formatEurCompact(-150))).toBe('-2 €');
     expect(plain(formatEurCompact(50))).toBe('1 €');
     expect(plain(formatEurCompact(-50))).toBe('-1 €');
+  });
+});
+
+describe('formatEurSigned', () => {
+  // Used on the page's stat tiles and in reconciliation error messages, and
+  // until now reached by tests only incidentally, through a `join.ts` message
+  // that asserts a different part of the string. Its whole body could be
+  // deleted, or its division turned into a multiplication, with the suite green.
+  it('renders a plain signed amount, no parentheses', () => {
+    expect(plain(formatEurSigned(802500))).toBe('8 025,00 €');
+    expect(plain(formatEurSigned(-802500))).toBe('-8 025,00 €');
+    expect(plain(formatEurSigned(0))).toBe('0,00 €');
+  });
+
+  it('scales cents to euros, not the other way round', () => {
+    // A hundredfold error here is not obviously wrong on a page of large
+    // numbers, which is exactly why it needs pinning.
+    expect(plain(formatEurSigned(1))).toBe('0,01 €');
+    expect(plain(formatEurSigned(100))).toBe('1,00 €');
+  });
+
+  it('differs from formatEur precisely in how it shows a negative', () => {
+    expect(plain(formatEur(-802500))).toBe('(8 025,00 €)');
+    expect(plain(formatEurSigned(-802500))).toBe('-8 025,00 €');
   });
 });

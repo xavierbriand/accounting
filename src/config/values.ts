@@ -1,3 +1,8 @@
+// Prose error messages, excluded for the reason given at the top of schema.ts:
+// mutating them tests whether a regex matches a sentence, not whether the
+// reader is correct. Scoped per-file so the ingest's format strings stay
+// measured.
+// Stryker disable StringLiteral: the strings below are prose, not contract — see the note above
 import { parseAmount, AmountParseError, type Cents } from '../core/money.ts';
 
 /**

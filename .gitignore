@@ -12,10 +12,15 @@ next-env.d.ts
 
 # Mutation testing. `.stryker-tmp/` is the sandbox Stryker mutates inside — a
 # full copy of the tree, so it must never be committed and must never be the
-# thing anyone edits. `reports/` holds the run output, including the incremental
-# cache; the baseline that matters lives in the pull request, not in git.
-.stryker-tmp/
-reports/
+# thing anyone edits. `reports/` holds the run output; the baseline that matters
+# lives in the pull request, not in git.
+#
+# Both anchored with a leading slash. Unanchored they would match a directory of
+# that name at ANY depth, so a future `app/reports/` route would be silently
+# untracked and fail only in CI on a clean clone — the same failure this file
+# warns about for fixtures at the bottom.
+/.stryker-tmp/
+/reports/
 
 # SLUICE_CONFIG_DIR lives here for local dev — never committed, same reason
 # sluice.toml itself never is: it's a path into the household's own machine.

@@ -19,13 +19,6 @@ here means finding one to cut.
 - **Every defect this project's reviews have found is a plausible wrong
   number, never a crash.** Review accordingly: check arithmetic against its
   own doc comment, not just that the suite is green.
-- **`src/core/` and `src/numbers/` touch nothing but their arguments** — no
-  wall clock, no disk, no network. Enforced by `src/purity.test.ts`, not
-  just documented; `src/config/` and `src/ingest/` are the I/O layer, on
-  purpose.
-- **No chart library, no state library.** Dependencies are added
-  deliberately, not reflexively — `package.json` is the source of truth for
-  the current count, and a new one is worth a second look before it lands.
 - **An envelope's `estimate` is a commitment, never regenerated in place.**
   `generateEnvelopeBlock()` (`src/numbers/generate.ts`) only ever returns
   TOML text for a human to paste; nothing in `app/` calls it.

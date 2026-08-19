@@ -153,10 +153,16 @@ export function formatEurSigned(cents: Cents): string {
 export function formatEurCompact(cents: Cents): string {
   const euros = Math.round(Math.abs(cents) / 100);
   // Negating zero produces -0, which is exactly the value being avoided.
+  //
   // `<` cannot be widened to `<=` observably: the only value it would newly
   // admit is cents === 0, and there euros === 0 too, so the second operand
-  // already excludes it. Mutation testing flags the swap; nothing can kill it.
-  // Stryker disable next-line EqualityOperator: cents === 0 implies euros === 0, so < and <= agree everywhere
+  // already excludes it. That one mutant is equivalent, recorded as such in
+  // #299's triage, and deliberately left to survive rather than suppressed —
+  // a `Stryker disable` here covers the whole EqualityOperator mutator on the
+  // whole line, which would also silence `cents >= 0` and `euros === 0`. Both
+  // of those are killed by the tests below this file: they render -150 as
+  // `2 €` against an expected `-2 €`, and -49 as `-0 €` — the precise defect
+  // this function exists to prevent.
   const signed = cents < 0 && euros !== 0 ? -euros : euros;
   // `signed` is always an integer, `Math.round` having just made it one, and
   // Intl renders an integer without a fractional part regardless. The option is

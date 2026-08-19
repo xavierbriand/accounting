@@ -13,9 +13,16 @@ export type Month = string & { readonly __brand: 'Month' };
 
 // Anchored for the reader's benefit rather than the parser's: `checked` is only
 // ever handed a string reassembled from FRENCH's or OFX's own capture groups, so
-// the shape is already guaranteed and neither anchor can decide anything. Both
-// anchor-removal mutants therefore survive by construction, not by omission.
-// Stryker disable next-line Regex: every caller builds this string from digit captures, so the anchors are unreachable
+// the shape is already guaranteed and neither anchor can decide anything. The two
+// anchor-removal mutants therefore survive by construction, not by omission, and
+// are recorded as equivalent in #299's triage.
+//
+// They are NOT suppressed with a `Stryker disable` comment. That directive is
+// scoped to a whole mutator on a whole line, and `Regex` emits eight mutants
+// here: the two anchors plus six that weaken the digit groups (`\d{4}` to `\d`,
+// `\d` to `\D`). Those six are killed by every date test in the file, because
+// `checked` rejects a date DAY no longer matches. Silencing them to hide two
+// unkillable ones would trade real signal for a tidier number.
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const FRENCH = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 const OFX = /^(\d{4})(\d{2})(\d{2})/;

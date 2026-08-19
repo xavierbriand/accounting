@@ -39,6 +39,14 @@ reports which mutations no test objects to. It sits outside `check` on purpose �
 `check` gates every push in about thirty seconds, where a mutation run is about
 three minutes.
 
+It prints a score per directory rather than one for the whole tree, because the
+weakest surface otherwise hides behind the strongest — the spread is currently
+thirteen points. The baseline and the triage of every surviving mutant live on
+[#299](https://github.com/xavierbriand/sluice/issues/299); the gaps it found are
+tracked as their own issues rather than fixed inline, so the cost of each stays
+visible. No score threshold is enforced yet, deliberately: [#321](https://github.com/xavierbriand/sluice/issues/321)
+holds the criteria for adopting one.
+
 sluice reads two things and holds nothing: a folder of bank exports, and one configuration file. There is no database and no import step — every run re-reads the files, because a stale render of a household's money is worse than a slow one.
 
 `SLUICE_CONFIG_DIR` points at the folder holding `sluice.toml`; the page refuses to render without it, with a message saying so, rather than guessing a path.

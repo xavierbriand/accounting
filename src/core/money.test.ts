@@ -86,8 +86,12 @@ describe('allocate', () => {
     // left over has three equally good claimants. Which one gets it has to be
     // decided, not left to the sort's behaviour on equal keys — otherwise the
     // same household split could move a cent between two people between runs,
-    // or between two machines. The comparator's `|| a.i - b.i` tie-break is
-    // what decides, and nothing exercised it before this.
+    // or between two machines.
+    //
+    // This pins the contract; it does not kill a mutant. The three survivors on
+    // that comparator turn out to be equivalent — see the note beside it in
+    // money.ts. The tie behaviour is still worth stating, because it is the part
+    // a reader would otherwise assume rather than know.
     expect(allocate(100, [1, 1, 1])).toEqual([34, 33, 33]);
     expect(allocate(101, [1, 1, 1])).toEqual([34, 34, 33]);
     // Equal remainders across unequal positions: the earlier index wins.

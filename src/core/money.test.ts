@@ -44,12 +44,24 @@ describe('parseAmount', () => {
   });
 
   it('reads a whole-euro amount with no decimal part at all', () => {
-    // `AMOUNT` makes the decimals optional, and the destructuring defaults for
-    // the missing fraction were reached by no test — a whole-euro cell would
-    // have been the one shape nothing here had ever parsed.
+    // `AMOUNT` makes the decimals optional, and the `frac = ''` default for the
+    // missing fraction was reached by no test — a whole-euro cell would have
+    // been the one shape nothing here had ever parsed. (`whole`'s default is
+    // dead code, not exercised by this: `split` always returns a first
+    // element. See the note beside the destructuring in money.ts.)
     expect(parseAmount('42')).toBe(4200);
     expect(parseAmount('-42')).toBe(-4200);
     expect(parseAmount('0')).toBe(0);
+  });
+
+  it('does not turn a negative-zero cell into a negative amount', () => {
+    // "-0,00" is a real cell a bank can emit for a zero-value adjustment row.
+    // `negative ? -cents : cents` with cents = 0 produces -0, which is a
+    // distinct value from +0 under `Object.is` even though `-0 === 0`. Pinned
+    // here because it is exactly the shape `formatEurSigned` has to guard
+    // against — see the corresponding test there.
+    expect(Object.is(parseAmount('-0'), -0)).toBe(true);
+    expect(Object.is(parseAmount('-0,00'), -0)).toBe(true);
   });
 
   it('refuses anything it cannot read exactly', () => {
@@ -96,6 +108,16 @@ describe('allocate', () => {
     expect(allocate(101, [1, 1, 1])).toEqual([34, 34, 33]);
     // Equal remainders across unequal positions: the earlier index wins.
     expect(allocate(10, [1, 1, 1, 1])).toEqual([3, 3, 2, 2]);
+  });
+
+  it('gives the spare cent to the largest remainder, not the smallest', () => {
+    // Every other case in this file either ties every remainder or happens to
+    // put the largest one at index 0, so none of them can tell a descending
+    // sort from an ascending one — a comparator that hands out the cent by
+    // smallest remainder first would pass all of them. 1000 split [1, 2]:
+    // shares are 333.33 and 666.67, both floor to 333/666, and the spare cent
+    // belongs to the second share, not the first.
+    expect(allocate(1000, [1, 2])).toEqual([333, 667]);
   });
 
   it('splits proportionally to the weights, worked by hand', () => {
@@ -200,6 +222,15 @@ describe('formatEurSigned', () => {
     // numbers, which is exactly why it needs pinning.
     expect(plain(formatEurSigned(1))).toBe('0,01 €');
     expect(plain(formatEurSigned(100))).toBe('1,00 €');
+  });
+
+  it('never renders a negative zero', () => {
+    // `-0` is reachable — parseAmount returns it for a bank cell of "-0,00" —
+    // and `-0 / 100` is still -0, which Intl renders as "-0,00 €" on a value
+    // that is exactly zero, the same hazard formatEurCompact guards against
+    // above. A signed stat tile showing a minus sign on nothing would be the
+    // wrong kind of alarming.
+    expect(plain(formatEurSigned(-0))).toBe('0,00 €');
   });
 
   it('differs from formatEur precisely in how it shows a negative', () => {

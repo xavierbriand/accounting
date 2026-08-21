@@ -68,9 +68,10 @@ function checked(iso: string, raw: string, where: string): Day {
   // 1..12 — see the `?? 0` there, which `noUncheckedIndexedAccess` requires — so
   // the day check below already refuses every such date. A `month < 1 || month > 12`
   // guard used to sit here and could not be killed by any mutant, because it had
-  // no observable effect: verified exhaustively over the whole domain `DAY` admits
-  // (month and day each 00..99, across leap, century and common years), zero
-  // inputs where it changed the outcome.
+  // no observable effect: verified exhaustively over the entire domain `DAY`
+  // admits — year 0000..9999, month and day each 00..99, all 100,000,000
+  // combinations run through both versions of `checked` — zero inputs where the
+  // guard changed the outcome.
   //
   // That makes `daysInMonth`'s out-of-range return load-bearing rather than
   // incidental. `dates.test.ts` pins it directly; if that ever becomes `?? 31`,

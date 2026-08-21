@@ -31,18 +31,19 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('2026-08-14')).toThrow(DateParseError);
   });
 
-  it('refuses a month outside 1 to 12, on the day check alone', () => {
-    // These are the pin for a deliberately absent guard. `checked` has no
-    // month-range test of its own: it relies on `daysInMonth` returning 0
-    // outside 1..12, so that `day > 0` refuses the date one line later. The
-    // reliance is invisible from the call site, so it is asserted here — if
-    // `daysInMonth`'s `?? 0` ever becomes `?? 31`, this fails rather than
-    // month 13 being quietly admitted as a real date.
+  it('pins daysInMonth\'s fallback for an out-of-range month at 0, not a real length', () => {
+    // Not a test of "there is no month guard" — reinstating one would leave
+    // every assertion here passing exactly as easily, since a guard and this
+    // fallback both refuse the same inputs. What this pins is narrower and
+    // more load-bearing: `checked` has no separate month-range check, so it
+    // relies on `daysInMonth` returning `0` for a month outside 1..12 — that
+    // `?? 0` is what makes `day > 0` refuse the date one line later. If that
+    // fallback ever became `?? 31` instead, month 99 would be treated as a
+    // 31-day month and admitted as a real date. Verified: it does fail under
+    // that change, unlike the test's former name suggested. The OFX equivalent
+    // is in `describe('parseOfxDay')`, below.
     expect(() => parseFrenchDay('01/00/2026')).toThrow(DateParseError);
-    expect(() => parseFrenchDay('01/13/2026')).toThrow(DateParseError);
     expect(() => parseFrenchDay('01/99/2026')).toThrow(DateParseError);
-    expect(() => parseOfxDay('20260013')).toThrow(DateParseError);
-    expect(() => parseOfxDay('20269913')).toThrow(DateParseError);
   });
 
   it('refuses a day the month does not have', () => {
@@ -76,23 +77,20 @@ describe('parseFrenchDay', () => {
 
   it('refuses day zero', () => {
     expect(() => parseFrenchDay('00/01/2026')).toThrow(DateParseError);
-    expect(() => parseOfxDay('20260100')).toThrow(DateParseError);
   });
 
   it('refuses a date carrying anything but the date', () => {
-    // Both patterns are anchored. Unanchored, a label that merely *contains*
-    // something date-shaped would parse, and the surrounding text would be
-    // silently discarded rather than refused.
+    // The pattern is anchored at both ends. Unanchored, a label that merely
+    // *contains* something date-shaped would parse, and the surrounding text
+    // would be silently discarded rather than refused.
     expect(() => parseFrenchDay('x14/08/2026')).toThrow(DateParseError);
     expect(() => parseFrenchDay('14/08/2026x')).toThrow(DateParseError);
-    expect(() => parseOfxDay('x20260814')).toThrow(DateParseError);
   });
 
   it('tolerates surrounding whitespace', () => {
     // Exports have been seen with padded cells. Trimming is deliberate, so it
     // is asserted rather than left to chance.
     expect(parseFrenchDay('  14/08/2026  ')).toBe('2026-08-14');
-    expect(parseOfxDay('  20260814  ')).toBe('2026-08-14');
   });
 });
 
@@ -113,6 +111,28 @@ describe('parseOfxDay', () => {
     expect(() => parseOfxDay('not-a-date')).toThrow(DateParseError);
     expect(() => parseOfxDay('')).toThrow(DateParseError);
     expect(() => parseOfxDay('2026')).toThrow(DateParseError);
+  });
+
+  it('pins daysInMonth\'s fallback for an out-of-range month at 0, not a real length', () => {
+    // The OFX counterpart to the identically-named test under parseFrenchDay,
+    // above — see the comment there for what this actually protects.
+    expect(() => parseOfxDay('20260013')).toThrow(DateParseError);
+    expect(() => parseOfxDay('20269913')).toThrow(DateParseError);
+  });
+
+  it('refuses day zero', () => {
+    expect(() => parseOfxDay('20260100')).toThrow(DateParseError);
+  });
+
+  it('refuses a date preceded by anything else', () => {
+    // Anchored at the front only — the tail is left open on purpose, for the
+    // time and timezone suffix above. A leading character still has to be
+    // refused, or a label merely containing something date-shaped would parse.
+    expect(() => parseOfxDay('x20260814')).toThrow(DateParseError);
+  });
+
+  it('tolerates surrounding whitespace', () => {
+    expect(parseOfxDay('  20260814  ')).toBe('2026-08-14');
   });
 
   it('is timezone-independent by construction', () => {

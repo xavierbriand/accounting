@@ -43,7 +43,71 @@ describe('parseOfx', () => {
   });
 
   it('refuses a file that is not OFX at all', () => {
-    expect(() => parseOfx(Buffer.from('just some text', 'latin1'), 'x.ofx')).toThrow(OfxFormatError);
+    // The check this guards is one line away from redundant with the
+    // <LEDGERBAL> lookup below it — remove it and "just some text" still
+    // throws OfxFormatError, just from the balance check instead. What makes
+    // it worth keeping is the message: this one tells someone they pointed
+    // sluice at the wrong file; a LEDGERBAL complaint would send them looking
+    // for a balance in a file that was never OFX to begin with. Asserting the
+    // text, not just the error type, is what keeps that message load-bearing.
+    expect(() => parseOfx(Buffer.from('just some text', 'latin1'), 'x.ofx')).toThrow(
+      /is this an OFX export/,
+    );
+  });
+
+  it('names the missing tag and the right transaction when a required field is absent', () => {
+    // FITID, DTPOSTED and TRNAMT all go through the same `required()` guard,
+    // and none of the three had ever been omitted from a fixture — the throw
+    // this depends on had no test reaching it at all. Two transactions, the
+    // second one broken, so the message's index has to be right rather than
+    // merely present: transaction 1 is fine and transaction 2 is missing its
+    // id, so a message saying "transaction 1" would be exactly the kind of
+    // wrong number this project keeps finding.
+    const bad = ofxFixture(
+      [
+        { postedOn: '01/08/2026', amount: '-10,00' },
+        { postedOn: '02/08/2026', amount: '-20,00', omit: ['FITID'] },
+      ],
+      { to: '20260815' },
+    );
+    expect(() => parseOfx(bad, 'x.ofx')).toThrow(/x\.ofx transaction 2: <FITID> is missing/);
+  });
+
+  it('splits transactions on every <STMTTRN>, not just the first', () => {
+    // `text.split('<STMTTRN>')` is what turns the raw file into one block per
+    // transaction; a single-transaction fixture cannot tell it apart from
+    // reading the whole body as one block.
+    const statement = parseOfx(
+      ofxFixture(
+        [
+          { postedOn: '01/08/2026', amount: '-10,00', fitId: 'A' },
+          { postedOn: '02/08/2026', amount: '-20,00', fitId: 'B' },
+        ],
+        { to: '20260815' },
+      ),
+    );
+    expect(statement.transactions.map((t) => t.fitId)).toEqual(['A', 'B']);
+    expect(statement.transactions.map((t) => t.amount)).toEqual([-1000, -2000]);
+  });
+
+  it('treats an absent TRNTYPE or NAME as empty, not as missing', () => {
+    // Unlike FITID/DTPOSTED/TRNAMT, these two are read with `?? ''` rather
+    // than `required()` — a card statement's memo-only rows have been seen
+    // without a NAME. The `?? ''` fallbacks on both had no test reaching them.
+    const statement = parseOfx(
+      ofxFixture([{ postedOn: '01/08/2026', amount: '-10,00', omit: ['TRNTYPE', 'NAME'] }], {
+        to: '20260815',
+      }),
+    );
+    expect(statement.transactions[0]?.type).toBe('');
+    expect(statement.transactions[0]?.name).toBe('');
+  });
+
+  it('defaults the currency to EUR when CURDEF is absent', () => {
+    const statement = parseOfx(
+      ofxFixture([{ postedOn: '01/08/2026', amount: '-10,00' }], { to: '20260815', omitCurdef: true }),
+    );
+    expect(statement.currency).toBe('EUR');
   });
 
   it('accepts a statement with no transactions and still reads its balance', () => {

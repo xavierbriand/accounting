@@ -19,6 +19,8 @@ export interface FixtureRow {
   readonly operationType?: string;
   readonly notes?: string;
   readonly fitId?: string;
+  /** OFX only, ignored by `csvFixture`: tags to leave out of this transaction's block. */
+  readonly omit?: readonly ('TRNTYPE' | 'DTPOSTED' | 'TRNAMT' | 'FITID' | 'NAME')[];
 }
 
 export function csvFixture(rows: readonly FixtureRow[]): Uint8Array {
@@ -51,6 +53,7 @@ export interface OfxOptions {
   readonly to?: string; // YYYYMMDD
   readonly balance?: string; // "+264.21"
   readonly omitBalance?: boolean;
+  readonly omitCurdef?: boolean;
 }
 
 function ofxDate(french: string): string {
@@ -69,20 +72,23 @@ export function ofxFixture(rows: readonly FixtureRow[], options: OfxOptions = {}
     to = '20261231',
     balance = '+0.00',
     omitBalance = false,
+    omitCurdef = false,
   } = options;
 
   const body = rows
-    .map((r, i) =>
-      [
+    .map((r, i) => {
+      const omit = new Set(r.omit ?? []);
+      const lines = [
         '<STMTTRN>',
-        `<TRNTYPE>${r.amount.startsWith('-') ? 'DEBIT' : 'CREDIT'}`,
-        `<DTPOSTED>${ofxDate(r.postedOn)}`,
-        `<TRNAMT>${ofxAmount(r.amount)}`,
-        `<FITID>${r.fitId ?? `FIT${i + 1}`}`,
-        `<NAME>${r.label ?? 'MERCHANT'}`,
+        !omit.has('TRNTYPE') && `<TRNTYPE>${r.amount.startsWith('-') ? 'DEBIT' : 'CREDIT'}`,
+        !omit.has('DTPOSTED') && `<DTPOSTED>${ofxDate(r.postedOn)}`,
+        !omit.has('TRNAMT') && `<TRNAMT>${ofxAmount(r.amount)}`,
+        !omit.has('FITID') && `<FITID>${r.fitId ?? `FIT${i + 1}`}`,
+        !omit.has('NAME') && `<NAME>${r.label ?? 'MERCHANT'}`,
         '</STMTTRN>',
-      ].join('\r\n'),
-    )
+      ];
+      return lines.filter((l): l is string => l !== false).join('\r\n');
+    })
     .join('\r\n');
 
   const ledgerBalance = omitBalance
@@ -122,7 +128,7 @@ export function ofxFixture(rows: readonly FixtureRow[], options: OfxOptions = {}
     '<SEVERITY>INFO',
     '</STATUS>',
     '<STMTRS>',
-    '<CURDEF>EUR',
+    ...(omitCurdef ? [] : ['<CURDEF>EUR']),
     '<BANKACCTFROM>',
     `<ACCTID>${accountId}</ACCTID>`,
     '</BANKACCTFROM>',

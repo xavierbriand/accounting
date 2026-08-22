@@ -29,8 +29,9 @@ import { parseAmount, AmountParseError, type Cents } from '../core/money.ts';
  */
 /**
  * Six places in schema.ts read `if (X === null || problems.count !== before)
- * return null;` — one per reader function, right after its first required
- * field. It looks like the two halves are redundant with each other: every
+ * return null;`, right after each's first required field, across five reader
+ * functions — readSeasonal has two, one per branch of its months/weights
+ * choice. It looks like the two halves are redundant with each other: every
  * accessor that returns null has already called `add()` (directly, via
  * `fail()`, or via `take()`'s date-refusal branch) within that same call, so
  * `X === null` implies `problems.count !== before` in every case — proven by

@@ -708,11 +708,14 @@ estimate = "1200.00"
   });
 
   it('refuses a matcher with an extra key, even though category itself is fine', () => {
-    // If readMatcher's guard is bypassed despite the bogus key, it returns a
-    // usable matcher instead of null — this is the envelope's ONLY matcher,
-    // so "claims nothing" would never fire, and that second complaint is
-    // what actually distinguishes a bypassed guard from a working one; the
-    // bogus-key message alone is reported either way.
+    // Whether readMatcher's own guard fires here is not actually observable:
+    // readEnvelope captures its own "before" ahead of processing matches, so
+    // its OWN guard (schema.ts:257) re-catches the bogus-key problem and
+    // returns null regardless of what readMatcher did with its return value
+    // — readEnvelope's "claims nothing" check (schema.ts:259) sits AFTER
+    // that guard and is never reached either way. This test pins the correct
+    // end-to-end refusal; see the note on Problems in values.ts for why
+    // readMatcher's specific guard is not independently testable here.
     const bad = () =>
       parse({
         envelopes: `

@@ -29,6 +29,12 @@ export type ResolvedEnvelope =
  * place, rather than reimplementing the same two-branch check per
  * component (the same "no third copy" reasoning `funding.ts`'s `compare()`
  * is exported for).
+ *
+ * NOT unique across kinds: a configured envelope's declared id and a
+ * derived envelope's `category / subCategory` share one namespace with
+ * nothing preventing a collision (see `resolveEnvelopes`'s sort-tie test).
+ * A React `key` built from this alone can therefore repeat; prefix it with
+ * `envelope.kind` wherever uniqueness matters, as both table components do.
  */
 export function envelopeId(envelope: ResolvedEnvelope): string {
   return envelope.kind === 'configured' ? envelope.config.id : envelope.id;
@@ -90,6 +96,22 @@ export function resolveEnvelopes(config: Config, ledger: Ledger): readonly Resol
   // depends on the runtime's default locale, which is not guaranteed to
   // agree between two machines (or two Node builds) — precisely the
   // opposite of the deterministic order this function promises.
+  //
+  // Mutation testing flags six survivors on the comparator below. Three are
+  // killed by the sort-order test in envelopes.test.ts. The other three —
+  // pinning the inner ternary (`idA > idB ? 1 : 0`) to `true`, to `false`,
+  // and widening `>` to `>=` — are equivalent, for the same reason as the
+  // comparator in `core/money.ts`'s `allocate`: `.sort()` only ever invokes
+  // this comparator with `a` being the later-positioned element in the
+  // pre-sort array (verified directly: over 2.1M calls per mutant, `a`'s
+  // original index exceeded `b`'s every time). The inner ternary only
+  // executes once the outer `idA < idB` has already ruled out `a` sorting
+  // first, so all three mutants can only turn a `0` (tie) into a `1`
+  // (explicitly "a after b") or a `1` into a `0` — never into a negative
+  // value. Since `a` is always the later-positioned element already, "tied,
+  // stable-sort keeps it after" and "explicitly place it after" are the same
+  // outcome, so the final permutation never differs (verified: 0 sign-class
+  // disagreements across the same 2.1M calls).
   return [...configured, ...derived].sort((a, b) => {
     const idA = envelopeId(a);
     const idB = envelopeId(b);

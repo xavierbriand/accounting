@@ -159,4 +159,30 @@ monthly = "3000.00"
     const warnings = auditPlan(config, ledger).filter((w) => w.kind === 'label-matches-nothing');
     expect(warnings.map((w) => (w.kind === 'label-matches-nothing' ? w.personId : null))).toEqual(['alice', 'zoe']);
   });
+
+  it('breaks a tie within a kind by keeping declaration order, a stable sort on equal keys', () => {
+    // Two dead matchers on the SAME envelope tie on sortKey — both are
+    // `0-groceries` — which is the only way two warnings collide on their
+    // sort key at all (every other kind's key includes something that
+    // distinguishes it, like the label or the transaction id). `.sort()` is
+    // spec-guaranteed stable, so a genuine tie has to preserve the matchers'
+    // declaration order rather than being left to chance.
+    const config = numbersConfig({
+      envelopes: `
+[envelopes.groceries]
+name = "Groceries"
+matches = [
+  { category = "Alimentation", sub_category = "Supermarche" },
+  { category = "Alimentation", sub_category = "Marche" },
+]
+estimate = "1200.00"
+`,
+    });
+    const warnings = auditPlan(config, ledgerOf([])).filter((w) => w.kind === 'matcher-matches-nothing');
+    expect(
+      warnings.map((w) =>
+        w.kind === 'matcher-matches-nothing' && w.matcher.kind === 'sub-category' ? w.matcher.subCategory : null,
+      ),
+    ).toEqual(['Supermarche', 'Marche']);
+  });
 });

@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { attributeContributions, contributionsByMonth } from './funding.ts';
+import { attributeContributions, compare, contributionsByMonth } from './funding.ts';
 import { ledgerOf, numbersConfig, tx } from './__fixtures__/build.ts';
+
+describe('compare', () => {
+  // Direct, not through a `.sort()` call: `.sort()` only ever invokes a
+  // comparator with specific argument orderings (a stable sort presents the
+  // later-positioned element first), which can leave some of a comparator's
+  // own mutants unobservable through the sort even though the function
+  // itself is wrong — see the note beside `attributeContributions`'s own
+  // sort below, and the identical situation documented in `envelopes.ts`
+  // and `audit.ts`. Calling `compare` directly sidesteps that entirely.
+  it('orders strings by plain code-point value', () => {
+    expect(compare('a', 'b')).toBeLessThan(0);
+    expect(compare('b', 'a')).toBeGreaterThan(0);
+  });
+
+  it('returns exactly zero for equal strings, not merely falsy', () => {
+    expect(compare('a', 'a')).toBe(0);
+  });
+
+  it('is code-point order, not locale order', () => {
+    // Uppercase sorts before lowercase in code-point order; the two would
+    // commonly disagree under localeCompare().
+    expect(compare('Z', 'a')).toBeLessThan(0);
+  });
+});
 
 describe('attributeContributions', () => {
   it('credits a transfer to its own month when it arrives before the cutoff day', () => {
@@ -89,6 +113,19 @@ monthly = "2000.00"
     ]);
     const contributions = attributeContributions(config, ledger);
     expect(contributions.map((c) => c.transaction.id)).toEqual(['a', 'b']);
+  });
+
+  it('breaks a tie between two contributions funding the same month by transaction id', () => {
+    // Two transfers landing in the same funding month have nothing else to
+    // order them by — the month-comparison branch of the sort never even
+    // runs for this pair, so only the tie-break is exercised.
+    const config = numbersConfig();
+    const ledger = ledgerOf([
+      tx({ id: 'z', kind: 'transfer-in', occurredOn: '2026-01-20', label: 'VIR ALICE MARTIN', amount: 50000 }),
+      tx({ id: 'a', kind: 'transfer-in', occurredOn: '2026-01-05', label: 'VIR ALICE MARTIN', amount: 100000 }),
+    ]);
+    const contributions = attributeContributions(config, ledger);
+    expect(contributions.map((c) => c.transaction.id)).toEqual(['a', 'z']);
   });
 });
 

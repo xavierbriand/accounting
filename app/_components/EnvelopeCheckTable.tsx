@@ -50,7 +50,7 @@ export function EnvelopeCheckTable({ envelopes }: EnvelopeCheckTableProps) {
           {rows.map((c) => {
             const badge = goalBadge(c.goalStatus);
             return (
-              <tr key={envelopeId(c.envelope)}>
+              <tr key={`${c.envelope.kind}:${envelopeId(c.envelope)}`}>
                 <td>{envelopeName(c.envelope)}</td>
                 <td className={c.pastPace ? 'pace-over' : 'pace-ok'}>{c.pastPace ? 'Over' : '—'}</td>
                 <td>

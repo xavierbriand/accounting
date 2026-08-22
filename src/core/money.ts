@@ -42,6 +42,11 @@ export function parseAmount(raw: string, where = 'amount'): Cents {
 
   const negative = cleaned.startsWith('-');
   const digits = cleaned.replace(/^[+-]/, '');
+  // `whole`'s default can never run — `split` always returns at least one
+  // element, and `AMOUNT` requires a leading digit before any separator — so it
+  // exists only to satisfy `noUncheckedIndexedAccess`; that mutant is permanent,
+  // unkillable NoCoverage. `frac`'s default is real: it fires for a whole-euro
+  // cell with no decimal part at all, and is covered below.
   const [whole = '0', frac = ''] = digits.split(/[.,]/);
   const cents = Number(whole) * 100 + Number(frac.padEnd(2, '0'));
   return negative ? -cents : cents;
@@ -109,6 +114,32 @@ export function allocate(total: Cents, weights: readonly number[]): Cents[] {
   // so converting it back to a plain number is safe.
   const remainder = Number(totalBig - bases.reduce((a, b) => a + b, 0n));
 
+  // Largest remainder first, ties broken by position so the same weights always
+  // produce the same split.
+  //
+  // Mutation testing flags three survivors on the comparator below. Two of them
+  // — `>` widened to `>=`, and the `a.i - b.i` tie-break flipped to `a.i + b.i`
+  // — only change behaviour on an exact tie, and for a tie every variant leaves
+  // the tied entries in ascending index order regardless, so they are equivalent
+  // by construction.
+  //
+  // The third — the first branch pinned to `false` — is not that case: it
+  // returns a different value than the original whenever `b.remainder >
+  // a.remainder`, tie or not. It survives for a narrower, engine-specific
+  // reason. `byRemainder` is built by `.map((r, i) => ...)` over the array in
+  // original order, so every `i` is distinct and increasing before the sort
+  // runs, and a stable sort built on binary insertion only ever calls the
+  // comparator as `(newer, alreadyPlaced)` — i.e. with `a.i > b.i`. In that one
+  // calling order the mutant and the original always agree in sign (verified
+  // directly: 0 disagreements across 497,500 pairs with `a.i > b.i`), so the
+  // final permutation never differs. This is a property of how V8 invokes the
+  // comparator, not a guarantee the language makes, which is why it is backed
+  // by a search rather than left as a closed-form proof: roughly 500k cases
+  // (2-6 weights, totals 1-400) plus 116k more spanning array lengths either
+  // side of V8's merge-sort cutoff at 64 elements (55-205, including 60k random
+  // weight vectors), on the real `allocate` output. None found. Treated as
+  // equivalent rather than suppressed, so the search stays visible and
+  // challengeable, and re-checked if this file's sort or grouping ever changes.
   const byRemainder = remainders
     .map((r, i) => ({ i, remainder: r }))
     .sort((a, b) => (b.remainder > a.remainder ? 1 : b.remainder < a.remainder ? -1 : 0) || a.i - b.i);
@@ -121,6 +152,15 @@ export function allocate(total: Cents, weights: readonly number[]): Cents[] {
   return out;
 }
 
+// Evaluated once at import and cached, like every module-level Intl formatter
+// here. That makes its three constructor-argument mutants permanently
+// unkillable rather than merely equivalent: `'fr-FR'` -> `''`, `'currency'` ->
+// `''` and `'EUR'` -> `''` would each throw a RangeError if the initialiser
+// actually ran again, but Stryker's per-mutant reruns exercise the tests, not
+// module load, so it never does. Left surviving and documented rather than
+// suppressed, so a future triage pass sees why in one line instead of
+// re-deriving it — this is the one cluster in the file that was left silent
+// when the rest of the equivalent mutants here were written up.
 const EUR = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
   currency: 'EUR',
@@ -139,7 +179,12 @@ export function formatEur(cents: Cents): string {
 
 /** Plain signed notation, for axes and tooltips where parentheses read as noise. */
 export function formatEurSigned(cents: Cents): string {
-  return EUR.format(cents / 100);
+  // `cents === 0` is true for -0 as well as +0 — JS equality does not
+  // distinguish them — so this normalises before dividing. `-0 / 100` is still
+  // -0, and `Intl` renders that as "-0,00 €" on a value that is exactly zero.
+  // `-0` is reachable: `parseAmount` returns it for a debit cell of "-0,00" or
+  // an OFX <TRNAMT>-0.00. `formatEurCompact` guards the same hazard below.
+  return EUR.format(cents === 0 ? 0 : cents / 100);
 }
 
 /**

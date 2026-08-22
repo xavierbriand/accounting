@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AmountParseError, allocate, formatEur, formatEurCompact, parseAmount, sum } from './money.ts';
+import {
+  AmountParseError,
+  allocate,
+  formatEur,
+  formatEurCompact,
+  formatEurSigned,
+  parseAmount,
+  sum,
+} from './money.ts';
 
 /**
  * French grouping uses a narrow no-break space (U+202F), and which space ICU
@@ -35,6 +43,27 @@ describe('parseAmount', () => {
     expect(parseAmount('3,5')).toBe(350);
   });
 
+  it('reads a whole-euro amount with no decimal part at all', () => {
+    // `AMOUNT` makes the decimals optional, and the `frac = ''` default for the
+    // missing fraction was reached by no test — a whole-euro cell would have
+    // been the one shape nothing here had ever parsed. (`whole`'s default is
+    // dead code, not exercised by this: `split` always returns a first
+    // element. See the note beside the destructuring in money.ts.)
+    expect(parseAmount('42')).toBe(4200);
+    expect(parseAmount('-42')).toBe(-4200);
+    expect(parseAmount('0')).toBe(0);
+  });
+
+  it('does not turn a negative-zero cell into a negative amount', () => {
+    // "-0,00" is a real cell a bank can emit for a zero-value adjustment row.
+    // `negative ? -cents : cents` with cents = 0 produces -0, which is a
+    // distinct value from +0 under `Object.is` even though `-0 === 0`. Pinned
+    // here because it is exactly the shape `formatEurSigned` has to guard
+    // against — see the corresponding test there.
+    expect(Object.is(parseAmount('-0'), -0)).toBe(true);
+    expect(Object.is(parseAmount('-0,00'), -0)).toBe(true);
+  });
+
   it('refuses anything it cannot read exactly', () => {
     expect(() => parseAmount('12,345')).toThrow(AmountParseError);
     expect(() => parseAmount('n/a')).toThrow(AmountParseError);
@@ -62,6 +91,33 @@ describe('allocate', () => {
     // 1000 / 3 = 333.33... per weight; three independent roundings would land
     // on 999 or 1002 depending on which way each one rounds.
     expect(sum(allocate(1000, [1, 1, 1]))).toBe(1000);
+  });
+
+  it('breaks a tie by position, not by chance', () => {
+    // Three equal weights over 100 cents: each floors to 33, and the one cent
+    // left over has three equally good claimants. Which one gets it has to be
+    // decided, not left to the sort's behaviour on equal keys — otherwise the
+    // same household split could move a cent between two people between runs,
+    // or between two machines.
+    //
+    // This pins the contract; it does not kill a mutant. The three survivors on
+    // that comparator turn out to be equivalent — see the note beside it in
+    // money.ts. The tie behaviour is still worth stating, because it is the part
+    // a reader would otherwise assume rather than know.
+    expect(allocate(100, [1, 1, 1])).toEqual([34, 33, 33]);
+    expect(allocate(101, [1, 1, 1])).toEqual([34, 34, 33]);
+    // Equal remainders across unequal positions: the earlier index wins.
+    expect(allocate(10, [1, 1, 1, 1])).toEqual([3, 3, 2, 2]);
+  });
+
+  it('gives the spare cent to the largest remainder, not the smallest', () => {
+    // Every other case in this file either ties every remainder or happens to
+    // put the largest one at index 0, so none of them can tell a descending
+    // sort from an ascending one — a comparator that hands out the cent by
+    // smallest remainder first would pass all of them. 1000 split [1, 2]:
+    // shares are 333.33 and 666.67, both floor to 333/666, and the spare cent
+    // belongs to the second share, not the first.
+    expect(allocate(1000, [1, 2])).toEqual([333, 667]);
   });
 
   it('splits proportionally to the weights, worked by hand', () => {
@@ -147,5 +203,38 @@ describe('formatEurCompact', () => {
     expect(plain(formatEurCompact(-150))).toBe('-2 €');
     expect(plain(formatEurCompact(50))).toBe('1 €');
     expect(plain(formatEurCompact(-50))).toBe('-1 €');
+  });
+});
+
+describe('formatEurSigned', () => {
+  // Used on the page's stat tiles and in reconciliation error messages, and
+  // until now reached by tests only incidentally, through a `join.ts` message
+  // that asserts a different part of the string. Its whole body could be
+  // deleted, or its division turned into a multiplication, with the suite green.
+  it('renders a plain signed amount, no parentheses', () => {
+    expect(plain(formatEurSigned(802500))).toBe('8 025,00 €');
+    expect(plain(formatEurSigned(-802500))).toBe('-8 025,00 €');
+    expect(plain(formatEurSigned(0))).toBe('0,00 €');
+  });
+
+  it('scales cents to euros, not the other way round', () => {
+    // A hundredfold error here is not obviously wrong on a page of large
+    // numbers, which is exactly why it needs pinning.
+    expect(plain(formatEurSigned(1))).toBe('0,01 €');
+    expect(plain(formatEurSigned(100))).toBe('1,00 €');
+  });
+
+  it('never renders a negative zero', () => {
+    // `-0` is reachable — parseAmount returns it for a bank cell of "-0,00" —
+    // and `-0 / 100` is still -0, which Intl renders as "-0,00 €" on a value
+    // that is exactly zero, the same hazard formatEurCompact guards against
+    // above. A signed stat tile showing a minus sign on nothing would be the
+    // wrong kind of alarming.
+    expect(plain(formatEurSigned(-0))).toBe('0,00 €');
+  });
+
+  it('differs from formatEur precisely in how it shows a negative', () => {
+    expect(plain(formatEur(-802500))).toBe('(8 025,00 €)');
+    expect(plain(formatEurSigned(-802500))).toBe('-8 025,00 €');
   });
 });

@@ -31,6 +31,21 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('2026-08-14')).toThrow(DateParseError);
   });
 
+  it('pins daysInMonth\'s fallback for an out-of-range month at 0, not a real length', () => {
+    // Not a test of "there is no month guard" — reinstating one would leave
+    // every assertion here passing exactly as easily, since a guard and this
+    // fallback both refuse the same inputs. What this pins is narrower and
+    // more load-bearing: `checked` has no separate month-range check, so it
+    // relies on `daysInMonth` returning `0` for a month outside 1..12 — that
+    // `?? 0` is what makes `day > 0` refuse the date one line later. If that
+    // fallback ever became `?? 31` instead, month 99 would be treated as a
+    // 31-day month and admitted as a real date. Verified: it does fail under
+    // that change, unlike the test's former name suggested. The OFX equivalent
+    // is in `describe('parseOfxDay')`, below.
+    expect(() => parseFrenchDay('01/00/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('01/99/2026')).toThrow(DateParseError);
+  });
+
   it('refuses a day the month does not have', () => {
     expect(() => parseFrenchDay('31/02/2026')).toThrow(DateParseError);
     expect(() => parseFrenchDay('31/04/2026')).toThrow(DateParseError);
@@ -45,10 +60,37 @@ describe('parseFrenchDay', () => {
     expect(() => parseFrenchDay('29/02/1900')).toThrow(DateParseError);
   });
 
-  it('accepts the last day of every month', () => {
+  it('accepts the last day of every month, in a leap year as well as a common one', () => {
     const lastDays = ['31/01', '28/02', '31/03', '30/04', '31/05', '30/06',
                       '31/07', '31/08', '30/09', '31/10', '30/11', '31/12'];
     for (const d of lastDays) expect(() => parseFrenchDay(`${d}/2026`)).not.toThrow();
+
+    // The leap year is the half that matters. Checking only a common year
+    // leaves the February branch of `daysInMonth` free to apply to every other
+    // month: widen its condition and 2026 is unaffected, because 2026 is not a
+    // leap year at all. In 2024 that same widening returns 29 days for January,
+    // and `31/01/2024` — a real date — starts being refused.
+    const leapLastDays = ['31/01', '29/02', '31/03', '30/04', '31/05', '30/06',
+                          '31/07', '31/08', '30/09', '31/10', '30/11', '31/12'];
+    for (const d of leapLastDays) expect(() => parseFrenchDay(`${d}/2024`)).not.toThrow();
+  });
+
+  it('refuses day zero', () => {
+    expect(() => parseFrenchDay('00/01/2026')).toThrow(DateParseError);
+  });
+
+  it('refuses a date carrying anything but the date', () => {
+    // The pattern is anchored at both ends. Unanchored, a label that merely
+    // *contains* something date-shaped would parse, and the surrounding text
+    // would be silently discarded rather than refused.
+    expect(() => parseFrenchDay('x14/08/2026')).toThrow(DateParseError);
+    expect(() => parseFrenchDay('14/08/2026x')).toThrow(DateParseError);
+  });
+
+  it('tolerates surrounding whitespace', () => {
+    // Exports have been seen with padded cells. Trimming is deliberate, so it
+    // is asserted rather than left to chance.
+    expect(parseFrenchDay('  14/08/2026  ')).toBe('2026-08-14');
   });
 });
 
@@ -60,6 +102,37 @@ describe('parseOfxDay', () => {
   it('ignores the time and timezone suffix OFX may append', () => {
     expect(parseOfxDay('20260815171313')).toBe('2026-08-15');
     expect(parseOfxDay('20260815120000[+1:CET]')).toBe('2026-08-15');
+  });
+
+  it('refuses something that is not a date at all', () => {
+    // The OFX pattern is unanchored at its tail on purpose, to skip the time
+    // and timezone suffix. That makes the no-match path the only thing standing
+    // between a malformed export and a silently wrong month bucket.
+    expect(() => parseOfxDay('not-a-date')).toThrow(DateParseError);
+    expect(() => parseOfxDay('')).toThrow(DateParseError);
+    expect(() => parseOfxDay('2026')).toThrow(DateParseError);
+  });
+
+  it('pins daysInMonth\'s fallback for an out-of-range month at 0, not a real length', () => {
+    // The OFX counterpart to the identically-named test under parseFrenchDay,
+    // above — see the comment there for what this actually protects.
+    expect(() => parseOfxDay('20260013')).toThrow(DateParseError);
+    expect(() => parseOfxDay('20269913')).toThrow(DateParseError);
+  });
+
+  it('refuses day zero', () => {
+    expect(() => parseOfxDay('20260100')).toThrow(DateParseError);
+  });
+
+  it('refuses a date preceded by anything else', () => {
+    // Anchored at the front only — the tail is left open on purpose, for the
+    // time and timezone suffix above. A leading character still has to be
+    // refused, or a label merely containing something date-shaped would parse.
+    expect(() => parseOfxDay('x20260814')).toThrow(DateParseError);
+  });
+
+  it('tolerates surrounding whitespace', () => {
+    expect(parseOfxDay('  20260814  ')).toBe('2026-08-14');
   });
 
   it('is timezone-independent by construction', () => {

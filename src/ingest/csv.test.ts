@@ -38,7 +38,9 @@ describe('parseCsv', () => {
     // same suffix.
     const bad = Buffer.from('Date;Amount\r\n01/01/2026;-1,00\r\n', 'latin1');
     expect(() => parseCsv(bad, 'export.csv')).toThrow(CsvFormatError);
-    expect(() => parseCsv(bad, 'export.csv')).toThrow(/expected 13 columns, found 2/);
+    expect(() => parseCsv(bad, 'export.csv')).toThrow(
+      new RegExp(`expected ${CSV_COLUMNS.length} columns, found 2`),
+    );
   });
 
   it('rejects a renamed column even when the count still matches', () => {

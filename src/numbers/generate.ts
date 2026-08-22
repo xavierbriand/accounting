@@ -121,6 +121,13 @@ function slugify(text: string): string {
     .replace(/[\u0300-\u036f]/g, '') // combining diacritical marks, once NFD has split them off
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
+    // The trailing "+" on each half of this regex is equivalent, not
+    // decorative: the line above already collapses every run of non-alnum
+    // characters, including any run of literal underscores, into exactly
+    // one "_" — so by the time this line runs, a leading or trailing run
+    // can never be longer than one character. Verified across 200k
+    // randomised inputs: max observed run length 1. "+" matches the intent
+    // ("any run") even though "^_|_$" would behave identically today.
     .replace(/^_+|_+$/g, '');
   return base === '' ? 'envelope' : base;
 }

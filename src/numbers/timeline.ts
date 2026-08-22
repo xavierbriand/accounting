@@ -29,6 +29,16 @@ export interface MonthlySpend {
  */
 export function monthlySpendTimeline(ledger: Ledger): readonly MonthlySpend[] {
   const movements = ledger.transactions.filter((t) => t.kind === 'movement');
+  // Equivalent, not dead: bypassing this leaves `months` empty, so `first`
+  // and `last` below are `undefined` (past the `!`, which is compile-time
+  // only). `monthRange(undefined, undefined)`'s loop condition,
+  // `m <= undefined`, is false for any `m` — a relational comparison
+  // coerces `undefined` to `NaN`, and every relational comparison against
+  // `NaN` is false — so the loop body never runs and it returns `[]`
+  // regardless. Verified directly: removing this guard changes nothing
+  // observable for any ledger with zero movements. Kept because it states
+  // the case explicitly rather than relying on a comparison quirk three
+  // lines away from the type-unsafe `!` that depends on it.
   if (movements.length === 0) return [];
 
   const byMonth = new Map<Month, Transaction[]>();

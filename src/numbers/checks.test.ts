@@ -114,6 +114,17 @@ describe('checkPlan — plannedTotal, trailingYearActual, drift', () => {
     expect(result.plannedTotal).toBe(120000);
     expect(result.drift).toBe(30000);
   });
+
+  it('excludes a non-movement transaction inside the trailing window', () => {
+    // The window and the kind check are two separate conditions on the same
+    // filter — a transfer landing inside the date range still has to be
+    // excluded, on kind alone, not just on date.
+    const result = check({}, [
+      { occurredOn: '2026-06-01', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' },
+      { kind: 'transfer-in', occurredOn: '2026-06-05', amount: 500000 },
+    ], '2026-06-15');
+    expect(result.trailingYearActual).toBe(3000);
+  });
 });
 
 describe('checkPlan — worstObservedMonth and bufferSufficient', () => {

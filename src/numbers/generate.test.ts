@@ -36,6 +36,18 @@ describe('generateEnvelopeBlock', () => {
     expect(block).toContain('estimate = "40.00"');
   });
 
+  it('ignores a pair whose only spending falls in a different year entirely', () => {
+    // Every other year-filter test still has SOME spending in the target
+    // year for the same pair, so the filter's role there is to trim an
+    // amount, not to decide whether the envelope exists at all. This pair
+    // has nothing in 2026, so it must not appear in the block at all.
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2025-03-05', amount: -5000, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    expect(block).not.toContain('loisirs_et_vacances_cinema');
+  });
+
   it('derives the seasonal shape from the SAME year, not the year before', () => {
     const ledger = ledgerOf([
       tx({ occurredOn: '2025-06-05', amount: -99999, category: 'Alimentation', subCategory: 'Supermarche' }),
@@ -117,6 +129,37 @@ describe('generateEnvelopeBlock', () => {
     const block = generateEnvelopeBlock(ledger, null, 2026);
     expect(block).toContain('[envelopes.a_b_c]');
     expect(block).toContain('[envelopes.a_b_c_2]');
+  });
+
+  it('keeps disambiguating past the second collision, _2 and _3 both', () => {
+    // A single collision cannot tell +suffix from -suffix: both put the
+    // second pair at _2. Only a THIRD pair sharing the same base can, since
+    // -1 would put it at _1 (colliding with the un-suffixed original)
+    // instead of _3.
+    const ledger = ledgerOf([
+      tx({ id: 'a', occurredOn: '2026-01-05', amount: -1000, category: 'A B', subCategory: 'C' }),
+      tx({ id: 'b', occurredOn: '2026-01-06', amount: -2000, category: 'A', subCategory: 'B C' }),
+      tx({ id: 'c', occurredOn: '2026-01-07', amount: -3000, category: 'A B C', subCategory: '' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    expect(block).toContain('[envelopes.a_b_c]');
+    expect(block).toContain('[envelopes.a_b_c_2]');
+    expect(block).toContain('[envelopes.a_b_c_3]');
+  });
+
+  it('collapses a run of punctuation to one underscore, not one per character', () => {
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-01-05', amount: -1000, category: 'Loisirs!!!vacances', subCategory: 'Cinema' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    expect(block).toContain('[envelopes.loisirs_vacances_cinema]');
+    expect(block).not.toContain('loisirs___vacances');
+  });
+
+  it('falls back to "envelope" for a pair that slugs to nothing at all', () => {
+    const ledger = ledgerOf([tx({ occurredOn: '2026-01-05', amount: -1000, category: '!!!', subCategory: '???' })]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    expect(block).toContain('[envelopes.envelope]');
   });
 
   it('says so when there is nothing new to configure', () => {

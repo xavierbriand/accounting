@@ -39,7 +39,7 @@ export function EnvelopeYearTable({ consumption }: EnvelopeYearTableProps) {
         </thead>
         <tbody>
           {consumption.map((c) => (
-            <tr key={envelopeId(c.envelope)}>
+            <tr key={`${c.envelope.kind}:${envelopeId(c.envelope)}`}>
               <td>
                 {envelopeName(c.envelope)}
                 {c.envelope.kind === 'configured' && <div className="envelope-id">{c.envelope.config.id}</div>}

@@ -29,6 +29,12 @@ export type ResolvedEnvelope =
  * place, rather than reimplementing the same two-branch check per
  * component (the same "no third copy" reasoning `funding.ts`'s `compare()`
  * is exported for).
+ *
+ * NOT unique across kinds: a configured envelope's declared id and a
+ * derived envelope's `category / subCategory` share one namespace with
+ * nothing preventing a collision (see `resolveEnvelopes`'s sort-tie test).
+ * A React `key` built from this alone can therefore repeat; prefix it with
+ * `envelope.kind` wherever uniqueness matters, as both table components do.
  */
 export function envelopeId(envelope: ResolvedEnvelope): string {
   return envelope.kind === 'configured' ? envelope.config.id : envelope.id;

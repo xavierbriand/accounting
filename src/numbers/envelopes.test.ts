@@ -93,25 +93,27 @@ estimate = "1200.00"
   });
 
   it('sorts by id: the configured envelope\'s own id, or the derived "category / subCategory" id', () => {
-    // Three ids, declared in an order that matches neither the sorted output
-    // nor localeCompare()'s: 'apple', 'Zebra', 'Mango' in TOML declaration
-    // order, sorting to ['Mango', 'Zebra', 'apple'] by plain code-point value
-    // (uppercase letters sort before lowercase). A comparator that stopped
-    // comparing and just returned its input unchanged, or that returned a
-    // pinned constant, would be caught by the declaration order differing
-    // from the expected order — the previous version of this test happened to
-    // have both orders coincide for a 2-element array, which is exactly why
-    // several comparator mutants survived it.
+    // Three ids, declared in an order that is neither the sorted output nor
+    // its exact reverse: 'Zebra', 'apple', 'Mango' in TOML declaration order,
+    // sorting to ['Mango', 'Zebra', 'apple'] by plain code-point value
+    // (uppercase letters sort before lowercase). Reversal specifically was
+    // ruled out, not just "some shuffle": a comparator pinned to always
+    // return -1 reverses whatever order Array.sort receives, so a declared
+    // order that already IS the sorted output's reverse would pass against
+    // that broken comparator by coincidence — verified directly, and it is
+    // exactly why an earlier version of this test (declared as ['apple',
+    // 'Zebra', 'Mango'], the reverse of the sorted output) missed that
+    // mutant despite intending to catch it.
     const config = numbersConfig({
       envelopes: `
-[envelopes.apple]
-name = "Apple"
-matches = [{ category = "A", sub_category = "A" }]
-estimate = "10.00"
-
 [envelopes.Zebra]
 name = "Zebra"
 matches = [{ category = "Z", sub_category = "Z" }]
+estimate = "10.00"
+
+[envelopes.apple]
+name = "Apple"
+matches = [{ category = "A", sub_category = "A" }]
 estimate = "10.00"
 
 [envelopes.Mango]

@@ -22,7 +22,7 @@ v0.2 is being built in steps, each its own pull request. The first version was d
 | 2 | **config** — `sluice.toml`: income, envelopes, goals, buffer | merged |
 | 3 | the numbers — the split, envelope consumption, seasonal pacing, the checks, the envelope generator | merged |
 | 4 | the page — instalment strip and four sections | merged |
-| 5 | `CLAUDE.md`, written once there is code to describe | next |
+| 5 | `CLAUDE.md`, written once there is code to describe | merged |
 
 ## Running it
 

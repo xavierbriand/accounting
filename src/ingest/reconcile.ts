@@ -85,6 +85,11 @@ const CARD_IN_LABEL = /\.\.\.\s*(\d{4})(?!\d)/;
 export const UNIDENTIFIED_CARD = 'unidentified';
 
 function cardNumberOf(settlement: Transaction): string {
+  // `.trim()` is unreachable given today's ingest, not decorative: every
+  // `Transaction.label` is `row.csv.label` (ledger.ts), and csv.ts's own
+  // parser already trims it. Kept anyway — it costs nothing, and this
+  // function has no way to know the guarantee still holds the next time
+  // ledger.ts changes which side's label wins.
   return CARD_IN_LABEL.exec(settlement.label.trim())?.[1] ?? UNIDENTIFIED_CARD;
 }
 
@@ -123,6 +128,10 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
   // export stops in June, a July settlement is not "still to come" — it is a
   // charge the account file simply does not reach, and saying "in flight" would
   // book money as owed that was in fact paid months ago.
+  // `b > a` cannot be widened to `b >= a` observably: `Day` values are
+  // compared by value, not identity, so a tie leaves the reduce holding an
+  // equal string either way. Verified across ties, near-ties and empty
+  // input — no case where the two produce a different result.
   const dataCurrentTo = ledger.sources
     .map((s) => s.balanceAsOf)
     .reduce<Day | null>((a, b) => (a === null || b > a ? b : a), null);
@@ -145,6 +154,14 @@ export function reconcileSettlements(ledger: LedgerData): ReconciliationReport {
     readonly settlesOn: Day;
   }
   const slots = new Map<string, Slot>();
+  // The guard reads as "first slot for this key wins", but it cannot lose to
+  // a mutant that makes every call overwrite: `key` is derived from exactly
+  // `cardNumber` and `settlesOn`, so any two calls that produce the same key
+  // were passed the same two values, and the Slot they'd write is identical
+  // either way. Real card numbers never contain "|", so a collision between
+  // two DIFFERENT pairs is not constructible through this codebase's own
+  // data. Kept for readability — "first wins" is what the comment above it
+  // claims — not because a test can tell it apart from "last wins".
   const slotKey = (cardNumber: string, settlesOn: Day): string => {
     const key = `${cardNumber}|${settlesOn}`;
     if (!slots.has(key)) slots.set(key, { cardNumber, settlesOn });

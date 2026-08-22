@@ -152,6 +152,7 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
   if (hasMonths) {
     const months = r.integerArray('months');
     r.done();
+    // See the comment on Problems in values.ts for why this is not the redundant disjunction it looks like.
     if (months === null || problems.count !== before) return null;
     if (months.length === 0) {
       problems.add(`"${r.where}.months" is empty. List the months the money falls in.`);
@@ -172,6 +173,7 @@ function readSeasonal(r: Reader, problems: Problems): SeasonalWeights | null {
 
   const weights = r.integerArray('weights');
   r.done();
+  // See the comment on Problems in values.ts.
   if (weights === null || problems.count !== before) return null;
 
   if (weights.length !== 12) {
@@ -208,6 +210,7 @@ function readMatcher(r: Reader, problems: Problems): EnvelopeMatcher | null {
   const subCategory = r.optionalString('sub_category');
   const declaredSub = r.has('sub_category');
   r.done();
+  // See the comment on Problems in values.ts.
   if (category === null || problems.count !== before) return null;
 
   if (!declaredSub) return { kind: 'category', category };
@@ -237,6 +240,11 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
   const before = problems.count;
   const name = r.string('name');
   const matchReaders = r.tableArray('matches');
+  // `?? []`, not `matchReaders!`: matchReaders is null whenever the
+  // "matches" key is absent or malformed, and this line runs before
+  // readEnvelope's own guard below, so the fallback is what stands between a
+  // missing key and a crash trying to .map() over null. The guard still
+  // catches the missing-key problem a moment later, via problems.count.
   const matches = (matchReaders ?? [])
     .map((m) => readMatcher(m, problems))
     .filter((m): m is EnvelopeMatcher => m !== null);
@@ -245,6 +253,7 @@ function readEnvelope(id: string, r: Reader, problems: Problems): EnvelopeConfig
   const seasonalReader = r.optionalTable('seasonal');
   const seasonal = seasonalReader === null ? null : readSeasonal(seasonalReader, problems);
   r.done();
+  // See the comment on Problems in values.ts.
   if (name === null || problems.count !== before) return null;
 
   if (matches.length === 0) {
@@ -305,6 +314,7 @@ function readIncome(r: Reader, problems: Problems): IncomeSource | null {
   const monthly = r.optionalMoney('monthly');
   const annual = r.optionalMoney('annual');
   r.done();
+  // See the comment on Problems in values.ts.
   if (label === null || problems.count !== before) return null;
 
   if (declaredMonthly && declaredAnnual) {
@@ -345,6 +355,7 @@ function readPerson(id: string, r: Reader, problems: Problems): Person | null {
     .map((entry) => readIncome(entry, problems))
     .filter((entry): entry is IncomeSource => entry !== null);
   r.done();
+  // See the comment on Problems in values.ts.
   if (name === null || problems.count !== before) return null;
 
   if (income.length === 0) {
@@ -357,6 +368,13 @@ function readPerson(id: string, r: Reader, problems: Problems): Person | null {
   }
 
   const labels: string[] = [];
+  // Unlike matches' fallback above, this `?? []` is unreachable rather than
+  // load-bearing: rawLabels is null only when "transfer_labels" is malformed
+  // (stringArray calls fail()), and that fail() runs before readPerson's own
+  // guard, which already returned null by the time this loop is reached.
+  // Verified: replacing it with a `!` assertion still passes every test.
+  // Kept as `?? []` anyway — cheaper to read as "defensive" than to prove
+  // unreachable again the next time this function is touched.
   for (const [i, raw] of (declaredLabels ? (rawLabels ?? []) : []).entries()) {
     const label = normaliseLabel(raw);
     if (label === '') {

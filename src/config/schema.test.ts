@@ -163,6 +163,7 @@ describe('parseConfig — refusals that would otherwise be a wrong number', () =
     expect(bad).toThrow(/Nothing in sluice\.toml is a date/);
   });
 
+
   it('refuses a goal above its estimate', () => {
     const bad = () =>
       parse({
@@ -606,6 +607,22 @@ ${seasonal}
     expect(bad).not.toThrow(/gives neither/);
   });
 
+  it('gives both forms exactly one complaint, not one plus "months"/"weights" unknown', () => {
+    // readSeasonal marks "months" and "weights" read with r.skip() before
+    // r.done() runs, specifically so a legitimate key does not also get
+    // flagged as unrecognised just because this branch chose not to use it.
+    // Without that, "gives both" would arrive alongside two spurious "is not
+    // a key sluice knows" complaints about the very keys that triggered it.
+    let message = '';
+    try {
+      withSeasonal('seasonal = { months = [6], weights = [1,1,1,1,1,1,1,1,1,1,1,1] }');
+    } catch (error) {
+      message = (error as ConfigError).message;
+    }
+    expect(message).toMatch(/gives both/);
+    expect(message).toMatch(/has 1 problem:/);
+  });
+
   it('reports an unknown key alongside giving both forms', () => {
     const bad = () =>
       withSeasonal('seasonal = { months = [6], weights = [1,1,1,1,1,1,1,1,1,1,1,1], bogus = 1 }');
@@ -621,6 +638,179 @@ ${seasonal}
     // The months branch builds its own twelve zeros and returns before the
     // all-zero check, which guards only the weights branch.
     expect(() => withSeasonal('seasonal = { months = [] }')).toThrow(/List the months/);
+  });
+});
+
+describe('parseConfig — a good first field does not excuse a bad later one', () => {
+  // Six readers share one idiom: `if (X === null || problems.count !== before)
+  // return null;`. It looks redundant — X becomes null only via a `fail()` call
+  // that has already bumped `problems.count` — but every one of the six also
+  // calls `r.done()`, or reads a later field, or reads a nested table, between
+  // capturing `before` and this check. Any of those can add a problem while X
+  // itself parsed fine, and the `|| problems.count !== before` half is what
+  // catches that case. None of the six had a test where X succeeds and
+  // something else in the same table fails, so that half of the guard had
+  // never been exercised.
+
+  it("refuses a seasonal months table with an extra key, even though months itself is fine", () => {
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+seasonal = { months = [6], bogus = 1 }
+`,
+      });
+    expect(bad).toThrow(/seasonal\.bogus" is not a key sluice knows/);
+  });
+
+  it('refuses a bad weights shape, which nothing had exercised', () => {
+    expect(() =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+seasonal = { weights = "not a list" }
+`,
+      }),
+    ).toThrow(/must be a list of whole numbers/);
+  });
+
+  it('refuses a seasonal weights table with an extra key, even though weights itself is fine', () => {
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "1200.00"
+seasonal = { weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], bogus = 1 }
+`,
+      });
+    expect(bad).toThrow(/seasonal\.bogus" is not a key sluice knows/);
+  });
+
+  it('refuses a matcher with a bad category type, which nothing had exercised', () => {
+    expect(() =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = 5 }]
+estimate = "1200.00"
+`,
+      }),
+    ).toThrow(/must be text/);
+  });
+
+  it('refuses a matcher with an extra key, even though category itself is fine', () => {
+    // Whether readMatcher's own guard fires here is not actually observable:
+    // readEnvelope captures its own "before" ahead of processing matches, so
+    // its OWN guard (schema.ts:257) re-catches the bogus-key problem and
+    // returns null regardless of what readMatcher did with its return value
+    // — readEnvelope's "claims nothing" check (schema.ts:259) sits AFTER
+    // that guard and is never reached either way. This test pins the correct
+    // end-to-end refusal; see the note on Problems in values.ts for why
+    // readMatcher's specific guard is not independently testable here.
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries", bogus = 1 }]
+estimate = "1200.00"
+`,
+      });
+    expect(bad).toThrow(/matches\[0\]\.bogus" is not a key sluice knows/);
+  });
+
+  it('refuses an envelope with no matches key at all, not just an empty one', () => {
+    // Absent and empty are different refusals with different messages — "matches
+    // is empty" already had a test; a wholly absent key had not, and it is the
+    // one that would crash instead of refusing gracefully if the fallback that
+    // guards against it were ever removed.
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+estimate = "1200.00"
+`,
+      });
+    expect(bad).toThrow(/"envelopes\.food\.matches" is missing/);
+  });
+
+  it('refuses an envelope with a good name but a malformed estimate', () => {
+    const bad = () =>
+      parse({
+        envelopes: `
+[envelopes.food]
+name = "Food"
+matches = [{ category = "Groceries" }]
+estimate = "not an amount"
+`,
+      });
+    expect(bad).toThrow(/not an amount/);
+  });
+
+  it('refuses an income source with a good label but a malformed amount', () => {
+    const bad = () =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+[[people.alice.income]]
+label = "Salary"
+monthly = "not an amount"
+`,
+      });
+    expect(bad).toThrow(/not an amount/);
+  });
+
+  it('refuses an income source with a bad label type, which nothing had exercised', () => {
+    expect(() =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+[[people.alice.income]]
+label = 5
+monthly = "3200.00"
+`,
+      }),
+    ).toThrow(/must be text/);
+  });
+
+  it("refuses a person with a good name whose income entry is itself malformed", () => {
+    // Not the same case as the income-source test above, even though the
+    // fixture looks similar: that one exercises readIncome's own guard from
+    // inside readIncome. This one exercises readPerson's guard, catching a
+    // problem a NESTED reader added to the shared `problems` object while
+    // the person's own `name` parsed fine — a different call site, a
+    // different survivor, and the malformed amount has to be on a field
+    // readPerson itself never touches directly, or the name check alone
+    // could coincidentally cover it. `annual` on a second income entry does
+    // that: the first entry is fine, so income.length > 0 by the time
+    // readPerson's guard runs, isolating the failure to the second entry's
+    // own readIncome call rather than to anything readPerson reads itself.
+    const bad = () =>
+      parse({
+        people: `
+[people.alice]
+name = "Alice"
+[[people.alice.income]]
+label = "Salary"
+monthly = "3200.00"
+[[people.alice.income]]
+label = "Bonus"
+annual = "not an amount"
+`,
+      });
+    expect(bad).toThrow(/not an amount/);
   });
 });
 

@@ -27,6 +27,48 @@ import { parseAmount, AmountParseError, type Cents } from '../core/money.ts';
  * while and rendered nowhere, which is how it was found: structure nothing reads
  * is structure that will drift away from the thing it claims to describe.
  */
+/**
+ * Six places in schema.ts read `if (X === null || problems.count !== before)
+ * return null;`, right after each's first required field, across five reader
+ * functions — readSeasonal has two, one per branch of its months/weights
+ * choice. It looks like the two halves are redundant with each other: every
+ * accessor that returns null has already called `add()` (directly, via
+ * `fail()`, or via `take()`'s date-refusal branch) within that same call, so
+ * `X === null` implies `problems.count !== before` in every case — proven by
+ * reading every accessor in this file, not assumed.
+ *
+ * It is NOT redundant to keep, for two separate reasons:
+ *
+ * 1. **Type narrowing.** Every one of the six reads more of the table after
+ *    this line and uses the first field as non-null (`months.length`,
+ *    `category` embedded in a returned object, ...). Dropping the `X ===
+ *    null` half compiles to a runtime-correct but type-UNSAFE function:
+ *    TypeScript cannot see that `problems.count !== before` implies `X` is
+ *    non-null, and refuses to narrow it. Verified directly — removing it
+ *    produces `'X' is possibly 'null'` at every later use.
+ * 2. **The right half is not redundant with the left, in principle.** Every one
+ *    of the six reads more fields, or calls `done()`, or calls a nested
+ *    reader, between capturing `before` and this check — and any of those
+ *    can add a problem while the FIRST field parsed fine. `X === null`
+ *    alone would miss that case entirely.
+ *
+ * In practice, verified by mutating every half of all six checks and running
+ * the suite: only two of the resulting 24 mutants are killed today (both on
+ * `readSeasonal`, both because bypassing them lets `null` reach a `.length`
+ * read one line later and crash). The other 22 are not observable through
+ * `parseConfig`'s public surface as it stands — every one of the six reader
+ * functions is either itself called from within another reader's own
+ * before/after window (so the outer guard re-catches whatever the inner one
+ * would have), or its return value only ever reaches a check
+ * (`checkEnvelopesDoNotOverlap`, `checkLabelsDoNotCollide`) that inspects a
+ * field the corruption does not touch, before the same top-level
+ * `problems.count > 0` throw fires regardless. That is a fact about today's
+ * call graph, not a proof the right half is pointless: it is what keeps a
+ * later refactor — flattening the nesting, or adding a check that inspects
+ * the corrupted field — from silently reopening a hole. Kept for that
+ * reason, not chased with more fixtures to force the remaining 22 mutants to
+ * die.
+ */
 export class Problems {
   private readonly items: string[] = [];
 

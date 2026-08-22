@@ -68,6 +68,12 @@ export async function loadConfig(directory: string): Promise<Config> {
 
   // A BOM is invisible in an editor and would otherwise become part of the first
   // key's name, so the file would be refused for a reason nobody could see.
+  //
+  // The `^` anchor is equivalent: `text` is one whole file's contents read
+  // fresh from disk, so a match can only ever be at position 0 — there is no
+  // constructible "BOM later in the file" case, since a stray U+FEFF midway
+  // through otherwise-valid TOML is not a byte-order mark at all, just a
+  // different bug. Left in for readability, not because a test needs it.
   const config = parseConfig(text.replace(/^﻿/, ''), path);
 
   const declared = expandHome(config.exportsDirectory);

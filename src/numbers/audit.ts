@@ -91,6 +91,14 @@ export function auditPlan(config: Config, ledger: Ledger): readonly PlanWarning[
     });
   }
 
+  // Mutation testing flags six survivors on this comparator; three are
+  // killed by the tie and order tests in audit.test.ts, and the other three
+  // — pinning the inner ternary to `true`, to `false`, and widening `>` to
+  // `>=` — are equivalent, for the identical structural reason documented
+  // beside `envelopes.ts`'s comparator: `.sort()` only ever calls this
+  // comparator with `a` already the later-positioned element, so none of the
+  // three can turn a non-negative return into a negative one, and the final
+  // order never differs.
   return warnings.sort((a, b) => {
     const ka = sortKey(a);
     const kb = sortKey(b);

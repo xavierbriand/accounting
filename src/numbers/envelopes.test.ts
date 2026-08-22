@@ -93,17 +93,60 @@ estimate = "1200.00"
   });
 
   it('sorts by id: the configured envelope\'s own id, or the derived "category / subCategory" id', () => {
-    const config = numbersConfig();
-    const ledger = ledgerOf([
-      tx({ occurredOn: '2026-01-06', amount: -1500, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
-      tx({ occurredOn: '2026-01-05', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' }),
-    ]);
-    const ids = resolveEnvelopes(config, ledger).map((e) => (e.kind === 'configured' ? e.config.id : e.id));
-    // Plain code-point order, not locale-aware: uppercase "L" (76) sorts
-    // before lowercase "g" (103), so the derived id comes first — this is
-    // the discriminator that would fail if the sort silently went back to
-    // localeCompare(), where the two commonly order the other way.
-    expect(ids).toEqual(['Loisirs et vacances / Cinema', 'groceries']);
+    // Three ids, declared in an order that matches neither the sorted output
+    // nor localeCompare()'s: 'apple', 'Zebra', 'Mango' in TOML declaration
+    // order, sorting to ['Mango', 'Zebra', 'apple'] by plain code-point value
+    // (uppercase letters sort before lowercase). A comparator that stopped
+    // comparing and just returned its input unchanged, or that returned a
+    // pinned constant, would be caught by the declaration order differing
+    // from the expected order — the previous version of this test happened to
+    // have both orders coincide for a 2-element array, which is exactly why
+    // several comparator mutants survived it.
+    const config = numbersConfig({
+      envelopes: `
+[envelopes.apple]
+name = "Apple"
+matches = [{ category = "A", sub_category = "A" }]
+estimate = "10.00"
+
+[envelopes.Zebra]
+name = "Zebra"
+matches = [{ category = "Z", sub_category = "Z" }]
+estimate = "10.00"
+
+[envelopes.Mango]
+name = "Mango"
+matches = [{ category = "M", sub_category = "M" }]
+estimate = "10.00"
+`,
+    });
+    const ids = resolveEnvelopes(config, ledgerOf([])).map((e) => envelopeId(e));
+    expect(ids).toEqual(['Mango', 'Zebra', 'apple']);
+  });
+
+  it('breaks a sort tie by keeping the configured envelope before the derived one it collides with', () => {
+    // A configured envelope's id and a derived "category / subCategory" id
+    // live in the same namespace with nothing stopping them coinciding: here
+    // the configured envelope is named "A / B", and a ledger transaction for
+    // category "A" / subCategory "B" is not one of ITS matchers, so it is
+    // left uncovered and derives its own envelope — also named "A / B". The
+    // comparator returns 0 for the tie, and `.sort()` is spec-guaranteed
+    // stable, so the configured one (always first in the pre-sort array)
+    // stays first. This is the only way to exercise the comparator's
+    // "equal" branch and the `<`/`>` widenings to `<=`/`>=` through the
+    // exported function — envelope ids are otherwise unique by construction.
+    const config = numbersConfig({
+      envelopes: `
+[envelopes."A / B"]
+name = "Configured A / B"
+matches = [{ category = "X", sub_category = "Y" }]
+estimate = "10.00"
+`,
+    });
+    const ledger = ledgerOf([tx({ occurredOn: '2026-01-05', amount: -1000, category: 'A', subCategory: 'B' })]);
+    const resolved = resolveEnvelopes(config, ledger);
+    expect(resolved.map((e) => e.kind)).toEqual(['configured', 'derived']);
+    expect(resolved.map((e) => envelopeId(e))).toEqual(['A / B', 'A / B']);
   });
 });
 
@@ -131,6 +174,23 @@ describe('envelopeFor', () => {
     const config = numbersConfig();
     const resolved = resolveEnvelopes(config, ledgerOf([]));
     expect(envelopeFor(resolved, 'Nothing', 'Here')).toBeNull();
+  });
+
+  it('demands both category and sub-category from a derived envelope, not either', () => {
+    // A derived envelope's identity is its exact (category, subCategory) pair
+    // — `resolveEnvelopes` synthesises one per pair, not one per category.
+    // Matching on category alone would return the wrong envelope for any two
+    // pairs sharing a category, and silently misattribute one's spending to
+    // the other.
+    const config = numbersConfig();
+    const resolved = resolveEnvelopes(
+      config,
+      ledgerOf([
+        tx({ occurredOn: '2026-01-06', amount: -1500, category: 'Loisirs et vacances', subCategory: 'Cinema' }),
+      ]),
+    );
+    expect(envelopeFor(resolved, 'Loisirs et vacances', 'Cinema')).not.toBeNull();
+    expect(envelopeFor(resolved, 'Loisirs et vacances', 'Something else')).toBeNull();
   });
 });
 

@@ -93,6 +93,22 @@ describe('generateEnvelopeBlock', () => {
     expect(zIndex).toBeGreaterThan(aIndex);
   });
 
+  it('breaks a tie on category by sub-category, not by dropping the tie-break', () => {
+    // Two pairs sharing a category only differ by sub-category — the
+    // comparator's `||` between the two `compare()` calls has to actually
+    // fall through to the second one. Built in reverse of the expected
+    // output order, the same shuffle as the test above.
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-01-06', amount: -1000, category: 'A', subCategory: 'Z' }),
+      tx({ occurredOn: '2026-01-05', amount: -2000, category: 'A', subCategory: 'A' }),
+    ]);
+    const block = generateEnvelopeBlock(ledger, null, 2026);
+    const aIndex = block.indexOf('[envelopes.a_a]');
+    const zIndex = block.indexOf('[envelopes.a_z]');
+    expect(aIndex).toBeGreaterThanOrEqual(0);
+    expect(zIndex).toBeGreaterThan(aIndex);
+  });
+
   it('disambiguates two pairs that would otherwise slugify to the same id', () => {
     const ledger = ledgerOf([
       tx({ id: 'a', occurredOn: '2026-01-05', amount: -1000, category: 'A B', subCategory: 'C' }),

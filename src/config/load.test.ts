@@ -63,6 +63,14 @@ describe('loadConfig', () => {
     );
   });
 
+  it('expands a bare ~ on its own, not just as a ~/ prefix', async () => {
+    // A different branch of expandHome() from the test above: `~/x` matches
+    // startsWith('~/'), but a bare `~` has nothing after the slash to match
+    // that pattern at all — it needs its own equality check.
+    const dir = await withConfig(configToml({ exports: '[exports]\ndirectory = "~"\n' }));
+    expect((await loadConfig(dir)).exportsDirectory).toBe(homedir());
+  });
+
   it('reads a file that starts with a byte-order mark', async () => {
     // Invisible in an editor, and it would otherwise become part of the first
     // key's name — so the file would be refused for a reason nobody could see.
@@ -74,6 +82,20 @@ describe('loadConfig', () => {
     const dir = await tempDir();
     await expect(loadConfig(dir)).rejects.toThrow(ConfigNotFoundError);
     await expect(loadConfig(dir)).rejects.toThrow(new RegExp(dir));
+  });
+
+  it('keeps the original filesystem error as the cause', async () => {
+    // The friendly message names the directory; `cause` is what a debugger
+    // reaches for when "no such file" isn't the whole story — a permissions
+    // error looks identical from the message alone.
+    const dir = await tempDir();
+    try {
+      await loadConfig(dir);
+      expect.unreachable();
+    } catch (error) {
+      expect((error as ConfigNotFoundError).cause).toBeInstanceOf(Error);
+      expect(((error as ConfigNotFoundError).cause as NodeJS.ErrnoException).code).toBe('ENOENT');
+    }
   });
 
   it('reports a bad plan as a config problem, not a missing file', async () => {

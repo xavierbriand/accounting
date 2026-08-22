@@ -137,6 +137,20 @@ describe('reconcileSettlements', () => {
     expect(report.mismatched).toBe(1);
   });
 
+  it('refuses in-flight for a genuinely future settlement too, with no account export', () => {
+    // The test above uses a settlement date safely in the past, which stays a
+    // mismatch under "hasAccount" inverted to include card sources — the date
+    // comparison alone happens to still say no. This one settles after the
+    // card's own data is current, which a real account WOULD have called
+    // in-flight; with no account at all, it has to stay a mismatch regardless.
+    const card = statementOf([buy('11/08/2026', '04/09/2026', '-7,00')],
+      'carte_1111_01012024_31122024.ofx', { ...WINDOW, balance: '-7.00' });
+
+    const report = reconcileSettlements(ledgerOf([card]));
+    expect(report.inFlight).toBe(0);
+    expect(report.mismatched).toBe(1);
+  });
+
   it('judges pending against when the data is current, not the range requested', () => {
     // Asking the bank for a whole calendar year in August returns a December
     // end date over data that stops today. Trusting that end date would place
@@ -239,6 +253,35 @@ describe('reconcileSettlements', () => {
     expect(report.checks.map((c) => c.cardNumber)).not.toContain('2026');
     expect(report.checks.map((c) => c.cardNumber)).toContain(UNIDENTIFIED_CARD);
     expect(report.mismatched).toBeGreaterThan(0);
+  });
+
+  it('does not treat non-whitespace before the digits as part of the ellipsis gap', () => {
+    // The pattern allows whitespace, and only whitespace, between "..." and
+    // the four digits — a label where something else sits in that gap must
+    // not be read as naming a card at all.
+    const account = statementOf(
+      [{ ...charge('04/08/2026', '-180,00', '1111'), label: 'DEBIT DIFFERE N° ...XX1111' }],
+      '00000000001_01012024_31122024.ofx',
+      { ...WINDOW, balance: '+100.00' },
+    );
+
+    const report = reconcileSettlements(ledgerOf([account]));
+    expect(report.checks[0]?.cardNumber).toBe(UNIDENTIFIED_CARD);
+  });
+
+  it('refuses a run of five digits rather than guessing the first four', () => {
+    // The lookahead exists so a run longer than four digits is refused as
+    // ambiguous, not silently truncated to its first four — the same
+    // "guessing is what produced the wrong answer" reasoning CARD_IN_LABEL
+    // is built on.
+    const account = statementOf(
+      [{ ...charge('04/08/2026', '-180,00', '1111'), label: 'DEBIT DIFFERE N° ...11111' }],
+      '00000000001_01012024_31122024.ofx',
+      { ...WINDOW, balance: '+100.00' },
+    );
+
+    const report = reconcileSettlements(ledgerOf([account]));
+    expect(report.checks[0]?.cardNumber).toBe(UNIDENTIFIED_CARD);
   });
 
   it('surfaces a settlement whose label does not name a card', () => {

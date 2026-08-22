@@ -191,7 +191,7 @@ describe('month arithmetic', () => {
     // MONTH_NAMES is rendered straight onto the page. A reordered or
     // corrupted entry would be a confident wrong month beside a correct
     // figure — one assertion over all twelve closes every entry at once.
-    const names = Array.from({ length: 12 }, (_, i) => formatMonthLong(makeMonth(2026, i + 1)));
+    const names = monthRange(makeMonth(2026, 1), makeMonth(2026, 12)).map(formatMonthLong);
     expect(names).toEqual([
       'Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026', 'May 2026', 'Jun 2026',
       'Jul 2026', 'Aug 2026', 'Sep 2026', 'Oct 2026', 'Nov 2026', 'Dec 2026',

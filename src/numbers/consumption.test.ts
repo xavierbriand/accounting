@@ -91,4 +91,17 @@ seasonal = { months = [7] }
     const consumption = computeConsumption(ledger, resolved, '2026-06-01' as Day);
     expect(consumption.map((c) => c.envelope)).toEqual(resolved);
   });
+
+  it('counts a transaction dated exactly on referenceDay as year-to-date', () => {
+    // referenceDay is "today" for the whole page. A transaction posted today
+    // has to count — excluding it would make the figure lag by a day for
+    // anyone checking their spending the same day it happened.
+    const config = numbersConfig();
+    const ledger = ledgerOf([
+      tx({ occurredOn: '2026-03-15', amount: -3000, category: 'Alimentation', subCategory: 'Supermarche' }),
+    ]);
+    const resolved = resolveEnvelopes(config, ledger);
+    const [c] = computeConsumption(ledger, resolved, '2026-03-15' as Day);
+    expect(c?.yearToDateSpent).toBe(3000);
+  });
 });

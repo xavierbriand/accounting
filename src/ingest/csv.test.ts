@@ -27,9 +27,20 @@ describe('parseCsv', () => {
   });
 
   it('rejects a file whose columns are not the ones expected', () => {
+    // Asserting the count-mismatch message specifically, not the generic
+    // "format may have changed" suffix both this and the per-column check
+    // share: the wrong column count also fails the per-column comparison on
+    // its first entry, so a loose assertion here cannot tell the header-count
+    // guard apart from that fallback — and would stay green with the guard's
+    // body deleted entirely. Verified by hand: with `if (columns.length !==
+    // CSV_COLUMNS.length) {}` emptied, `/format may have changed/` alone still
+    // passes, because the per-column loop throws its own message with the
+    // same suffix.
     const bad = Buffer.from('Date;Amount\r\n01/01/2026;-1,00\r\n', 'latin1');
     expect(() => parseCsv(bad, 'export.csv')).toThrow(CsvFormatError);
-    expect(() => parseCsv(bad, 'export.csv')).toThrow(/format may have changed/);
+    expect(() => parseCsv(bad, 'export.csv')).toThrow(
+      new RegExp(`expected ${CSV_COLUMNS.length} columns, found 2`),
+    );
   });
 
   it('rejects a renamed column even when the count still matches', () => {
@@ -82,5 +93,63 @@ describe('parseCsv', () => {
 
   it('rejects an empty file', () => {
     expect(() => parseCsv(Buffer.from('', 'latin1'), 'export.csv')).toThrow(/is empty/);
+  });
+
+  it('tolerates bare \n line endings, not just \r\n', () => {
+    // Every fixture in the suite builds \r\n files, since that is what the bank
+    // actually emits — so the /\r?\n/ split's tolerance for a bare \n had never
+    // been exercised by anything.
+    const good = Buffer.from(
+      Buffer.from(csvFixture([{ postedOn: '01/01/2026', amount: '-1,00' }]))
+        .toString('latin1')
+        .replace(/\r\n/g, '\n'),
+      'latin1',
+    );
+    const [row] = parseCsv(good);
+    expect(row?.postedOn).toBe('2026-01-01');
+  });
+
+  it('skips a line of only whitespace, not just an empty one', () => {
+    // The blank-line filter is `l.text.trim().length > 0` specifically because
+    // a line of only spaces or tabs has to be skipped the same way an empty
+    // line is — and line numbering has to keep counting it, the same reason
+    // filtering happens after numbering rather than before (see the comment
+    // in parseCsv). A pure empty-string blank line cannot tell `.trim()` from
+    // a no-op, since '' is already falsy-length either way.
+    const text = Buffer.from(csvFixture([{ postedOn: '01/01/2026', amount: '-1,00' }])).toString(
+      'latin1',
+    );
+    const [header = '', row = ''] = text.split('\r\n');
+    const withWhitespaceLine = Buffer.from([header, '   ', row, ''].join('\r\n'), 'latin1');
+    const rows = parseCsv(withWhitespaceLine);
+    expect(rows).toHaveLength(1);
+    // header=1, whitespace-only=2, data row=3.
+    expect(rows[0]?.line).toBe(3);
+  });
+
+  it('trims whitespace from every free-text field', () => {
+    // Six independent `.trim()` calls build the returned row, none of them
+    // covered until now: a padded cell would have been passed straight
+    // through, and it is exactly the kind of value that ends up compared
+    // against a config's exact-match category or label matcher.
+    const [row] = parseCsv(
+      csvFixture([
+        {
+          postedOn: '01/08/2026',
+          amount: '-5,00',
+          label: '  MERCHANT  ',
+          notes: '  a note  ',
+          operationType: '  Carte bancaire  ',
+          category: '  Alimentation  ',
+          subCategory: '  Supermarche  ',
+        },
+      ]),
+    );
+    expect(row?.label).toBe('MERCHANT');
+    expect(row?.description).toBe('MERCHANT');
+    expect(row?.notes).toBe('a note');
+    expect(row?.operationType).toBe('Carte bancaire');
+    expect(row?.category).toBe('Alimentation');
+    expect(row?.subCategory).toBe('Supermarche');
   });
 });

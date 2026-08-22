@@ -59,6 +59,44 @@ describe('sourceOf', () => {
     expect(() => sourceOf('carte_11111_01012025_31122025.ofx')).toThrow(SourceNameError);
     expect(() => sourceOf('cb_1111_01012025_31122025.ofx')).toThrow(SourceNameError);
   });
+
+  it('refuses trailing characters after the extension, rather than ignoring them', () => {
+    // EXPORT_NAME is anchored at both ends. Unanchored at the tail, a renamed
+    // or backed-up file — "….ofxBACKUP" — would still match on its real
+    // extension and be silently accepted as the genuine export.
+    expect(() => sourceOf('00000000001_01012025_31122025.ofxBACKUP')).toThrow(SourceNameError);
+  });
+
+  it('refuses leading characters before the stem, rather than skipping past them', () => {
+    // Unanchored at the head, "(.+?)" would happily start matching partway
+    // through the filename — accepting "xcarte_1111_…" as card "carte_1111"
+    // and silently dropping the "x" that made the name unrecognisable.
+    expect(() => sourceOf('xcarte_1111_01012025_31122025.ofx')).toThrow(SourceNameError);
+  });
+
+  it('refuses a name with an embedded newline before an otherwise-valid stem', () => {
+    // "(.+?)" cannot cross a newline without the anchor forcing the match to
+    // start at position 0 — without "^", exec() is free to start the match
+    // just past the newline instead of refusing the whole name. The one
+    // input shape where the anchor above is not equivalent to leaving it out.
+    expect(() => sourceOf('junk\ncarte_1111_01012025_31122025.ofx')).toThrow(SourceNameError);
+  });
+
+  it('refuses a stem with a card-shaped tail but junk before it', () => {
+    // CARD_STEM is anchored at both ends too. Unanchored at the head it would
+    // accept "xcarte_1111" as card "1111", the same failure as above but one
+    // level deeper — inside the already-extracted stem rather than the whole
+    // filename.
+    expect(() => sourceOf('xcarte_1111_01012025_31122025.ofx')).toThrow(/is not a name sluice recognises/);
+  });
+
+  it('refuses an account stem with non-digit characters at either end', () => {
+    // ACCOUNT_STEM is anchored at both ends. Unanchored at the head or tail,
+    // a stem with leading or trailing junk around a run of digits — a typo,
+    // a copy-paste artifact — would be misread as a bare account number.
+    expect(() => sourceOf('x00000000001_01012025_31122025.ofx')).toThrow(/is not a name sluice recognises/);
+    expect(() => sourceOf('00000000001x_01012025_31122025.ofx')).toThrow(/is not a name sluice recognises/);
+  });
 });
 
 describe('csvNameFor', () => {
@@ -71,5 +109,12 @@ describe('csvNameFor', () => {
     // filename match, so lowercasing here rejected a correctly-named uppercase
     // pair that was sitting in the folder.
     expect(csvNameFor('CARTE_1111_01012024_31122024.OFX')).toBe('CARTE_1111_01012024_31122024.CSV');
+  });
+
+  it('replaces the trailing extension, not the first occurrence of ".ofx"', () => {
+    // Anchored at the end on purpose: a filename that happens to contain
+    // ".ofx" earlier than its real, trailing extension must still be
+    // rewritten at the extension, not at the first match.
+    expect(csvNameFor('export.ofx.backup.ofx')).toBe('export.ofx.backup.csv');
   });
 });

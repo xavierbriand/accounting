@@ -47,4 +47,21 @@ describe('joinPositionally', () => {
       joinPositionally(parseOfx(ofxFixture(rows)), parseCsv(csvFixture(differentAmount)), 'acct'),
     ).toThrow(/row 2/);
   });
+
+  it('refuses a date mismatch on its own, not just as a side effect of a length or amount mismatch', () => {
+    // Every other date-mismatch test in this file reorders rows, which also
+    // changes the amount at the diverging position — a bypassed date check
+    // still throws, just from the amount check instead, and the outcome
+    // looks identical from the outside. This fixture changes only the date,
+    // amounts held equal, so the date check is the only thing that can catch
+    // it — and names row 2, isolating the message's row index from the
+    // amount-mismatch message's own row-index test above.
+    const dateShifted = [rows[0]!, { ...rows[1]!, postedOn: '05/03/2026' }, rows[2]!];
+    expect(() =>
+      joinPositionally(parseOfx(ofxFixture(rows)), parseCsv(csvFixture(dateShifted)), 'acct'),
+    ).toThrow(JoinMismatchError);
+    expect(() =>
+      joinPositionally(parseOfx(ofxFixture(rows)), parseCsv(csvFixture(dateShifted)), 'acct'),
+    ).toThrow(/row 2 is dated/);
+  });
 });

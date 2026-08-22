@@ -52,6 +52,14 @@ export interface OfxOptions {
   readonly from?: string; // YYYYMMDD
   readonly to?: string; // YYYYMMDD
   readonly balance?: string; // "+264.21"
+  /**
+   * DTASOF, the balance's own as-of date. Defaults to `to`, which is
+   * realistic for most exports but not guaranteed — a real bank can report a
+   * DTEND (the requested range) that differs from the moment its balance is
+   * current as of. Set independently to test code that depends on the two
+   * NOT being the same value.
+   */
+  readonly balanceAsOf?: string; // YYYYMMDD
   readonly omitBalance?: boolean;
   readonly omitCurdef?: boolean;
 }
@@ -71,6 +79,7 @@ export function ofxFixture(rows: readonly FixtureRow[], options: OfxOptions = {}
     from = '20250101',
     to = '20261231',
     balance = '+0.00',
+    balanceAsOf = to,
     omitBalance = false,
     omitCurdef = false,
   } = options;
@@ -93,7 +102,7 @@ export function ofxFixture(rows: readonly FixtureRow[], options: OfxOptions = {}
 
   const ledgerBalance = omitBalance
     ? ''
-    : ['<LEDGERBAL>', `<BALAMT>${balance}`, `<DTASOF>${to}`, '</LEDGERBAL>'].join('\r\n') + '\r\n';
+    : ['<LEDGERBAL>', `<BALAMT>${balance}`, `<DTASOF>${balanceAsOf}`, '</LEDGERBAL>'].join('\r\n') + '\r\n';
 
   const text = [
     'OFXHEADER:100',

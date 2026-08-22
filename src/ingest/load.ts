@@ -74,6 +74,12 @@ function consolidate(files: readonly ParsedFile[], merged: readonly Transaction[
     const newest = ordered.at(-1)!;
     const source = newest.source;
 
+    // `<` and `>` cannot be widened to `<=`/`>=` observably: `Day` values
+    // compare by value, not identity, so a tie between two exports' `from`
+    // (or `to`) leaves the reduce holding an equal string regardless of
+    // which side "wins". Verified directly across single, all-tied and
+    // partially-tied inputs — the same reasoning as the latest-day reduce in
+    // reconcile.ts.
     return {
       source,
       from: ordered.map((f) => f.statement.from).reduce((a, b) => (a < b ? a : b)),
@@ -106,6 +112,14 @@ export async function loadLedgerData(directory: string): Promise<LedgerData> {
     );
   }
 
+  // The trailing .sort() is a real fix, not tested here. `readdir`'s return
+  // order is filesystem-defined — already alphabetical on APFS, not
+  // guaranteed on ext4, where CI runs — so a test built on real files in a
+  // real temp directory cannot force the unsorted case this .sort() protects
+  // against without also mocking `readdir` itself, which nothing else in
+  // this suite does. Removing it would only ever change which file's parse
+  // error is reported first when more than one is broken; every value this
+  // function computes is unaffected either way.
   const ofxFiles = entries.filter((f) => f.toLowerCase().endsWith('.ofx')).sort();
   if (ofxFiles.length === 0) {
     throw new ExportsNotFoundError(

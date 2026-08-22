@@ -87,6 +87,50 @@ describe('loadLedgerData', () => {
     expect(source?.files).toHaveLength(2);
   });
 
+  it('widens the window from the middle export, not just the ends, and sorts before picking the newest', async () => {
+    // Filenames are chosen so their OWN alphabetical order (which
+    // loadLedgerData already sorts by, upstream of this) does NOT match the
+    // balanceAsOf order these exports actually carry — otherwise the
+    // upstream sort would silently do consolidate()'s job for it, and a
+    // broken or missing sort inside consolidate() would go unnoticed. By
+    // filename, B < C < A; by balanceAsOf, A < B < C.
+    //
+    // The widest from/to both come from the MIDDLE export by balanceAsOf
+    // (B), not the first or the last — a reduce that always kept its first
+    // argument would report A's from instead of B's; one that always kept
+    // its second would report C's to instead of B's.
+    const dir = await folderOf([
+      {
+        stem: '00000000001_09092025_09092025',
+        rows: [{ postedOn: '05/01/2025', amount: '-40,00', fitId: 'A-1' }],
+        options: { from: '20250105', to: '20250131', balanceAsOf: '20250131', balance: '+500.00' },
+      },
+      {
+        stem: '00000000001_01012025_01012025',
+        rows: [{ postedOn: '05/02/2025', amount: '-60,00', fitId: 'B-1' }],
+        options: { from: '20241201', to: '20250630', balanceAsOf: '20250228', balance: '+600.00' },
+      },
+      {
+        stem: '00000000001_05052025_05052025',
+        rows: [{ postedOn: '05/03/2025', amount: '-10,00', fitId: 'C-1' }],
+        options: { from: '20250301', to: '20250331', balanceAsOf: '20250331', balance: '+700.00' },
+      },
+    ]);
+
+    const [source] = (await loadLedgerData(dir)).sources;
+    expect(source?.from).toBe('2024-12-01');
+    expect(source?.to).toBe('2025-06-30');
+    expect(source?.balance).toBe(70000);
+    expect(source?.balanceAsOf).toBe('2025-03-31');
+    // Ordered by balanceAsOf, not by declaration or filename order — the
+    // same guarantee the values above depend on, made directly observable.
+    expect(source?.files).toEqual([
+      '00000000001_09092025_09092025.ofx',
+      '00000000001_01012025_01012025.ofx',
+      '00000000001_05052025_05052025.ofx',
+    ]);
+  });
+
   it('counts only the rows that survived the merge', async () => {
     const dir = await folderOf([
       { stem: '00000000001_01012025_31012025', rows: ROWS, options: { balance: '+500.00' } },
@@ -138,6 +182,19 @@ describe('loadLedgerData', () => {
     await expect(loadLedgerData(join(tmpdir(), 'sluice-does-not-exist'))).rejects.toThrow(
       /sluice\.toml/,
     );
+  });
+
+  it('keeps the original filesystem error as the cause', async () => {
+    // The friendly message says where to point sluice.toml; cause is what a
+    // debugger reaches for when "cannot read the folder" isn't the whole
+    // story — a permissions error looks identical from the message alone.
+    try {
+      await loadLedgerData(join(tmpdir(), 'sluice-does-not-exist'));
+      expect.unreachable();
+    } catch (error) {
+      expect((error as ExportsNotFoundError).cause).toBeInstanceOf(Error);
+      expect(((error as ExportsNotFoundError).cause as NodeJS.ErrnoException).code).toBe('ENOENT');
+    }
   });
 });
 

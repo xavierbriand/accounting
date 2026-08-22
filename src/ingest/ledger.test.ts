@@ -69,6 +69,22 @@ describe('classification', () => {
     expect(t?.occurredOn).toBe('2026-08-11');
     expect(t?.settlesOn).toBe('2026-09-04');
   });
+
+  it('reads a zero-amount internal transfer as inbound, not outbound', () => {
+    // The boundary itself: `>= 0` puts exactly zero on the "in" side. A
+    // household transfer that nets to nothing (an immediate correction, a
+    // same-day reversal) still has to land on one side deterministically
+    // rather than the other.
+    const zero: FixtureRow = {
+      postedOn: '05/08/2026',
+      amount: '+0,00',
+      label: 'VIR. VERS COMPTE CHEQUE',
+      category: 'Transaction exclue',
+      subCategory: 'Virement interne',
+    };
+    const [t] = build([zero], '00000000001_01012024_31122024.ofx').transactions;
+    expect(t?.kind).toBe('transfer-in');
+  });
 });
 
 describe('mergeLedger', () => {
@@ -119,6 +135,27 @@ describe('mergeLedger', () => {
   it('refuses to merge two different transactions that claim the same identity', () => {
     const a: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-14,00', fitId: 'SAME' }];
     const b: FixtureRow[] = [{ postedOn: '11/08/2026', amount: '-7,00', fitId: 'SAME' }];
+    expect(() =>
+      mergeLedger([build(a, '00000000001_01012024_31122024.ofx'), build(b, '00000000001_01012024_31122024.ofx')]),
+    ).toThrow(DuplicateTransactionError);
+  });
+
+  it('refuses a same-id pair sharing the date but not the amount', () => {
+    // "Same transaction" needs the date AND the amount to agree, not either
+    // alone. Both rows below share their date, so this isolates the amount
+    // half of the check from the case above, where both fields differ at
+    // once and either alone would already explain the refusal.
+    const a: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-14,00', fitId: 'SAME' }];
+    const b: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-7,00', fitId: 'SAME' }];
+    expect(() =>
+      mergeLedger([build(a, '00000000001_01012024_31122024.ofx'), build(b, '00000000001_01012024_31122024.ofx')]),
+    ).toThrow(DuplicateTransactionError);
+  });
+
+  it('refuses a same-id pair sharing the amount but not the date', () => {
+    // The mirror of the test above: isolates the date half of the check.
+    const a: FixtureRow[] = [{ postedOn: '10/08/2026', amount: '-14,00', fitId: 'SAME' }];
+    const b: FixtureRow[] = [{ postedOn: '11/08/2026', amount: '-14,00', fitId: 'SAME' }];
     expect(() =>
       mergeLedger([build(a, '00000000001_01012024_31122024.ofx'), build(b, '00000000001_01012024_31122024.ofx')]),
     ).toThrow(DuplicateTransactionError);
@@ -177,5 +214,17 @@ describe('mergeLedger', () => {
   it('returns the ledger in date order', () => {
     const merged = mergeLedger([build([TRANSFER_OUT, GROCERIES, CONTRIBUTION], '00000000001_01012024_31122024.ofx')]);
     expect(merged.map((t) => t.occurredOn)).toEqual(['2026-08-03', '2026-08-05', '2026-08-10']);
+  });
+
+  it('breaks a same-day tie by id, not by declaration order', () => {
+    // Two rows sharing a date, with the later-sorting id declared first — a
+    // no-op sort (Array.sort is stable) would leave it first. The stated
+    // contract puts the earlier id first regardless.
+    const rows: FixtureRow[] = [
+      { postedOn: '10/08/2026', amount: '-1,00', fitId: 'ZZZ' },
+      { postedOn: '10/08/2026', amount: '-2,00', fitId: 'AAA' },
+    ];
+    const merged = mergeLedger([build(rows, '00000000001_01012024_31122024.ofx')]);
+    expect(merged.map((t) => t.id)).toEqual(['00000000001:AAA', '00000000001:ZZZ']);
   });
 });

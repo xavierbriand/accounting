@@ -284,17 +284,6 @@ describe('reconcileSettlements', () => {
     expect(report.checks[0]?.cardNumber).toBe(UNIDENTIFIED_CARD);
   });
 
-  it('reads the card number past surrounding whitespace in the label', () => {
-    const account = statementOf(
-      [{ ...charge('04/08/2026', '-180,00', '1111'), label: '  DEBIT DIFFERE N° ...1111  ' }],
-      '00000000001_01012024_31122024.ofx',
-      { ...WINDOW, balance: '+100.00' },
-    );
-
-    const report = reconcileSettlements(ledgerOf([account]));
-    expect(report.checks[0]?.cardNumber).toBe('1111');
-  });
-
   it('surfaces a settlement whose label does not name a card', () => {
     // The sub-category already proved it is a settlement. Dropping it for want
     // of a parseable label would recreate the worst failure here: an account

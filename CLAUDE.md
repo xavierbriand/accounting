@@ -27,6 +27,13 @@ here means finding one to cut.
   asserts `err.name`; every catch site matches by `instanceof` or
   `toThrow(SomeErrorClass)`. Applies project-wide — filed once as a decision
   on #328 rather than re-argued per class.
+- **`app/_lib/` is unit- and mutation-tested like `src/`; the rest of `app/`
+  (components, routes) isn't.** `app/_lib/today.ts` is the product's only
+  clock and `chart.ts` feeds what the axes show — both can produce the wrong
+  number this project's reviews keep finding. `telemetry.ts` sits in
+  `app/_lib` too but is deliberately excluded from the same guarantee: every
+  error in it is swallowed, so it structurally can't produce one (see the
+  comment at the top of that file).
 - **There's no `docs/` folder, and no process documentation lives in this
   repo.** v0.1 had one — 201 lines of `CLAUDE.md` deferring to it, and 72%
   of that version's effort went to process instead of product. Anything
